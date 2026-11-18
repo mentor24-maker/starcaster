@@ -2730,6 +2730,18 @@ epic: eleven tickets, led by a side-by-side difference report so the next
 import's gaps come out as a list instead of a comparison by eye. Measure an
 import against that report, and file what it shows.
 
+**Where the report is now (SC-862, 2026-11-17).** You no longer have to
+remember to run it. Every real build of an import's pages ends by making it:
+the Imports screen's **Build Draft Pages** button, and
+`scripts/site_import_map.mjs --apply` by hand. The Imports screen shows it
+under **Difference report** for each import, with a link to the side-by-side
+report and how many things each category lost ("Text styling 26, Links 3…").
+Pages it could not look at are named as CANNOT TELL. A report that could not
+be made says why there, and in the build's warnings. It files nothing: the
+report is the list an agent session (or Dane) files from. Before that change,
+Bayside went live on 2026-11-17 without the report ever running, and five
+differences went unfiled until Dane asked that evening where the policy stood.
+
 **How this sits beside §6.24.** §6.24 limits tickets the pipeline files *about
 itself* to failures that cost something. This section is about missing
 *product* capability. It does not relax §6.24, because here the cost is built

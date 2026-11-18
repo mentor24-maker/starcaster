@@ -8,14 +8,18 @@ import type {
   BackgroundSettings,
   BuilderOverlayBlendMode,
   BuilderTemplateLayout,
-  BuilderTemplateSection
+  BuilderTemplateSection,
+  SectionShapeLayer
 } from "@/lib/builder-template";
 import {
   BUILDER_OVERLAY_BLEND_MODES,
   getLayoutColumnPercents,
   getLayoutColumns,
   normalizeRowOverlayScreenSettings,
+  normalizeSectionShapeLayer,
   normalizeSignedOffsetValue,
+  SECTION_SHAPE_KINDS,
+  SECTION_SHAPE_SIDES,
   seedVideoBackgroundOverlayScreen
 } from "@/lib/builder-template";
 import { BuilderBackgroundControls } from "./builder-background-controls";
@@ -25,6 +29,8 @@ import { BuilderSettingRow } from "./builder-setting-row";
 import { BuilderModuleSpacingFields } from "./builder-spacing-fields";
 import { BuilderThemeColorField } from "./builder-theme-color-field";
 import { formatColumnName } from "./builder-utils";
+import { useBuilderPageSections } from "./builder-page-sections-context";
+import { normalizeAnchorName } from "@/lib/page-link";
 import type { ReactNode } from "react";
 import {
   BUILDER_DEVICE_LABELS,
@@ -53,6 +59,67 @@ type BuilderSectionControlsProps = {
   themePrimaryColor?: string;
   themeColors?: Array<{ label: string; hex: string }>;
 };
+
+/**
+ * While typing, only what an anchor name can never hold is dropped — the
+ * trailing hyphen of "about-" has to survive the keystroke before "us". The
+ * full rule (`normalizeAnchorName`) runs when the box loses focus, and again
+ * whenever the page is saved or loaded.
+ */
+function typingAnchorName(value: string): string {
+  return value.toLowerCase().replace(/^#+/, "").replace(/[\s_]+/g, "-").replace(/[^a-z0-9-]/g, "").slice(0, 80);
+}
+
+/**
+ * "Anchor name" (task SC-852): the name a link uses to jump to this section,
+ * rendered as the section's `id`. Says so when another section on the page
+ * already carries the name, because two sections with one name means a link
+ * can only ever reach the first.
+ */
+export function SectionAnchorNameRow({
+  section,
+  onUpdateSection
+}: {
+  section: BuilderTemplateSection;
+  onUpdateSection: BuilderSectionControlsProps["onUpdateSection"];
+}) {
+  const page = useBuilderPageSections();
+  const value = section.anchorName ?? "";
+  const name = normalizeAnchorName(value);
+  const takenBy = name
+    ? (page?.sections ?? []).find(
+        (other) => other.id !== section.id && normalizeAnchorName(other.anchorName ?? "") === name
+      )
+    : undefined;
+  const write = (next: string) =>
+    onUpdateSection((current) => {
+      const { anchorName: _previous, ...rest } = current;
+      return next ? { ...rest, anchorName: next } : rest;
+    });
+  return (
+    <BuilderSettingRow label="Anchor Name">
+      <div className="builder-section-anchor-name">
+        <input
+          type="text"
+          value={value}
+          placeholder="e.g. contact-us"
+          aria-label="Anchor Name"
+          aria-invalid={takenBy ? true : undefined}
+          title="A name a link can jump to: letters, digits and hyphens. A menu item can then link to this section."
+          onChange={(event) => write(typingAnchorName(event.target.value))}
+          onBlur={() => {
+            if (value !== name) write(name);
+          }}
+        />
+        {takenBy ? (
+          <p className="builder-section-anchor-name-taken" role="alert">
+            “{name}” is already the anchor name of {takenBy.title ? `the section “${takenBy.title}”` : "another section"} on this page. Links can only reach the first one; choose another name.
+          </p>
+        ) : null}
+      </div>
+    </BuilderSettingRow>
+  );
+}
 
 function updateSectionBackground(
   onUpdateSection: BuilderSectionControlsProps["onUpdateSection"],
@@ -102,6 +169,26 @@ function updateSectionOverlayBlendMode(
   onUpdateSection((current) => {
     const overlay = normalizeRowOverlayScreenSettings(current.overlayScreen);
     return { ...current, overlayScreen: { ...overlay, blendMode } };
+  });
+}
+
+/**
+ * The section's shape layer (task SC-859). Normalize-first for the overlay's
+ * reason: the key is absent on nearly every row. Choosing "None" removes the
+ * key outright, so a row that tried a shape and gave it up saves exactly as
+ * it did before.
+ */
+function updateSectionShapeLayer(
+  onUpdateSection: BuilderSectionControlsProps["onUpdateSection"],
+  patch: Partial<SectionShapeLayer>
+) {
+  onUpdateSection((current) => {
+    const next = { ...normalizeSectionShapeLayer(current.shapeLayer), ...patch };
+    if (next.shape === "none") {
+      const { shapeLayer: _dropped, ...rest } = current;
+      return rest as BuilderTemplateSection;
+    }
+    return { ...current, shapeLayer: next };
   });
 }
 
@@ -202,6 +289,7 @@ export function BuilderSectionControls({
   // The normalizer is also what the renderer and the serializer read it
   // through, so the panel shows exactly the value that will be painted.
   const overlayScreen = normalizeRowOverlayScreenSettings(section.overlayScreen);
+  const shapeLayer = normalizeSectionShapeLayer(section.shapeLayer);
 
   return (
     <div className={`builder-section-settings is-lattice${device ? " is-device-mode" : ""}`}>
@@ -325,6 +413,7 @@ export function BuilderSectionControls({
                       <option value="50">50% (centered)</option>
                     </select>
                   </BuilderSettingRow>
+          {!device ? <SectionAnchorNameRow section={section} onUpdateSection={onUpdateSection} /> : null}
           {canJoinPrevious && !device ? (
                     <BuilderSettingRow label="Share Background">
                       <input
@@ -665,6 +754,69 @@ export function BuilderSectionControls({
                     </option>
                   ))}
                 </select>
+              </BuilderSettingRow>
+            </>
+          ) : null}
+        </div>
+        )}
+        {/*
+         * SHAPE — a curve, wave or slant over the background (task SC-859).
+         * Its own lattice column for the Overlay group's reason above:
+         * check_panels measures columns, so this group is measured too.
+         */}
+        {device ? null : (
+        <div className="builder-schema-panel-column">
+          <div className="builder-schema-group-title">Shape</div>
+          <BuilderSettingRow label="Shape">
+            <select
+              value={shapeLayer.shape}
+              onChange={(event) =>
+                updateSectionShapeLayer(onUpdateSection, {
+                  shape: event.target.value as SectionShapeLayer["shape"]
+                })
+              }
+            >
+              {SECTION_SHAPE_KINDS.map((kind) => (
+                <option key={kind.value} value={kind.value}>
+                  {kind.label}
+                </option>
+              ))}
+            </select>
+          </BuilderSettingRow>
+          {shapeLayer.shape !== "none" ? (
+            <>
+              <BuilderSettingRow label="Side">
+                <select
+                  value={shapeLayer.side}
+                  onChange={(event) =>
+                    updateSectionShapeLayer(onUpdateSection, {
+                      side: event.target.value as SectionShapeLayer["side"]
+                    })
+                  }
+                >
+                  {SECTION_SHAPE_SIDES.map((side) => (
+                    <option key={side.value} value={side.value}>
+                      {side.label}
+                    </option>
+                  ))}
+                </select>
+              </BuilderSettingRow>
+              <BuilderSettingRow label="Color">
+                <BuilderThemeColorField
+                  fallback="#ffffff"
+                  themeColors={themeColors}
+                  value={shapeLayer.color}
+                  onChange={(color) => updateSectionShapeLayer(onUpdateSection, { color })}
+                />
+              </BuilderSettingRow>
+              <BuilderSettingRow label="Opacity">
+                <BuilderNumberSelectControl
+                  value={String(shapeLayer.opacity)}
+                  min={0}
+                  max={100}
+                  fallback="100"
+                  onChange={(value) => updateSectionShapeLayer(onUpdateSection, { opacity: Number(value) })}
+                />
               </BuilderSettingRow>
             </>
           ) : null}

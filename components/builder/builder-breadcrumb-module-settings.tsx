@@ -121,6 +121,7 @@ function BreadcrumbItemsManager({ settings, set }: BuilderSchemaFieldContext) {
               <BuilderProjectDataPicker
                 source="pages"
                 valueKind="path"
+                allowSections
                 value={item.url}
                 onChange={(url) => updateItem(item.id, "url", url)}
                 noneLabel={index === items.length - 1 ? "— Current page (no link) —" : "— No link —"}

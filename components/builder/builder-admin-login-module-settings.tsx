@@ -48,6 +48,7 @@ const SCHEMA: BuilderSettingsSchema = {
             control: "picker",
             source: "pages",
             valueKind: "path",
+            allowSections: true,
             placeholder: "/admin-dashboard",
             fallback: "/admin-dashboard",
             rendersVia: "AdminLoginPreview (builder-template-preview.tsx)"

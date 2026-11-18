@@ -4,9 +4,11 @@
  *
  * For every imported page, and every section the capture recorded on it, puts
  * the ORIGINAL section's screenshot beside a photograph of the IMPORTED rows,
- * and lists under seven named categories each captured style the import did
+ * and lists under eight named categories each captured style or link the import did
  * not reproduce: background, decorative layers, shadows and glow, shapes,
- * column layout, text styling, and files downloaded but never placed.
+ * column layout, text styling, links (one the original had that is gone, or
+ * one that jumps to a part of a page nothing carries — task SC-855), and files
+ * downloaded but never placed.
  *
  * Read-only. The only thing it writes is its own report:
  * SiteImport/<jobId>/fidelity.html in Blob (plus the photographs beside it),
@@ -36,6 +38,14 @@
  *                      (Doppler `dev`), for a machine with no production keys.
  *                      Needs the local Supabase container running.
  *   --no-upload        write the local copy only
+ *   --own-server       photograph through a files-only server of this
+ *                      checkout's public/ folder, started and stopped here,
+ *                      instead of a running app (the build's last step uses
+ *                      this on the import worker — SC-862). Never the full
+ *                      app: that starts background jobs against production.
+ *   --result-file <p>  write what the run found as JSON, success or failure
+ *                      (the build reads it and records it on the job for the
+ *                      Imports screen; lib/siteImportFidelityRun.js)
  *
  * EXIT
  *   0  report written; every page was found and photographed
@@ -50,6 +60,7 @@ import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { comparePixels, describeChange } from './ui/visual-diff.mjs';
+import { startStaticPreviewServer } from './lib/static_preview_server.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const require = createRequire(path.join(ROOT, 'package.json'));
@@ -66,9 +77,21 @@ const flagValue = (name) => {
 
 const JOB_ID = flagValue('--job');
 const PAGE_FILTER = flagValue('--page');
-const BASE_URL = (flagValue('--base-url') || process.env.UI_HARNESS_BASE_URL || 'http://localhost:3001').replace(/\/+$/, '');
+const OWN_SERVER = flag('--own-server');
+let BASE_URL = (flagValue('--base-url') || process.env.UI_HARNESS_BASE_URL || 'http://localhost:3001').replace(/\/+$/, '');
 const READONLY_DB = flag('--readonly-db');
 const NO_UPLOAD = flag('--no-upload');
+const RESULT_FILE = flagValue('--result-file');
+
+/** What this run found, for the build that ran it (SC-862). Never throws. */
+function writeResult(value) {
+  if (!RESULT_FILE) return;
+  try {
+    writeFileSync(RESULT_FILE, JSON.stringify(value, null, 2));
+  } catch (err) {
+    console.error(`could not write --result-file ${RESULT_FILE}: ${err.message || err}`);
+  }
+}
 const PREVIEW_SLUG = 'site-import-fidelity-preview';
 
 if (!JOB_ID) {
@@ -299,15 +322,27 @@ function decorativeBlind(pages) {
   return pages.flatMap((p) => p.sections || []).filter((s) => (s.notMeasured || []).some((n) => n.category === 'decorative')).length;
 }
 
+/** Pages on which some links could not be checked (task SC-855) — zero there
+ *  is "not looked at", never "none". */
+function linksBlind(pages) {
+  return pages.filter((p) => (p.pageNotMeasured || []).some((n) => n.category === 'links')).length;
+}
+
+/** The summary cell for one category: its count, plus what it could not see. */
+function summaryCount(key, n, pages) {
+  if (key === 'decorative' && decorativeBlind(pages)) return `${n} — and CANNOT TELL on ${decorativeBlind(pages)} section(s) captured before layers were recorded`;
+  if (key === 'links' && linksBlind(pages)) return `${n} — and CANNOT TELL on ${linksBlind(pages)} page(s): some links jump to a page this run did not read`;
+  return String(n);
+}
+
 function renderReport({ job, pages, totals, generatedAt }) {
-  const blindDecor = decorativeBlind(pages);
   const summary = fidelity.FIDELITY_CATEGORIES.map((c) =>
-    `<tr><td>${esc(c.label)}</td><td>${c.key === 'decorative' && blindDecor ? `${totals[c.key]} — and CANNOT TELL on ${blindDecor} section(s) captured before layers were recorded` : totals[c.key]}</td></tr>`).join('');
+    `<tr><td>${esc(c.label)}</td><td>${esc(summaryCount(c.key, totals[c.key], pages))}</td></tr>`).join('');
   const body = pages.map((p) => `
   <section class="page">
     <h2>${esc(p.path)} <small>${p.status === 'cannot-tell' ? `<span class="blind">CANNOT TELL — ${esc(p.reason)}</span>` : `Builder page ${esc(p.builderPageId)}`}</small></h2>
     ${p.fullPair ? `<details><summary>Whole page</summary>${p.fullPair}</details>` : ''}
-    ${p.pageFindings.length ? `<div class="findings">${findingsHtml(p.pageFindings, [])}</div>` : ''}
+    ${p.pageFindings.length || p.pageNotMeasured.length ? `<div class="findings">${findingsHtml(p.pageFindings, p.pageNotMeasured)}</div>` : ''}
     ${p.sections.map((s) => `
     <article>
       <h3>Section ${esc(s.sourceId)} <small>${s.status === 'cannot-tell' ? `<span class="blind">CANNOT TELL — ${esc(s.reason)}</span>` : `rows ${esc(s.builderRowIds.join(', '))}`}</small></h3>
@@ -367,6 +402,16 @@ async function main() {
   const builderPages = await loader.pages(irPages.map(({ key }) => pageIds[key]).filter(Boolean));
   const themes = await loader.themes(job.projectId);
 
+  let ownServer = null;
+  if (OWN_SERVER) {
+    try {
+      ownServer = await startStaticPreviewServer(ROOT);
+      BASE_URL = ownServer.url;
+      console.log(`Camera:  files-only preview server at ${BASE_URL}`);
+    } catch (err) {
+      console.log(`Camera:  could not start the files-only preview server (${err.message})`);
+    }
+  }
   const camera = await openCamera();
   if (camera.error) console.log(`Camera:  CANNOT TELL — ${camera.error}`);
 
@@ -400,7 +445,7 @@ async function main() {
   for (const { page: irPage, key } of irPages) {
     const builderPageId = pageIds[key];
     const builderPage = builderPages.find((p) => String(p.id) === String(builderPageId));
-    const entry = { path: key, builderPageId, status: 'compared', reason: '', sections: [], pageFindings: [], fullPair: '' };
+    const entry = { path: key, builderPageId, status: 'compared', reason: '', sections: [], pageFindings: [], pageNotMeasured: [], fullPair: '' };
     reportPages.push(entry);
     if (!builderPage) {
       Object.assign(entry, fidelity.pageVerdict({ builderPageId, builderPageFound: false, cameraError: '', sectionsWithRows: 0, photographed: 0 }));
@@ -471,6 +516,11 @@ async function main() {
       entry.pageFindings.push(finding);
       allFindings.push(finding);
     }
+    // Links: one the original had that is gone, and a jump that lands on nothing (SC-855).
+    const links = fidelity.linkFindings(irPage, rows, { pageUrl: irPage.url, pages: builderPages });
+    entry.pageFindings.push(...links.findings);
+    entry.pageNotMeasured.push(...links.notMeasured);
+    allFindings.push(...links.findings);
     for (const { finding } of fidelity.unplacedAssets(ir.assets || [], irPage.url, JSON.stringify(builderPage))) {
       entry.pageFindings.push(finding);
       allFindings.push(finding);
@@ -486,6 +536,7 @@ async function main() {
       `${blindSections ? `; ${blindSections} section(s) CANNOT TELL` : ''}`);
   }
   if (!camera.error) await camera.close();
+  if (ownServer) await ownServer.close();
 
   const totals = fidelity.countByCategory(allFindings);
   const html = renderReport({ job, pages: reportPages, totals, generatedAt: new Date().toISOString() });
@@ -501,16 +552,35 @@ async function main() {
 
   console.log('\nThings lost, all pages:');
   for (const c of fidelity.FIDELITY_CATEGORIES) {
-    const n = totals[c.key];
-    const blindDecor = c.key === 'decorative' ? decorativeBlind(reportPages) : 0;
-    console.log(`  ${labelOf[c.key].padEnd(40)} ${n}${blindDecor ? ` — and CANNOT TELL on ${blindDecor} section(s): captured before ::before/::after layers were recorded` : ''}`);
+    console.log(`  ${labelOf[c.key].padEnd(40)} ${summaryCount(c.key, totals[c.key], reportPages)}`);
+  }
+  for (const p of reportPages) {
+    for (const f of p.pageFindings.filter((x) => x.category === 'links')) console.log(`  ${p.path}  LINKS: ${f.what} — import: ${f.imported}`);
+    for (const n of p.pageNotMeasured.filter((x) => x.category === 'links')) console.log(`  ${p.path}  LINKS CANNOT TELL: ${n.why}`);
   }
   if (blindPages) console.log(`\n${blindPages} page(s) CANNOT TELL — see the report; that is not "no differences".`);
   console.log(`\nReport: ${link}${uploadNote ? `  (${uploadNote}; local copy)` : ''}`);
-  process.exit(blindPages || uploadNote.startsWith('NOT') ? 2 : 0);
+  const exitCode = blindPages || uploadNote.startsWith('NOT') ? 2 : 0;
+  writeResult({
+    ok: true,
+    exitCode,
+    reportUrl: upload ? link : '',
+    localFile,
+    totals: fidelity.FIDELITY_CATEGORIES.map((c) => ({ key: c.key, label: c.label, count: totals[c.key] || 0 })),
+    pages: reportPages.map((p) => ({ path: p.path, status: p.status, reason: p.reason || '' })),
+    blindSections: reportPages.reduce((n, p) => n + p.sections.filter((x) => x.status === 'cannot-tell').length, 0),
+    notes: [
+      ...(camera.error ? [`No section was photographed: ${camera.error}`] : []),
+      ...(uploadNote && uploadNote.startsWith('NOT') ? [`The report was ${uploadNote}.`] : []),
+      ...(decorativeBlind(reportPages) ? [`Decorative layers: CANNOT TELL on ${decorativeBlind(reportPages)} section(s) captured before layers were recorded.`] : []),
+      ...(linksBlind(reportPages) ? [`Links: CANNOT TELL on ${linksBlind(reportPages)} page(s) — some links jump to a page this run did not read.`] : []),
+    ],
+  });
+  process.exit(exitCode);
 }
 
 main().catch((err) => {
   console.error(`\nNo report: ${err.message}`);
+  writeResult({ ok: false, exitCode: 1, error: String(err.message || err) });
   process.exit(1);
 });

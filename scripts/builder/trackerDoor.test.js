@@ -128,6 +128,53 @@ test('comments: open tickets read once, Live only when needed, newest first, unk
   assert.equal(await door.readComments('SC-404', { run: fake.run }), null, 'readComments answers null, "could not read"');
 });
 
+// --- the narrow reader (SC-851) ----------------------------------------------
+
+/** A fake for scripts/tracker_read.mjs, which runs where the door would. */
+function fakeReader(answer) {
+  const calls = [];
+  const run = (_node, argv, opts) => {
+    const at = argv.findIndex((a) => a.endsWith('tracker_read.mjs'));
+    // The reader, never the door: the door's listing is the 851-request read.
+    if (at < 0) throw new Error(`expected scripts/tracker_read.mjs, got ${argv.join(' ')}`);
+    const cmd = argv.slice(at + 1);
+    calls.push({ cmd, env: opts.env, timeout: opts.timeout });
+    return answer(cmd);
+  };
+  return { run, calls };
+}
+
+test('findTasksNamed asks the reader for that one name, Live included, and shapes it as a task', async () => {
+  const fake = fakeReader(() => JSON.stringify([{ id: 'SC-9', name: 'Pipeline pause switch', status: 'live', updated: '2026-11-03T00:00:00.000Z' }]));
+  const tasks = await door.findTasksNamed({ project: 'starcaster', name: 'Pipeline pause switch', run: fake.run });
+  assert.deepEqual(fake.calls[0].cmd, ['named', '--project', 'starcaster', '--name', 'Pipeline pause switch']);
+  assert.equal(tasks[0].id, 'SC-9');
+  assert.equal(tasks[0].status.status, 'live');
+  assert.equal(tasks[0].date_updated, String(Date.parse('2026-11-03T00:00:00.000Z')));
+  assert.ok(fake.calls[0].timeout > 0, 'every call has a deadline');
+});
+
+test('BREAK-TEST: a failed name lookup throws, never answers "no such ticket"', async () => {
+  // An empty answer means RUNNING for the pause switch, so it may only come from a read that worked.
+  const dead = fakeReader(() => { const e = new Error('exit 1'); e.stderr = 'tracker_read: listing the starcaster tickets failed: HTTP 0'; throw e; });
+  await assert.rejects(door.findTasksNamed({ project: 'starcaster', name: 'x', run: dead.run }), /HTTP 0/);
+  const garbled = fakeReader(() => '');
+  await assert.rejects(door.findTasksNamed({ project: 'starcaster', name: 'x', run: garbled.run }), /not a JSON list/);
+});
+
+test('readTaskComments reads ONE ticket, newest first, and an unknown ticket is an error', async () => {
+  const fake = fakeReader(() => JSON.stringify([
+    { id: '1', author: { id: 1, name: 'Dane' }, at: '2026-11-01T00:00:00.000Z', text: 'first' },
+    { id: '2', author: { id: 31, name: 'loop' }, at: '2026-11-02T00:00:00.000Z', text: 'second' },
+  ]));
+  const got = await door.readTaskComments('SC-9', { run: fake.run });
+  assert.deepEqual(fake.calls[0].cmd, ['comments', '--task', 'SC-9']);
+  assert.deepEqual(got.map((c) => c.comment_text), ['second', 'first'], 'newest first, as getTaskCommentRecords answers');
+  assert.equal(got[1].user.id, 1);
+  const missing = fakeReader(() => { const e = new Error('exit 1'); e.stderr = 'tracker_read: reading the comments on SC-404 failed: HTTP 404: no ticket SC-404.'; throw e; });
+  await assert.rejects(door.readTaskComments('SC-404', { run: missing.run }), /no ticket SC-404/);
+});
+
 // --- writes -------------------------------------------------------------------
 
 test('a guarded move hands the guard to the door', () => {

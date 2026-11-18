@@ -35,6 +35,14 @@
  *   a section whose content changed (a human redesigned it) is SKIPPED and
  *   reported as humanModified — never overwritten. --force-section <id>
  *   overrides for one section at a time.
+ * - Stale sections (SC-850): an import section (`imps_`) on a page that
+ *   this build no longer produces is REMOVED when its content still matches
+ *   the recorded fingerprint, and KEPT (and named in the report) when it was
+ *   edited since. Without this an import fix that stops making a section
+ *   left the old one on every page.
+ * - Deleted pages (SC-850): a page this import made and somebody deleted is
+ *   LEFT OUT of a rebuild, not made again, and the report names it.
+ *   --recreate-deleted makes such pages again.
  * - The report must reconcile (every IR element accounted) or --apply
  *   refuses to run.
  * - IMPORT THEME (task 86bce9wx0, Dane 2026-10-06): --apply also creates a
@@ -83,14 +91,18 @@
  *   ... --no-menus   skip the Top Menu / Footer Menu (see MENUS above)
  *   ... --nav-master <savedSectionId> pin which header master --nav writes
  *       to (default: the one the most pages reference)
+ *   ... --no-fidelity   skip the difference report a real build ends with
+ *       (SC-862 — see THE DIFFERENCE REPORT below)
  *   ... --result-file <path>   write what the run planned / did as JSON (the
  *       import worker passes this when the Site Import screen's Preview build
  *       / Build draft pages buttons queued the run — task 86bcz9wcx)
  */
 
 import path from 'node:path';
+import os from 'node:os';
 import crypto from 'node:crypto';
-import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { spawn } from 'node:child_process';
+import { readFileSync, writeFileSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { mainCheckoutDir } from './lib/main_checkout.mjs';
 import { copyPromotedAssets, SourceUnreachableError } from './lib/site_import_copy.mjs';
@@ -173,9 +185,11 @@ const assetsStore = require('./lib/assetsStore.js');
 const { uploadBufferToBlobAtPath } = require('./lib/blobStorage.js');
 const {
   mapSite, reportReconciles, mergeMappedSections, adoptLegacySectionIds,
-  writeMappedPages, summarizePageWrites,
+  writeMappedPages, summarizePageWrites, dropStaleImportSections,
   buildMenuSection, planMenuTarget, attachMenuInstances, menuSiteLabel,
+  referenceSectionLinks, demoteEditedSectionLinks,
 } = require('./lib/site-import/dist/map.js');
+const { referenceJumpLinks } = require('./lib/siteImportJumpLinks.js');
 const { planImportTheme, saveImportTheme, undoLine } = require('./lib/siteImportTheme.js');
 const crmConfigStore = require('./lib/crmConfigStore.js');
 const crmFormsStore = require('./lib/crmFormsStore.js');
@@ -184,6 +198,9 @@ const {
 } = require('./lib/siteImportForms.js');
 const publishStore = require('./lib/builderPublishStore.js');
 const {
+  FIDELITY_TIMEOUT_MS, fidelityScriptArgs, fidelityFailureReason, fidelityCheckpoint, fidelitySummaryLine,
+} = require('./lib/siteImportFidelityRun.js');
+const {
   resolveRefreshSource, planRefresh, refreshSummaryLine, findHumanModifiedSections, themeMakesDefault,
 } = require('./lib/siteImportRefresh.js');
 
@@ -191,6 +208,8 @@ const APPLY = flag('--apply');
 const NAV = flag('--nav');
 const NAV_REPLACE = flag('--nav-replace');
 const NO_THEME = flag('--no-theme');
+const NO_FIDELITY = flag('--no-fidelity');
+const RECREATE_DELETED = flag('--recreate-deleted');
 const THEME_ONLY = flag('--theme-only');
 const FORMS_ONLY = flag('--forms-only');
 const SKIP_FORMS = new Set(flagValues('--skip-form'));
@@ -217,7 +236,7 @@ function must(res, what) {
  * Written to --result-file at the end, success or failure. Plain words only —
  * the operator reads these lines as they are.
  */
-const RESULT = { mode: APPLY ? 'apply' : 'preview', pages: [], theme: null, warnings: [], refresh: '', applied: null, reportUrl: '' };
+const RESULT = { mode: APPLY ? 'apply' : 'preview', pages: [], theme: null, warnings: [], refresh: '', applied: null, reportUrl: '', fidelity: null };
 const warn = (line) => { RESULT.warnings.push(String(line)); };
 function writeResult(extra = {}) {
   if (!RESULT_FILE) return;
@@ -226,6 +245,15 @@ function writeResult(extra = {}) {
   } catch (err) {
     console.error(`could not write --result-file ${RESULT_FILE}: ${err.message || err}`);
   }
+}
+/**
+ * A page the import recorded, or null when it has been deleted since (a
+ * clean 404 — SC-850 leaves such pages out). Any other failure throws.
+ */
+async function readImportedPage(pageId, scope) {
+  const res = await pagesStore.getPage(pageId, scope);
+  if (res && res.ok === false && res.status === 404) return null;
+  return must(res, `read page ${pageId}`);
 }
 const sha256 = (value) => crypto.createHash('sha256').update(JSON.stringify(value)).digest('hex');
 
@@ -379,9 +407,33 @@ async function main() {
     out.report.elements.form -= form;
   }
   const protectedIds = new Set(protectedSections.map((p) => p.section.id));
+  // A jump link to a section a person edited would point at an anchor name
+  // the kept copy never received: list it as a leftover, not as linked, and
+  // do not store it by reference (review of SC-854). Before the dry run's
+  // report, so preview and apply say the same thing.
+  out.sectionLinks = demoteEditedSectionLinks(
+    out.report, out.sectionLinks || [], new Map(protectedSections.map((p) => [p.section.id, p.live])),
+  );
   const refreshLine = refresh
-    ? refreshSummaryLine(refresh, planRefresh(out.pages, priorPageIds, existingPages), protectedIds.size)
+    ? refreshSummaryLine(refresh, planRefresh(out.pages, priorPageIds, existingPages), protectedIds.size, { recreateDeleted: RECREATE_DELETED })
     : '';
+
+  // ---- Stale sections and deleted pages (SC-850) --------------------------
+  // Planned against the startup listing so the dry run says exactly what
+  // --apply will do; --apply asks the same question again of each page as it
+  // reads it at write time.
+  const staleIo = { recordedHash: (id) => sectionHashesIn[id], fingerprint: sha256 };
+  const sectionLabel = (s) => `${s.id}${s.title || s.name ? ` ("${s.title || s.name}")` : ''}`;
+  const liveIds = new Set(existingPages.map((p) => String(p.id)));
+  const deletedPages = out.pages.filter((p) => priorPageIds[p.key] && !liveIds.has(String(priorPageIds[p.key])));
+  const leftOutKeys = new Set(RECREATE_DELETED ? [] : deletedPages.map((p) => p.key));
+  const stalePlan = [];
+  for (const page of out.pages) {
+    const current = existingPages.find((p) => String(p.id) === String(priorPageIds[page.key] || ''));
+    if (!current) continue;
+    const { removed, keptEdited } = dropStaleImportSections(current.layoutSections || [], page.sections, staleIo);
+    if (removed.length || keptEdited.length) stalePlan.push({ page, removed, keptEdited });
+  }
 
   // ---- Report ------------------------------------------------------------
   if (refreshLine) log(`\n${refreshLine}`);
@@ -389,7 +441,7 @@ async function main() {
   {
     const existingIds = new Set(existingPages.map((p) => String(p.id)));
     const nameByKey = new Map(out.pages.map((p) => [p.key, p.name]));
-    RESULT.pages = out.report.pages.map((p) => ({
+    RESULT.pages = out.report.pages.filter((p) => !leftOutKeys.has(p.key)).map((p) => ({
       path: p.path,
       slug: p.slug,
       name: nameByKey.get(p.key) || p.slug,
@@ -400,6 +452,16 @@ async function main() {
   }
   if (out.report.skipped.length) warn(`${out.report.skipped.length} part(s) of the old site could not be placed on any page.`);
   if (protectedIds.size) warn(`${protectedIds.size} section(s) were edited by a person since the last build and will be left exactly as they are.`);
+  if (deletedPages.length) {
+    const names = deletedPages.map((p) => `/${p.slug}`).join(', ');
+    warn(RECREATE_DELETED
+      ? `${deletedPages.length} page(s) this import made were deleted since the last build and will be made again (--recreate-deleted): ${names}.`
+      : `${deletedPages.length} page(s) this import made were deleted since the last build, left out: ${names}.`);
+  }
+  const keptStale = stalePlan.flatMap((p) => p.keptEdited.map((s) => `/${p.page.slug}: ${sectionLabel(s)}`));
+  if (keptStale.length) {
+    warn(`${keptStale.length} old section(s) this build no longer makes were edited since the last build, so they stay: ${keptStale.join('; ')}.`);
+  }
   log('\nReconciliation:', JSON.stringify(out.report.elements));
   if (out.report.skipped.length) log('Skipped:', JSON.stringify(out.report.skipped, null, 2));
   for (const p of out.report.pages) {
@@ -412,6 +474,21 @@ async function main() {
     for (const r of out.report.repeatCaptures) log(`  ${r.path}  (${r.url}, ${r.elements} elements)`);
   }
   log(`Pages: ${out.pages.length} — each becomes its own Builder page.`);
+  if (deletedPages.length) {
+    log(`Deleted since the last build${RECREATE_DELETED ? ' — made again (--recreate-deleted)' : ', left out (--recreate-deleted makes them again)'}:`);
+    for (const p of deletedPages) log(`  /${p.slug} (was page ${priorPageIds[p.key]})`);
+  }
+  if (stalePlan.length) {
+    log('Old sections this build no longer makes:');
+    for (const { page, removed, keptEdited } of stalePlan) {
+      log(`  /${page.slug}: ${removed.length} removed (untouched since the import made them), ${keptEdited.length} kept (edited since)`);
+      for (const s of keptEdited) log(`     kept: ${sectionLabel(s)}`);
+    }
+  }
+  RESULT.staleSections = stalePlan.map(({ page, removed, keptEdited }) => ({
+    slug: page.slug, removed: removed.length, kept: keptEdited.map((s) => s.id),
+  }));
+  RESULT.leftOutPages = RECREATE_DELETED ? [] : deletedPages.map((p) => ({ slug: p.slug, pageId: String(priorPageIds[p.key]) }));
   if (protectedIds.size) {
     log(`Hash guard: ${protectedIds.size} section(s) human-modified — will be left untouched:`);
     for (const { page, section } of protectedSections) log(`  ${page.slug} :: ${section.id} (${section.title})`);
@@ -460,6 +537,7 @@ async function main() {
   }
   log(`Assets: promote ${out.report.assets.promoted}, not placed but kept ${out.report.assets.unplaced}, crops ${out.report.assets.cropsCopied}, left in namespace ${out.report.assets.leftInNamespace}`);
   logMenuPlan(job, out, prior);
+  logJumpLinks(out);
   logFormsPlan(out, prior);
 
   if (!reportReconciles(out.report)) {
@@ -653,8 +731,11 @@ async function main() {
   const ownedSectionIds = new Map();
   // Keyed by page.key, never by source path: two captures of "/" keyed by
   // path found each other's page and were appended onto it (86bch6ger).
-  const { pageIds, writes } = await writeMappedPages(out.pages, {
+  /** pageId -> { slug, removed ids } — read back after the loop. */
+  const staleRemoved = new Map();
+  const { pageIds, writes, leftOut } = await writeMappedPages(out.pages, {
     priorPageIds,
+    recreateDeleted: RECREATE_DELETED,
     prepareSections: (page) => page.sections.map(({ sourceElementIds, dispositions, ...section }) => {
       const clean = rewriteUrls(section, urlMap);
       fillFormIds([clean], formIds);
@@ -666,7 +747,10 @@ async function main() {
     }),
     getPage: async (id) => {
       const fresh = await pagesStore.getPage(id, scope);
-      return fresh.ok && fresh.data ? adoptOldNames(fresh.data) : null;
+      // Only a clean "not found" means the page was deleted (and is then
+      // left out). A failed read must stop the run, never pass as deleted.
+      if (fresh && fresh.ok === false && fresh.status === 404) return null;
+      return adoptOldNames(must(fresh, `read page ${id}`));
     },
     createPage: async (page, sections) => must(await pagesStore.createPage({
       name: page.name,
@@ -679,7 +763,15 @@ async function main() {
     }, scope), `create ${page.slug}`),
     updatePage: async (page, current, merged) =>
       must(await pagesStore.updatePage(current.id, { ...current, layoutSections: merged, ...pageGroundPatch(page, current) }, scope), `update ${page.slug}`),
-    mergeSections: (existing, incoming) => mergeMappedSections(existing, incoming, protectedIds),
+    mergeSections: (existing, incoming, page) => {
+      const stale = dropStaleImportSections(existing, incoming, staleIo);
+      const pageId = String(priorPageIds[page.key]);
+      if (stale.removed.length) staleRemoved.set(pageId, { slug: page.slug, ids: stale.removed.map((s) => s.id) });
+      if (stale.removed.length || stale.keptEdited.length) {
+        log(`  /${page.slug}: removed ${stale.removed.length} old section(s) this build no longer makes; kept ${stale.keptEdited.length} edited since`);
+      }
+      return mergeMappedSections(stale.sections, incoming, protectedIds);
+    },
     onWrite: (page, pageId, sections, action) => {
       ownedSectionIds.set(pageId, sections.map((s) => s.id).filter((id) => !protectedIds.has(id)));
       const reportPage = out.report.pages.find((p) => p.key === page.key);
@@ -687,8 +779,28 @@ async function main() {
       log(`  ${action === 'created' ? 'created' : 'updated'} /${page.slug} (page ${pageId}, draft)`);
     },
   });
-  const writeSummary = summarizePageWrites(out.pages.length, writes);
-  log(`Pages: ${writeSummary.created} created, ${writeSummary.updated} updated — ${writeSummary.distinctPages} distinct page(s) for ${out.pages.length} in the report.`);
+  const writeSummary = summarizePageWrites(out.pages.length - leftOut.length, writes);
+  log(`Pages: ${writeSummary.created} created, ${writeSummary.updated} updated — ${writeSummary.distinctPages} distinct page(s) for ${out.pages.length - leftOut.length} in the report.`);
+  if (leftOut.length) log(`  left out ${leftOut.length} page(s) deleted since the last build: ${leftOut.map((p) => `/${p.slug}`).join(', ')}`);
+  // A page left out here that the startup listing still had was deleted
+  // while this run was going; say so rather than let the report disagree.
+  const lateDeleted = leftOut.filter((p) => !leftOutKeys.has(p.key));
+  if (lateDeleted.length) warn(`${lateDeleted.length} page(s) were deleted while this build ran and were left out: ${lateDeleted.map((p) => `/${p.slug}`).join(', ')}.`);
+
+  // 4-. Read back every page a stale section was removed from (SC-850): the
+  //     write succeeding does not prove the section is gone.
+  for (const [pageId, { slug, ids }] of staleRemoved) {
+    const after = must(await pagesStore.getPage(pageId, scope), `read back /${slug}`);
+    const still = (after.layoutSections || []).filter((s) => ids.includes(s.id)).map((s) => s.id);
+    if (still.length) {
+      console.error(`\nERROR: /${slug} (page ${pageId}) still holds ${still.length} old section(s) after the write: ${still.join(', ')}`);
+      warn(`/${slug}: ${still.length} old section(s) did not come off the page.`);
+      process.exitCode = 1;
+    } else {
+      log(`  read back /${slug}: the ${ids.length} removed section(s) are gone`);
+    }
+    for (const id of ids) if (!still.includes(id)) delete sectionHashes[id];
+  }
   if (writeSummary.problems.length) {
     // Not thrown: the pages are already written, and the checkpoint below
     // must still record them so a re-run finds them. But the run fails.
@@ -697,6 +809,15 @@ async function main() {
     for (const problem of writeSummary.problems) warn(problem);
     process.exitCode = 1;
   }
+
+  // 4-. Jump links by reference, now that every page has its id (SC-854).
+  //     Never throws: the checkpoint below must still record these pages,
+  //     or the next run builds a second set. A failed page fails the run.
+  const jump = await referenceJumpLinks({
+    out, pageIds, ownedSectionIds, pagesStore, scope, referenceSectionLinks,
+    log, warn, error: (line) => console.error(`\n${line}`),
+  });
+  if (jump.failed.length) process.exitCode = 1;
 
   // 4a. Read the Form modules back: each must hold its form's id.
   if (out.forms.length) {
@@ -796,6 +917,74 @@ async function main() {
     checkpoints: { ...checkpoints, map: { ...checkpoints.map, sectionHashes: settledHashes } },
   }), 'record settled section hashes');
   log(`Clobber guard: fingerprinted ${Object.keys(settledHashes).length} import-owned section(s).`);
+
+  // 6. The difference report, LAST — it measures the pages as built.
+  if (NO_FIDELITY) {
+    log('\nDifference report: skipped (--no-fidelity).');
+  } else {
+    await runDifferenceReport(job.id);
+  }
+}
+
+/**
+ * THE DIFFERENCE REPORT (SC-862). A real build ends by running
+ * scripts/site_import_fidelity.mjs over the pages it just wrote and recording
+ * the outcome on the job (checkpoints.fidelity), so the Imports screen shows
+ * it without anyone having to remember. Dane's rule (DOCTRINE §6.25) is that
+ * every difference it lists is a missing capability to file; it ran only by
+ * hand until Bayside went live on 2026-11-17 without it.
+ *
+ * A report that cannot be made does NOT fail the build — the pages are
+ * written and good — but it is recorded as 'failed' with the reason, shown on
+ * the screen and added to the build's warnings. Never skipped quietly.
+ */
+async function runDifferenceReport(jobId) {
+  const dir = mkdtempSync(path.join(os.tmpdir(), 'site-import-fidelity-run-'));
+  const resultFile = path.join(dir, 'result.json');
+  log('\nDifference report: comparing every built page with the original (this takes a few minutes)…');
+  const run = await new Promise((resolve) => {
+    const child = spawn(process.execPath, [path.join(ROOT, 'scripts', 'site_import_fidelity.mjs'), ...fidelityScriptArgs(jobId, resultFile)], {
+      cwd: ROOT, env: process.env, stdio: ['ignore', 'inherit', 'pipe'],
+    });
+    let stderr = '';
+    child.stderr.on('data', (chunk) => {
+      process.stderr.write(chunk);
+      stderr = (stderr + chunk).slice(-20000);
+    });
+    const timer = setTimeout(() => child.kill('SIGTERM'), FIDELITY_TIMEOUT_MS);
+    child.on('close', (code, signal) => { clearTimeout(timer); resolve({ code, signal, stderr }); });
+    child.on('error', (err) => { clearTimeout(timer); resolve({ code: 1, signal: null, stderr: '', error: `could not start the report script: ${err.message}` }); });
+  });
+  let result = null;
+  try { result = JSON.parse(readFileSync(resultFile, 'utf8')); } catch { /* none written */ }
+  rmSync(dir, { recursive: true, force: true });
+  const checkpoint = fidelityCheckpoint({
+    exitCode: run.code,
+    result,
+    error: run.error || fidelityFailureReason(run.stderr, run.code, run.signal),
+  });
+  RESULT.fidelity = checkpoint;
+  const line = fidelitySummaryLine(checkpoint);
+  log(line);
+  if (checkpoint.status !== 'done') warn(line);
+  // Re-read: the report runs for minutes, and the row must not be written
+  // from a copy older than that.
+  const fresh = must(await store.getJob(jobId), 'reload job for the difference report');
+  const saved = await store.updateJob(jobId, { checkpoints: { ...(fresh.checkpoints || {}), fidelity: checkpoint } });
+  if (!saved || saved.ok === false) {
+    const why = `Difference report: made, but it could not be recorded on the import (${saved?.error || `status ${saved?.status}`}), so the Imports screen will not show it.`;
+    console.error(`\nERROR: ${why}`);
+    warn(why);
+    process.exitCode = 1;
+    return;
+  }
+  const back = must(await store.getJob(jobId), 'read back the difference report');
+  if (back.checkpoints?.fidelity?.at !== checkpoint.at) {
+    const why = 'Difference report: the import row did not read back with the report on it, so the Imports screen will not show it.';
+    console.error(`\nERROR: ${why}`);
+    warn(why);
+    process.exitCode = 1;
+  }
 }
 
 /**
@@ -1050,6 +1239,22 @@ function logFormsPlan(out, prior) {
   for (const p of pictures) log(`  left as a picture on ${p.pagePath}: ${p.reason}`);
 }
 
+/** What became of the original's jump links (task SC-854), dry run and
+ *  apply alike — every one the import could not point anywhere, by name. */
+function logJumpLinks(out) {
+  const j = out.report.jumpLinks;
+  if (!j || (!j.linked && !j.skipLinks && !j.unresolved.length && !j.notRecorded)) {
+    log('\nJump links: the original has none.');
+    return;
+  }
+  log(`\nJump links: ${j.linked} now go to an imported section${j.skipLinks ? `; ${j.skipLinks} "skip to content" link(s) left out` : ''}.`);
+  if (j.unresolved.length) {
+    log(`  ${j.unresolved.length} could not be pointed at a section (kept as written, listed in the report):`);
+    for (const u of j.unresolved) log(`  - ${u.page}: "${u.label || u.href}" (${u.href}) — ${u.why}`);
+  }
+  if (j.notRecorded) log(`  ${j.notRecorded.links} not matched yet: ${j.notRecorded.why}`);
+}
+
 /** What the menu step will build — the dry run's promise, and --apply's. */
 function logMenuPlan(job, out, prior) {
   if (NO_MENUS) {
@@ -1089,8 +1294,11 @@ async function runMenus(job, scope, out, urlMap, checkpoints) {
       log(`Menus: no ${kind === 'top' ? 'Top' : 'Footer'} Menu — ${why.join('; ') || 'nothing to build'}.`);
       continue;
     }
-    // The logo's URL becomes the project's own copy, like every image.
-    const section = rewriteUrls(built, urlMap);
+    // The logo's URL becomes the project's own copy, like every image, and
+    // a jump link becomes a link to its section by reference (SC-854).
+    const section = referenceSectionLinks(
+      [rewriteUrls(built, urlMap)], out.sectionLinks || [], job.checkpoints?.map?.pageIds || {}
+    ).sections[0];
     const target = planMenuTarget(kind, savedSections, prior[kind] || '', siteLabel);
     let saved;
     let before = '';
@@ -1125,8 +1333,10 @@ async function runMenus(job, scope, out, urlMap, checkpoints) {
 
   const pageIds = [...new Set(Object.values(job.checkpoints?.map?.pageIds || {}).map(String))];
   let changedPages = 0;
+  let deletedPages = 0;
   for (const pageId of pageIds) {
-    const page = must(await pagesStore.getPage(pageId, scope), `read page ${pageId}`);
+    const page = await readImportedPage(pageId, scope);
+    if (!page) { deletedPages += 1; continue; }
     const next = attachMenuInstances(page.layoutSections || [], pageId, attached);
     if (!next.changed) continue;
     // Spread the page and pass the ARRAY (landmine 13), then read it back.
@@ -1152,7 +1362,7 @@ async function runMenus(job, scope, out, urlMap, checkpoints) {
     const prop = await pagesStore.propagateCanonicalSection(attached[kind].savedSectionId, attached[kind].section, scope);
     log(`Menus: ${kind === 'top' ? 'Top' : 'Footer'} Menu propagation updated ${prop?.updated ?? '?'}/${prop?.total ?? '?'}.`);
   }
-  log(`Menus: attached to ${changedPages} of ${pageIds.length} imported page(s) (the rest already carried them).`);
+  log(`Menus: attached to ${changedPages} of ${pageIds.length - deletedPages} imported page(s) (the rest already carried them)${deletedPages ? `; ${deletedPages} deleted since, skipped` : ''}.`);
   return ids;
 }
 
@@ -1253,14 +1463,16 @@ async function runNav(job, scope, out) {
   // Attach the master instance to every imported page missing it, then
   // propagate so instances match the master exactly.
   const pageIds = [...new Set(Object.values(job.checkpoints?.map?.pageIds || {}).map(String))];
+  let deletedPages = 0;
   for (const pageId of pageIds) {
-    const page = must(await pagesStore.getPage(pageId, scope), `read page ${pageId}`);
+    const page = await readImportedPage(pageId, scope);
+    if (!page) { deletedPages += 1; continue; }
     if ((page.layoutSections || []).some((s) => s.savedSectionId === master.id)) continue;
     const instance = { ...masterSection, id: `impnavinst_${pageId}`, savedSectionId: master.id, canonical: true };
     must(await pagesStore.updatePage(pageId, { ...page, layoutSections: [instance, ...(page.layoutSections || [])] }, scope), `attach nav to ${pageId}`);
   }
   const prop = await pagesStore.propagateCanonicalSection(master.id, masterSection, scope);
-  log(`--nav: attached to ${pageIds.length} page(s); propagation updated ${prop.updated}/${prop.total}.`);
+  log(`--nav: attached to ${pageIds.length - deletedPages} page(s)${deletedPages ? ` (${deletedPages} deleted since, skipped)` : ''}; propagation updated ${prop.updated}/${prop.total}.`);
 }
 
 main().then(() => {

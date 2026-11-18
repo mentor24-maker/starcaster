@@ -133,6 +133,7 @@ const IGNORED_SECTION_FIELDS = new Set(["id", "savedSectionId", "canonical", "ca
  */
 const SECTION_FIELD_LABELS: Record<string, string> = {
   title: "Section title",
+  anchorName: "Anchor Name",
   layout: "Column layout",
   widthMode: "Width mode",
   widthPercent: "Width %",
@@ -145,6 +146,7 @@ const SECTION_FIELD_LABELS: Record<string, string> = {
   equalColumnHeights: "Equal column heights",
   columnGap: "Column gap",
   overlayScreen: "Overlay screen",
+  shapeLayer: "Shape",
   // Per-column, so it renders as "Cell overlay screen (column b)". The label is
   // singular because `compareRecords` has already narrowed it to ONE column by
   // the time it is read; the mechanical humanisation would say "screens".

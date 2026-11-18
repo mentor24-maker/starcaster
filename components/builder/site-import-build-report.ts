@@ -31,7 +31,61 @@ export type MapReportData = {
    * shipped — which is NOT the same as "this site has no menus".
    */
   menus?: MapReportMenus;
+  /**
+   * The original's jump links and what became of them (task SC-854, mirrored
+   * from `MapReport.jumpLinks`). Absent on reports written before then —
+   * which is NOT "this site has no jump links": nobody looked.
+   */
+  jumpLinks?: {
+    linked?: number;
+    skipLinks?: number;
+    unresolved?: { page: string; href: string; label?: string; why: string }[];
+    /** Set when the import predates jump-link capture: these links were
+     *  never matched because nobody looked for the ids, not because the
+     *  original lacks them. */
+    notRecorded?: { links?: number; why?: string };
+  };
 };
+
+export type JumpLinksSummary =
+  | { predates: true; message: string }
+  | {
+      predates: false;
+      /** One plain sentence: how many now land on a section. */
+      line: string;
+      /** Each link that could not, with where it sits and why. */
+      leftovers: { page: string; href: string; label: string; why: string }[];
+    };
+
+export const JUMP_LINKS_PREDATE_MESSAGE =
+  "This preview predates jump-link import — run Preview Build again to see where the menu's jump links land.";
+
+/** What the Imports screen says about the original's jump links (SC-854). */
+export function summarizeJumpLinks(report: MapReportData): JumpLinksSummary {
+  const j = report?.jumpLinks;
+  if (!j || typeof j !== "object") return { predates: true, message: JUMP_LINKS_PREDATE_MESSAGE };
+  const linked = Number(j.linked) || 0;
+  const skip = Number(j.skipLinks) || 0;
+  const leftovers = (Array.isArray(j.unresolved) ? j.unresolved : []).map((u) => ({
+    page: String(u.page || ""),
+    href: String(u.href || ""),
+    label: String(u.label || ""),
+    why: String(u.why || ""),
+  }));
+  const notRecorded = Number(j.notRecorded?.links) || 0;
+  if (!linked && !skip && !leftovers.length && !notRecorded) {
+    return { predates: false, line: "The original site has no links that jump to a part of a page.", leftovers };
+  }
+  const parts = [`${pluralize(linked, "jump link")} now ${linked === 1 ? "goes" : "go"} to an imported section`];
+  if (skip) parts.push(`${pluralize(skip, '"skip to content" link')} left out on purpose`);
+  if (leftovers.length) parts.push(`${leftovers.length} could not be pointed at a section (listed below)`);
+  if (notRecorded) {
+    parts.push(
+      `${pluralize(notRecorded, "jump link")} not matched yet: ${String(j.notRecorded?.why || "this import predates jump-link capture")}`
+    );
+  }
+  return { predates: false, line: `${parts.join("; ")}.`, leftovers };
+}
 
 export type MapReportMenus = {
   top?: { items?: number; topLevel?: number; logo?: boolean } | null;

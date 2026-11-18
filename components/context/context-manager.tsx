@@ -8,6 +8,7 @@ import {
   contextStoragePath,
   formatFileSize,
 } from '../../lib/contextFileTypes.js';
+import { CONTEXT_USES, entryReadability } from '../../lib/contextUses.js';
 
 /**
  * Assets › Context (ticket SC-808, slice 1 of 3): written reference material a
@@ -26,6 +27,12 @@ import {
  * POST /api/context as a kind 'file' entry. Which files are accepted is ONE
  * rule, lib/contextFileTypes.js, which the server applies again.
  * The agent read-out is SC-810.
+ *
+ * Uses (SC-826): one switch per tool in lib/contextUses.js ("Reel Spinner
+ * reads this") on every entry. A switch saves at once with PATCH { usedBy }
+ * and the list is then READ BACK from the server, so what it shows after a
+ * click is what was stored, never what was clicked. A switched-on file the
+ * tool cannot read says so beside the switch.
  */
 
 export const CONTEXT_PATH = '/api/context';
@@ -45,6 +52,7 @@ export type ContextEntry = {
   fileName?: string;
   fileType?: string;
   fileSize?: number | null;
+  usedBy?: string[];
 };
 
 type AppShape = {
@@ -103,6 +111,7 @@ export default function ContextManager() {
   const [uploading, setUploading] = useState<{ name: string; percent: number } | null>(null);
   const [uploadError, setUploadError] = useState('');
   const [dragging, setDragging] = useState(false);
+  const [switching, setSwitching] = useState('');
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const requestSeq = useRef(0);
 
@@ -356,6 +365,35 @@ export default function ContextManager() {
     setDragging(false);
   };
 
+  /** Switch one tool on or off for one entry, then read the list back. */
+  const toggleUse = async (entry: ContextEntry, useId: string, on: boolean) => {
+    if (switching) return;
+    const current = entry.usedBy || [];
+    const next = on ? [...current.filter((u) => u !== useId), useId] : current.filter((u) => u !== useId);
+    const use = CONTEXT_USES.find((u: { id: string }) => u.id === useId);
+    setSwitching(`${entry.id}:${useId}`);
+    setNotice('');
+    const seq = requestSeq.current;
+    try {
+      const body = await call(`${CONTEXT_PATH}/${encodeURIComponent(entry.id)}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ usedBy: next }),
+      });
+      if (seq !== requestSeq.current) return;
+      if (!body?.ok) {
+        setNotice(body?.error?.message || `"${entry.title}" could not be switched ${on ? 'on' : 'off'} for ${use?.tool || useId}.`);
+      }
+      await load();
+    } catch (err) {
+      if (seq !== requestSeq.current) return;
+      setNotice(err instanceof Error ? err.message : `"${entry.title}" could not be switched ${on ? 'on' : 'off'}.`);
+    } finally {
+      // Always: load() itself moves requestSeq on, so a seq test here would
+      // leave every switch disabled after the first click.
+      setSwitching('');
+    }
+  };
+
   const remove = async (entry: ContextEntry) => {
     setConfirmingDelete('');
     const seq = requestSeq.current;
@@ -472,6 +510,7 @@ export default function ContextManager() {
               <th>Kind</th>
               <th>Size</th>
               <th>Last updated</th>
+              {CONTEXT_USES.map((use: { id: string; tool: string }) => <th key={use.id}>{use.tool}</th>)}
               <th aria-label="Actions" />
             </tr>
           </thead>
@@ -488,6 +527,27 @@ export default function ContextManager() {
                 <td>{kindLabel(entry)}</td>
                 <td>{entry.kind === 'file' && entry.fileSize != null ? formatFileSize(entry.fileSize) : ''}</td>
                 <td>{formatUpdated(entry.updatedAt)}</td>
+                {CONTEXT_USES.map((use: { id: string; label: string; tool: string }) => {
+                  const on = (entry.usedBy || []).includes(use.id);
+                  const readability = entryReadability(entry, use.tool);
+                  return (
+                    <td key={use.id} className="context-manager-use">
+                      <label className="context-manager-use-switch">
+                        <input
+                          type="checkbox"
+                          checked={on}
+                          disabled={Boolean(switching)}
+                          data-use={use.id}
+                          onChange={(e) => void toggleUse(entry, use.id, e.target.checked)}
+                        />
+                        <span>{use.label}</span>
+                      </label>
+                      {on && !readability.readable ? (
+                        <span className="context-manager-use-warning">{readability.reason}</span>
+                      ) : null}
+                    </td>
+                  );
+                })}
                 <td className="context-manager-row-actions">
                   {confirmingDelete === entry.id ? (
                     <>

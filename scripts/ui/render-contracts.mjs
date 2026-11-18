@@ -1247,6 +1247,184 @@ export const RENDER_CONTRACTS = [
     },
   },
   {
+    id: 'menu-link-to-a-named-section-lands-on-it',
+    why:
+      'On baysidepartners.com the menu\'s About Us, Services and Contact Us did nothing: they were ' +
+      '`/#about-us`-style jump links and no section on any StarCaster page could carry a name ' +
+      '(task SC-852, operator 2026-11-17). A section now has an Anchor name, rendered as its id, ' +
+      'and a menu item stores the section by its id — so the name in the address is looked up at ' +
+      'render time and renaming the anchor breaks nothing. This puts a menu at the top of a page ' +
+      'that scrolls, links one item to the subject section by REFERENCE with a stale saved name ' +
+      '("old-name"), says the section is now named "contact-us", clicks the item and measures ' +
+      'where the section ended up: at the top of the window, with the link pointing at #contact-us.',
+    section: {
+      layout: 'single',
+      anchorName: 'contact-us',
+      spacers: 3,
+      leadSections: [{
+        modules: [{
+          type: 'navigation',
+          settings: {
+            navItems: JSON.stringify([
+              { id: 'jump', label: 'Contact Us', href: 'page:4242#section-render-contract|/old-page#old-name' },
+            ]),
+          },
+        }],
+      }],
+      modules: [{ type: 'heading', text: 'Contact Us', settings: {} }],
+    },
+    // The page the preview is drawn on, and the section's name NOW.
+    pageAddresses: { 4242: 'builder-preview.html', '4242#section-render-contract': 'contact-us' },
+    emulate: { reducedMotion: 'reduce' },
+    click: '.site-nav-link[href*="#"]',
+    selector: '#contact-us',
+    read: ['display'],
+    series: {
+      count: 1,
+      everyMs: 0,
+      read: ['display'],
+      attrs: ['href', 'id'],
+      selectors: { link: '.site-nav-link[href*="#"]', section: 'section#contact-us' },
+    },
+    expect(sample) {
+      if (!sample.found) return 'no section carries the id "contact-us" — the Anchor name did not reach the rendered page.';
+      const frame = sample.series?.[0];
+      if (!frame?.link) return 'the menu item did not render as a link, so where it points could not be read.';
+      if (!frame.section) return 'the named section was not found after the click, so where it landed could not be measured.';
+      const href = String(frame.link.href || '');
+      if (href.endsWith('#old-name')) return `the menu link still points at the name saved when it was picked (${href}) — the section reference was not resolved to its current anchor name.`;
+      if (!href.endsWith('#contact-us')) return `the menu link points at ${JSON.stringify(href)}, expected the section's current name (#contact-us).`;
+      if (Math.abs(frame.section.top) > 4) {
+        return `after clicking the menu item the section sits ${Math.round(frame.section.top)}px from the top of the window — the page did not jump to it.`;
+      }
+      return null;
+    },
+  },
+  {
+    id: 'button-link-to-a-named-section-lands-on-it',
+    why:
+      'SC-852 let a menu link to a section of a page; a "Contact us" button still could only send a ' +
+      'visitor to the top of one (task SC-853, the 2026-11-17 anchor sweep). Every page picker now ' +
+      'offers the chosen page\'s named sections and stores the section by its id. This links a Button ' +
+      'at the top of a page that scrolls to the subject section by REFERENCE with a stale saved name ' +
+      '("old-name"), says the section is now named "contact-us", clicks the button and measures where ' +
+      'the section ended up: at the top of the window, with the button pointing at #contact-us.',
+    section: {
+      layout: 'single',
+      anchorName: 'contact-us',
+      spacers: 3,
+      leadSections: [{
+        modules: [{ type: 'button', text: 'Contact us', settings: { href: 'page:4242#section-render-contract|/old-page#old-name' } }],
+      }],
+      modules: [{ type: 'heading', text: 'Contact Us', settings: {} }],
+    },
+    pageAddresses: { 4242: 'builder-preview.html', '4242#section-render-contract': 'contact-us' },
+    emulate: { reducedMotion: 'reduce' },
+    click: 'a.builder-preview-button[href*="#"]',
+    selector: '#contact-us',
+    read: ['display'],
+    series: {
+      count: 1,
+      everyMs: 0,
+      read: ['display'],
+      attrs: ['href', 'id'],
+      selectors: { link: 'a.builder-preview-button[href*="#"]', section: 'section#contact-us' },
+    },
+    expect(sample) {
+      if (!sample.found) return 'no section carries the id "contact-us" — the Anchor name did not reach the rendered page.';
+      const frame = sample.series?.[0];
+      if (!frame?.link) return 'the button did not render as a link to a section, so where it points could not be read.';
+      if (!frame.section) return 'the named section was not found after the click, so where it landed could not be measured.';
+      const href = String(frame.link.href || '');
+      if (href.endsWith('#old-name')) return `the button still points at the name saved when it was picked (${href}) — the section reference was not resolved to its current anchor name.`;
+      if (!href.endsWith('#contact-us')) return `the button points at ${JSON.stringify(href)}, expected the section's current name (#contact-us).`;
+      if (Math.abs(frame.section.top) > 4) {
+        return `after clicking the button the section sits ${Math.round(frame.section.top)}px from the top of the window — the page did not jump to it.`;
+      }
+      return null;
+    },
+  },
+  {
+    id: 'rich-text-link-to-a-named-section-points-at-its-current-name',
+    why:
+      'A link typed inside rich text can now name a section of a page too (task SC-853, done-means 2). ' +
+      'It keeps a working href and carries the reference beside it in data-page-link. This saves the ' +
+      'href with the section\'s OLD name and says the section is now "contact-us": the rendered link ' +
+      'must point at the current name.',
+    section: {
+      layout: 'single',
+      anchorName: 'contact-us',
+      modules: [{
+        type: 'text',
+        text: '<p><a href="/old-page#old-name" data-page-link="page:4242#section-render-contract|/old-page#old-name">Write to us</a></p>',
+        settings: {},
+      }],
+    },
+    pageAddresses: { 4242: 'builder-preview.html', '4242#section-render-contract': 'contact-us' },
+    selector: '#contact-us',
+    read: ['display'],
+    series: { count: 1, everyMs: 0, read: ['display'], attrs: ['href'], selectors: { link: 'a[data-page-link]' } },
+    expect(sample) {
+      const frame = sample.series?.[0]?.link;
+      if (!frame) return 'the rich-text link did not render, so where it points could not be read.';
+      const href = String(frame.href || '');
+      if (href.endsWith('#old-name')) return `the rich-text link still points at the name saved with it (${href}) — the section reference was not resolved.`;
+      if (!href.endsWith('#contact-us')) return `the rich-text link points at ${JSON.stringify(href)}, expected the section's current name (#contact-us).`;
+      return null;
+    },
+  },
+  {
+    id: 'rich-text-headings-get-anchors-numbered-across-the-page',
+    why:
+      'Long pages gave a reader no way to jump to a heading: the original Delray and Dane of Earth ' +
+      'pages carried heading ids and StarCaster dropped them (task SC-856, from the 2026-11-17 ' +
+      'anchor sweep). Every heading in a Text module now gets an id from its words as the page ' +
+      'is drawn, numbered across the WHOLE page — each Text module is drawn on its own, so a ' +
+      'per-module count would hand two modules the same id. This puts "Junior Programs" in two ' +
+      'modules, a heading with its own id, and a "Contact Us" heading in a section already ' +
+      'named contact-us; reads every id; then clicks a link to the second "Junior Programs" and ' +
+      'measures that the page landed on it.',
+    section: {
+      layout: 'single',
+      anchorName: 'contact-us',
+      spacers: 3,
+      modules: [
+        { type: 'text', text: '<p><a href="#junior-programs-2">Jump to the second</a></p>' },
+        { type: 'text', text: '<h2>Junior Programs</h2><p>First.</p>' },
+        { type: 'text', text: '<h2>Junior Programs</h2><p>Second.</p>' },
+        { type: 'text', text: '<h2 id="my-name">Kept Its Name</h2><h3>Contact Us</h3>' },
+      ],
+    },
+    emulate: { reducedMotion: 'reduce' },
+    click: '.builder-preview-text a[href="#junior-programs-2"]',
+    selector: '#junior-programs-2',
+    read: ['display'],
+    series: {
+      count: 1,
+      everyMs: 0,
+      read: ['display'],
+      attrs: ['id'],
+      selectors: {
+        first: '#junior-programs',
+        second: '#junior-programs-2',
+        kept: 'h2#my-name',
+        contact: 'h3#contact-us-2',
+      },
+    },
+    expect(sample) {
+      if (!sample.found) return 'no heading carries the id "junior-programs-2" — the second "Junior Programs" was not numbered across the page.';
+      const frame = sample.series?.[0] || {};
+      if (!frame.first) return 'the first "Junior Programs" heading has no id "junior-programs" — headings in rich text are not getting anchors.';
+      if (!frame.kept) return 'the heading written with id="my-name" lost it — an id a heading already has must be kept.';
+      if (!frame.contact) return 'the "Contact Us" heading is not "contact-us-2" — it collided with (or was not numbered past) the section\'s anchor name.';
+      if (!frame.second) return 'the second "Junior Programs" heading could not be found after the click, so where it landed could not be measured.';
+      if (Math.abs(frame.second.top) > 4) {
+        return `after clicking the link the second "Junior Programs" heading sits ${Math.round(frame.second.top)}px from the top of the window — the page did not jump to it.`;
+      }
+      return null;
+    },
+  },
+  {
     id: 'button-linked-to-a-renamed-page-follows-it',
     why:
       'A Button whose Link was picked from the page list saved a COPY of the page\'s address, so ' +
@@ -3756,6 +3934,67 @@ export const RENDER_CONTRACTS = [
       return null;
     },
   })),
+
+  /*
+   * THE SECTION SHAPE LAYER (task SC-859) — a curve, wave or slant painted as
+   * an SVG background over the section's own. No computed style says where an
+   * SVG's fill landed, so these read the PIXELS: on a dark band, a white curve
+   * chosen for the LEFT must be white near the left edge and leave the band
+   * dark near the right — and the same curve on the RIGHT the other way
+   * round, so "it painted somewhere" cannot pass for "it painted where it was
+   * put". Plus the absence: a section without a shape mounts no layer.
+   */
+  ...[
+    { id: 'section-shape-curve-paints-on-the-left', side: 'left', white: 0.06, dark: 0.94 },
+    { id: 'section-shape-curve-paints-on-the-right', side: 'right', white: 0.94, dark: 0.06 },
+  ].map(({ id, side, white, dark }) => ({
+    id,
+    why:
+      'Bayside\'s Contact Us band has a white curve over its photo so the address sits on white; a ' +
+      'section had nowhere to hold one, so the import dropped it (SC-859). The shape is an SVG ' +
+      'background, so only its pixels prove it rendered, and on the side chosen.',
+    section: {
+      layout: 'single',
+      background: { mode: 'color', color: '#101820' },
+      shapeLayer: { shape: 'curve', side, color: '#ffffff', opacity: 100 },
+      modules: [{ type: 'heading', text: 'Contact Us', settings: {}, column: 'left' }],
+    },
+    selector: '.builder-preview-section-layered',
+    read: ['position'],
+    pixelsInside: { points: [[white, 0.85], [dark, 0.85]], size: 8 },
+    expect(sample) {
+      const px = sample.pixelsInside;
+      if (!px || !px[0] || !px[1]) {
+        return 'the pixels inside the section could not be read (off-screen, or the screenshot failed) — nothing was measured.';
+      }
+      const [onShape, offShape] = px;
+      const sum = (c) => c.r + c.g + c.b;
+      if (sum(offShape) > 120) {
+        return `the band away from the shape reads rgb(${offShape.r}, ${offShape.g}, ${offShape.b}), not the dark ` +
+          'background — either the shape covers the wrong side or the scene is wrong.';
+      }
+      if (sum(onShape) < 700) {
+        return `near the ${side} edge the band reads rgb(${onShape.r}, ${onShape.g}, ${onShape.b}), not the white ` +
+          `shape — the ${side} curve did not paint there.`;
+      }
+      return null;
+    },
+  })),
+
+  {
+    id: 'section-without-a-shape-mounts-no-shape-layer',
+    why:
+      'A row with no shape must render exactly as it did before shapes existed: no extra element ' +
+      '(the phone reverse-stack rules count a row\'s children). Paired with the two contracts above, ' +
+      'so it cannot pass because shapes never render at all (SC-859).',
+    section: {
+      layout: 'single',
+      background: { mode: 'color', color: '#101820' },
+      modules: [{ type: 'heading', text: 'No shape', settings: {}, column: 'left' }],
+    },
+    selector: '.builder-preview-row-shape-layer',
+    absent: true,
+  },
 
   {
     id: 'row-overlay-screen-keeps-a-radius-the-operator-set',

@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   addressForSlug,
+  jumpLands,
+  jumpOf,
   buildPageAddressMap,
   collectPageLinkIds,
   makePageLink,
@@ -9,14 +11,18 @@ import {
   resolvePageLink,
   resolvePageLinksInHtml,
   resolvePageLinksInJsonText,
-  resolvePageLinksInSettings
+  resolvePageLinksInSettings,
+  listSectionAnchors,
+  mentionsSectionLink,
+  normalizeAnchorName,
+  sectionAnchorKey
 } from "./page-link";
 
 describe("page links stored by reference (task 86bcxmrw2)", () => {
   it("writes and reads back the one stored shape", () => {
     const value = makePageLink("1217", "/fraud");
     expect(value).toBe("page:1217|/fraud");
-    expect(parsePageLink(value)).toEqual({ pageId: "1217", fallback: "/fraud" });
+    expect(parsePageLink(value)).toEqual({ pageId: "1217", sectionId: "", fallback: "/fraud" });
   });
 
   it("follows the page after its address changes — the whole point", () => {
@@ -160,5 +166,106 @@ describe("links typed inside rich text (task 86bcxthq5)", () => {
 
   it("the server finds the id inside rich text, so the live page is sent its address", () => {
     expect([...collectPageLinkIds([{ modules: [{ text: html }] }])]).toEqual(["42"]);
+  });
+});
+
+describe("links to a SECTION of a page (task SC-852)", () => {
+  const addresses = { ...buildPageAddressMap([
+    { id: "12", slug: "about", layoutSections: { sections: [{ id: "sec-team", anchorName: "our-team" }, { id: "sec-plain" }] } },
+    { id: "1", slug: "", layoutSections: [{ id: "s-contact", anchorName: "contact-us" }] }
+  ]) };
+
+  it("stores the section by its id, beside the page's id", () => {
+    const value = makePageLink("12", "/about#our-team", "sec-team");
+    expect(value).toBe("page:12#sec-team|/about#our-team");
+    expect(parsePageLink(value)).toEqual({ pageId: "12", sectionId: "sec-team", fallback: "/about#our-team" });
+    // A section id that is not a plain id is never stored, so the value parses back.
+    expect(parsePageLink(makePageLink("12", "/about", "bad id|x"))).toEqual({ pageId: "12", sectionId: "", fallback: "/about" });
+  });
+
+  it("the address map carries each named section's anchor name, and only named ones", () => {
+    expect(addresses[sectionAnchorKey("12", "sec-team")]).toBe("our-team");
+    expect(sectionAnchorKey("12", "sec-plain") in addresses).toBe(false);
+  });
+
+  it("follows the section after its anchor name changes — the point of storing the id", () => {
+    const value = "page:12#sec-team|/about#team";
+    expect(pageLinkHref(value, addresses)).toBe("/about#our-team");
+    const renamed = { ...addresses, [sectionAnchorKey("12", "sec-team")]: "the-team", 12: "who-we-are" };
+    expect(pageLinkHref(value, renamed)).toBe("/who-we-are#the-team");
+  });
+
+  it("keeps the name it was picked with when the section has lost its name, and the page still opens", () => {
+    expect(pageLinkHref("page:12#sec-gone|/about#team", addresses)).toBe("/about#team");
+    expect(pageLinkHref("page:12#sec-gone|/about", addresses)).toBe("/about");
+  });
+
+  it("uses the whole saved address when the page itself is gone", () => {
+    const result = resolvePageLink("page:99#s|/old#x", addresses);
+    expect(result).toEqual({ href: "/old#x", pageId: "99", missing: true });
+  });
+
+  it("resolves a section link inside a menu's items, and the server finds the page id in it", () => {
+    const navItems = JSON.stringify([{ id: "a", label: "Contact", href: "page:1#s-contact|/#contact-us" }, { id: "b", label: "Typed", href: "/#services" }]);
+    const resolved = JSON.parse(resolvePageLinksInJsonText(navItems, addresses));
+    expect(resolved[0].href).toBe("/#contact-us");
+    expect(resolved[1].href).toBe("/#services");
+    expect([...collectPageLinkIds({ settings: { navItems } })]).toEqual(["1"]);
+    expect(mentionsSectionLink({ settings: { navItems } })).toBe(true);
+    expect(mentionsSectionLink({ href: "page:1|/" })).toBe(false);
+  });
+
+  it("resolves a section link held directly in a setting and inside rich text", () => {
+    expect(resolvePageLinksInSettings({ href: "page:12#sec-team|/about#t" }, addresses)).toEqual({ href: "/about#our-team" });
+    expect(resolvePageLinksInHtml('<a href="/x" data-page-link="page:12#sec-team|/about#t">T</a>', addresses)).toBe(
+      '<a href="/about#our-team" data-page-link="page:12#sec-team|/about#t">T</a>'
+    );
+  });
+
+  it("cleans an anchor name with the one slug rule", () => {
+    expect(normalizeAnchorName(" #About Us! ")).toBe("about-us");
+    expect(normalizeAnchorName("contact-us")).toBe("contact-us");
+    expect(normalizeAnchorName("--")).toBe("");
+    expect(normalizeAnchorName(42)).toBe("");
+    expect(normalizeAnchorName("a".repeat(100)).length).toBe(80);
+  });
+
+  it("lists a page's named sections in page order, for a picker", () => {
+    expect(listSectionAnchors([{ id: "x", anchorName: "Our Work", title: "Work" }, { id: "y" }, { id: "z", anchorName: "about" }])).toEqual([
+      { sectionId: "x", anchorName: "our-work", title: "Work" },
+      { sectionId: "z", anchorName: "about", title: "" }
+    ]);
+    expect(listSectionAnchors('{"sections":[{"id":"q","anchorName":"q"}]}')).toEqual([{ sectionId: "q", anchorName: "q", title: "" }]);
+    expect(listSectionAnchors("not json")).toEqual([]);
+  });
+});
+
+// Task SC-855: the one answer to "does this #name link land?", shared by the
+// import difference report and the weekly broken-links scan.
+describe("jumpOf / jumpLands", () => {
+  it("reads the three shapes a jump is stored in, and ignores placeholders", () => {
+    expect(jumpOf("#services")).toEqual({ kind: "same-page", name: "services" });
+    expect(jumpOf("/About/#team")).toEqual({ kind: "address", address: "about", name: "team" });
+    expect(jumpOf("/home#team")).toEqual({ kind: "address", address: "", name: "team" });
+    expect(jumpOf("page:7#sec-1|/about#team")).toEqual({ kind: "reference", pageId: "7", sectionId: "sec-1", name: "team" });
+    expect(jumpOf("https://client.com/about#team", ["client.com"])).toEqual({ kind: "address", address: "about", name: "team" });
+    for (const none of ["#", "#top", "#!/route", "/about", "page:7|/about", "https://elsewhere.com/x#y", "mailto:a@b.c"]) {
+      expect(jumpOf(none)).toBeNull();
+    }
+  });
+
+  it("lands on a section's anchor name or an id inside a module, and nowhere else", () => {
+    const layout = { sections: [
+      { id: "a", anchorName: "about", modules: [] },
+      { id: "b", modules: [{ type: "text", text: '<h2 id="contact">Hi</h2>' }] },
+    ] };
+    expect(jumpLands({ kind: "same-page", name: "about" }, layout)).toEqual({ lands: true });
+    expect(jumpLands({ kind: "same-page", name: "contact" }, layout)).toEqual({ lands: true });
+    expect(jumpLands({ kind: "same-page", name: "services" }, layout).lands).toBe(false);
+    expect(jumpLands({ kind: "reference", pageId: "1", sectionId: "a", name: "" }, layout)).toEqual({ lands: true });
+    expect(jumpLands({ kind: "reference", pageId: "1", sectionId: "b", name: "" }, layout)).toEqual({
+      lands: false,
+      why: "jumps to a section that has no Anchor Name, so it opens the top of the page",
+    });
   });
 });

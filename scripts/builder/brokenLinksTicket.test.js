@@ -83,3 +83,16 @@ test('assignee change: Dane only while something is listed, nobody once clean', 
   assert.deepEqual(ticket.assigneeChange({ current: [{ id: 5 }], assign: true, operatorId: 9 }), { add: [9], rem: [5] });
   assert.deepEqual(ticket.assigneeChange({ current: [{ id: 9 }], assign: false, operatorId: 9 }), { add: [], rem: [9] });
 });
+
+// Task SC-855: a link to part of a page the check could not judge is named, never clean.
+test('links it could not check keep the ticket from reading as clean', () => {
+  const unchecked = { ...brokenLink, reason: 'jumps to #services on whichever page shows it, and no page shows this shared section — CANNOT TELL whether it lands' };
+  const out = ticket.renderBrokenLinksTicket({
+    projects: [{ id: 'a', name: 'Bayside', domain: '', broken: [], unchecked: [unchecked] }],
+    now: NOW,
+  });
+  assert.match(out.body, /^# No broken links found — but 1 link could not be checked/);
+  assert.doesNotMatch(out.body, /No broken links found on any site/);
+  assert.match(out.body, /## Links it could not check\n\n- \*\*CANNOT TELL\*\* Bayside: Saved section "Header" › Header › Menu › Menu Item "About" \(shown on 4 pages\) — jumps to #services/);
+  assert.equal(out.assign, false);
+});

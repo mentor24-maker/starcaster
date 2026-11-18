@@ -3,6 +3,7 @@
     "irVersion": "1.0",
     "jobId": "job-fixture-wordpress",
     "sourceUrl": "https://www.delraytennis.com/",
+    "anchorsRecorded": true,
     "capturedAt": "2026-08-06T06:03:04.460Z",
     "pages": [
       {
@@ -127,6 +128,9 @@
                 ],
                 "containers": [
                   "3"
+                ],
+                "anchors": [
+                  "text-5"
                 ]
               },
               {
@@ -339,6 +343,11 @@
                 "assetRefs": [],
                 "containers": [
                   "24"
+                ],
+                "anchors": [
+                  "genesis-nav-primary",
+                  "menu-jmenu",
+                  "menu-item-63"
                 ]
               },
               {
@@ -368,6 +377,9 @@
                 "assetRefs": [],
                 "containers": [
                   "24"
+                ],
+                "anchors": [
+                  "menu-item-65"
                 ]
               },
               {
@@ -382,6 +394,9 @@
                 "assetRefs": [],
                 "containers": [
                   "24"
+                ],
+                "anchors": [
+                  "menu-item-67"
                 ]
               },
               {
@@ -396,6 +411,9 @@
                 "assetRefs": [],
                 "containers": [
                   "24"
+                ],
+                "anchors": [
+                  "menu-item-69"
                 ]
               },
               {
@@ -410,6 +428,9 @@
                 "assetRefs": [],
                 "containers": [
                   "24"
+                ],
+                "anchors": [
+                  "menu-item-71"
                 ]
               },
               {
@@ -424,6 +445,9 @@
                 "assetRefs": [],
                 "containers": [
                   "24"
+                ],
+                "anchors": [
+                  "menu-item-62156"
                 ]
               },
               {
@@ -438,6 +462,9 @@
                 "assetRefs": [],
                 "containers": [
                   "24"
+                ],
+                "anchors": [
+                  "menu-item-73"
                 ]
               },
               {
@@ -452,6 +479,9 @@
                 "assetRefs": [],
                 "containers": [
                   "24"
+                ],
+                "anchors": [
+                  "menu-item-75"
                 ]
               },
               {
@@ -466,6 +496,9 @@
                 "assetRefs": [],
                 "containers": [
                   "24"
+                ],
+                "anchors": [
+                  "menu-item-46146"
                 ]
               },
               {
@@ -495,6 +528,9 @@
                 "assetRefs": [],
                 "containers": [
                   "24"
+                ],
+                "anchors": [
+                  "menu-item-77"
                 ]
               },
               {
@@ -509,6 +545,9 @@
                 "assetRefs": [],
                 "containers": [
                   "24"
+                ],
+                "anchors": [
+                  "menu-item-62267"
                 ]
               },
               {
@@ -523,6 +562,9 @@
                 "assetRefs": [],
                 "containers": [
                   "24"
+                ],
+                "anchors": [
+                  "menu-item-81"
                 ]
               },
               {
@@ -537,6 +579,9 @@
                 "assetRefs": [],
                 "containers": [
                   "24"
+                ],
+                "anchors": [
+                  "menu-item-83"
                 ]
               },
               {
@@ -551,6 +596,9 @@
                 "assetRefs": [],
                 "containers": [
                   "24"
+                ],
+                "anchors": [
+                  "menu-item-85"
                 ]
               },
               {
@@ -565,6 +613,9 @@
                 "assetRefs": [],
                 "containers": [
                   "24"
+                ],
+                "anchors": [
+                  "menu-item-62270"
                 ]
               },
               {
@@ -579,6 +630,9 @@
                 "assetRefs": [],
                 "containers": [
                   "24"
+                ],
+                "anchors": [
+                  "menu-item-62333"
                 ]
               },
               {
@@ -608,6 +662,9 @@
                 "assetRefs": [],
                 "containers": [
                   "24"
+                ],
+                "anchors": [
+                  "menu-item-91"
                 ]
               },
               {
@@ -622,6 +679,9 @@
                 "assetRefs": [],
                 "containers": [
                   "24"
+                ],
+                "anchors": [
+                  "menu-item-93"
                 ]
               },
               {
@@ -639,6 +699,9 @@
                 "containers": [
                   "39",
                   "41"
+                ],
+                "anchors": [
+                  "nivoslider-299"
                 ]
               },
               {
@@ -1529,6 +1592,11 @@
                 "assetRefs": [],
                 "containers": [
                   "109"
+                ],
+                "anchors": [
+                  "genesis-content",
+                  "featured-page-2",
+                  "content-title"
                 ]
               },
               {
@@ -4571,6 +4639,10 @@
                 "assetRefs": [],
                 "containers": [
                   "109"
+                ],
+                "anchors": [
+                  "news-context",
+                  "news-container"
                 ]
               },
               {
@@ -4596,6 +4668,9 @@
                 "assetRefs": [],
                 "containers": [
                   "462"
+                ],
+                "anchors": [
+                  "text-2"
                 ]
               },
               {
@@ -4676,7 +4751,10 @@
                 "computedStyles": {},
                 "documentPosition": 184,
                 "depth": 1,
-                "assetRefs": []
+                "assetRefs": [],
+                "anchors": [
+                  "wpstats"
+                ]
               }
             ]
           }
@@ -4828,6 +4906,9 @@
                 ],
                 "containers": [
                   "4"
+                ],
+                "anchors": [
+                  "text-5"
                 ]
               },
               {
@@ -5040,6 +5121,11 @@
                 "assetRefs": [],
                 "containers": [
                   "25"
+                ],
+                "anchors": [
+                  "genesis-nav-primary",
+                  "menu-jmenu",
+                  "menu-item-63"
                 ]
               },
               {
@@ -5069,6 +5155,9 @@
                 "assetRefs": [],
                 "containers": [
                   "25"
+                ],
+                "anchors": [
+                  "menu-item-65"
                 ]
               },
               {
@@ -5083,6 +5172,9 @@
                 "assetRefs": [],
                 "containers": [
                   "25"
+                ],
+                "anchors": [
+                  "menu-item-67"
                 ]
               },
               {
@@ -5097,6 +5189,9 @@
                 "assetRefs": [],
                 "containers": [
                   "25"
+                ],
+                "anchors": [
+                  "menu-item-69"
                 ]
               },
               {
@@ -5111,6 +5206,9 @@
                 "assetRefs": [],
                 "containers": [
                   "25"
+                ],
+                "anchors": [
+                  "menu-item-71"
                 ]
               },
               {
@@ -5125,6 +5223,9 @@
                 "assetRefs": [],
                 "containers": [
                   "25"
+                ],
+                "anchors": [
+                  "menu-item-62156"
                 ]
               },
               {
@@ -5139,6 +5240,9 @@
                 "assetRefs": [],
                 "containers": [
                   "25"
+                ],
+                "anchors": [
+                  "menu-item-73"
                 ]
               },
               {
@@ -5153,6 +5257,9 @@
                 "assetRefs": [],
                 "containers": [
                   "25"
+                ],
+                "anchors": [
+                  "menu-item-75"
                 ]
               },
               {
@@ -5167,6 +5274,9 @@
                 "assetRefs": [],
                 "containers": [
                   "25"
+                ],
+                "anchors": [
+                  "menu-item-46146"
                 ]
               },
               {
@@ -5196,6 +5306,9 @@
                 "assetRefs": [],
                 "containers": [
                   "25"
+                ],
+                "anchors": [
+                  "menu-item-77"
                 ]
               },
               {
@@ -5210,6 +5323,9 @@
                 "assetRefs": [],
                 "containers": [
                   "25"
+                ],
+                "anchors": [
+                  "menu-item-62267"
                 ]
               },
               {
@@ -5224,6 +5340,9 @@
                 "assetRefs": [],
                 "containers": [
                   "25"
+                ],
+                "anchors": [
+                  "menu-item-81"
                 ]
               },
               {
@@ -5238,6 +5357,9 @@
                 "assetRefs": [],
                 "containers": [
                   "25"
+                ],
+                "anchors": [
+                  "menu-item-83"
                 ]
               },
               {
@@ -5252,6 +5374,9 @@
                 "assetRefs": [],
                 "containers": [
                   "25"
+                ],
+                "anchors": [
+                  "menu-item-85"
                 ]
               },
               {
@@ -5266,6 +5391,9 @@
                 "assetRefs": [],
                 "containers": [
                   "25"
+                ],
+                "anchors": [
+                  "menu-item-62270"
                 ]
               },
               {
@@ -5280,6 +5408,9 @@
                 "assetRefs": [],
                 "containers": [
                   "25"
+                ],
+                "anchors": [
+                  "menu-item-62333"
                 ]
               },
               {
@@ -5309,6 +5440,9 @@
                 "assetRefs": [],
                 "containers": [
                   "25"
+                ],
+                "anchors": [
+                  "menu-item-91"
                 ]
               },
               {
@@ -5323,6 +5457,9 @@
                 "assetRefs": [],
                 "containers": [
                   "25"
+                ],
+                "anchors": [
+                  "menu-item-93"
                 ]
               },
               {
@@ -5340,6 +5477,9 @@
                 "containers": [
                   "40",
                   "42"
+                ],
+                "anchors": [
+                  "nivoslider-299"
                 ]
               },
               {
@@ -5655,6 +5795,9 @@
                 "assetRefs": [],
                 "containers": [
                   "48"
+                ],
+                "anchors": [
+                  "genesis-content"
                 ]
               },
               {
@@ -6030,7 +6173,10 @@
                 },
                 "documentPosition": 62,
                 "depth": 6,
-                "assetRefs": []
+                "assetRefs": [],
+                "anchors": [
+                  "genesis-sidebar-primary"
+                ]
               },
               {
                 "sourceId": "pa7e8b3dd-4b94f2c9",
@@ -6055,6 +6201,11 @@
                 "assetRefs": [],
                 "containers": [
                   "88"
+                ],
+                "anchors": [
+                  "text-6",
+                  "custom_html-2",
+                  "text-2"
                 ]
               },
               {
@@ -6137,7 +6288,10 @@
                 "computedStyles": {},
                 "documentPosition": 66,
                 "depth": 1,
-                "assetRefs": []
+                "assetRefs": [],
+                "anchors": [
+                  "wpstats"
+                ]
               }
             ]
           }
