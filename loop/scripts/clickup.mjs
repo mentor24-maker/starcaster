@@ -41,7 +41,7 @@ import {
   readyToLaunchGate, nextRound, wouldEscalate, roundSummaryLines, sendBackRounds, operatorSpokeLast,
   findPullRequest, newestFirst, ESCALATE_AT_ROUND,
 } from './lib/loopTrail.mjs';
-import { buildCard, cardSurvived, findBlockquoteLines, findBranchLinks, branchLinkRefusal, CONTEXT_MIN_WORDS, CONTEXT_MAX_WORDS } from './lib/operatorCard.mjs';
+import { buildCard, cardSurvived, findBlockquoteLines, findBranchLinks, branchLinkRefusal, sqlFilesWithoutBlock, sqlHandoffRefusal, CONTEXT_MIN_WORDS, CONTEXT_MAX_WORDS } from './lib/operatorCard.mjs';
 import { isMachineAuthored, isOperatorAuthored, stripMachineMarker } from './lib/machineComment.mjs';
 import { parseHumanHours, findHumanHours } from '../lib/humanHours.js';
 import { createClickupTracker } from './tracker/clickupTracker.mjs';
@@ -70,7 +70,7 @@ import {
 } from '../lib/mergeOnComment.js';
 import {
   PR_VIEW_FIELDS, markerBookkeeping, recordBookkeeping, emptyBooks, mergeDestination, relayLine,
-  handbackAnswer, earlierAnswerIds, handbackPlan, closePlan, conflictFilingPlan, CATCH_UP_WORKED_STATUSES,
+  handbackAnswer, earlierAnswerIds, handbackPlan, closePlan, questionCardMove, conflictFilingPlan, CATCH_UP_WORKED_STATUSES,
   mergeWithPreMergeStep, commandLine, mergedBusLine, conflictBusLine, busAnnouncer, stalledHandOffPlan, remindStalledHandOff,
 } from '../lib/relayLane.js';
 import {
@@ -91,7 +91,7 @@ import { CLASS_FIELDS, classValue, LOOP_FILING_CLASS } from '../lib/ticketClass.
 import stageCounts from '../lib/stageCounts.js';
 // A ticket's `Waits on:` line (task 86bctfun6): the claim leaves it alone
 // until every ticket it names is closed.
-import { waitsOn, waitsOnText, holdReasons } from '../lib/waitsOn.js';
+import { waitsOn, waitsOnText, holdReasons, readWaitsOn } from '../lib/waitsOn.js';
 import { isNoticeboard } from '../lib/loopNoticeboards.js';
 import waitingOnOperator from '../lib/waitingOnOperator.js';
 import { ticketLine, findTicketId } from '../lib/clickupTicketLink.js';
@@ -753,6 +753,38 @@ function refuseBranchLinks(text, nothing) {
   const links = findBranchLinks(text);
   if (!links.length) return;
   console.error(`\n${branchLinkRefusal(links, nothing)}\n`);
+  process.exit(2);
+}
+
+/**
+ * Exit 2, before any write, when `text` names a `.sql` file without the run
+ * block DOCTRINE 6.5 gives for it, printing the block ready to paste. Only
+ * `ask` and `comment` check: they hand SQL over; a spec only names it.
+ */
+function refuseSqlWithoutBlock(text, nothing) {
+  const files = sqlFilesWithoutBlock(text);
+  if (!files.length) return;
+  console.error(`\n${sqlHandoffRefusal(files, nothing, project.githubRepo)}\n`);
+  process.exit(2);
+}
+
+/**
+ * Exit 2, before any write, when `text` has a `Waits on:` line with a piece
+ * that is not a ticket id or link. The claim reads that same line, and a
+ * piece it cannot read holds the ticket back for good, unseen until the
+ * ticket sits unclaimed; refusing it here says so while the writer is
+ * still at the keyboard.
+ */
+function refuseUnreadableWaitsOn(text, nothing) {
+  const { unparsed } = readWaitsOn(text);
+  if (!unparsed.length) return;
+  console.error('\nThe body has a "Waits on:" line the build loop cannot read, so the ticket would never be claimed.');
+  for (const piece of unparsed) console.error(`  not a ticket id or link: "${piece}"`);
+  console.error('Write each ticket it waits on as an id, optionally with its title in quotes, separated by commas:');
+  console.error('  Waits on: SP-333');
+  console.error('  Waits on: SP-333 ("title"), SP-334');
+  console.error('Move anything else (why it waits, what the other ticket does) to a line of its own.');
+  console.error(`${nothing}\n`);
   process.exit(2);
 }
 
@@ -1609,6 +1641,7 @@ if (cmd === 'whoami') {
     process.exit(2);
   }
   refuseBranchLinks(body, 'Nothing was created.');
+  refuseUnreadableWaitsOn(body, 'Nothing was created.');
   const classWanted = classFlags('Nothing was created.');
   const tags = arg('tags') ? arg('tags').split(',').map((s) => s.trim()).filter(Boolean) : undefined;
   const boardProblem = trackerBus.noticeboardFilingProblem({ status: arg('status'), tags });
@@ -1657,6 +1690,7 @@ if (cmd === 'whoami') {
   const quoted = findBlockquoteLines(body);
   if (quoted.length) { console.error(`The body has "> " blockquote lines (${quoted.join(', ')}). ClickUp DELETES them. Nothing was written.`); process.exit(2); }
   refuseBranchLinks(body, 'Nothing was written.');
+  refuseUnreadableWaitsOn(body, 'Nothing was written.');
   const out = await tracker.updateTask(task, { markdown_description: body });
   if (!out.res.ok) die('replace description', out);
   const t = await readTask(task);
@@ -1697,6 +1731,7 @@ if (cmd === 'whoami') {
   const quoted = findBlockquoteLines(sent);
   if (quoted.length) { console.error(`The comment has "> " blockquote lines (${quoted.join(', ')}). ClickUp DELETES them. Nothing was posted.`); process.exit(2); }
   refuseBranchLinks(sent, 'Nothing was posted.');
+  refuseSqlWithoutBlock(sent, 'Nothing was posted.');
   const { id, stored } = await postComment(task, { comment_text: sent });
   console.log(`Comment ${id} added to task ${task} (${stored.comment_text.length} characters, verified by reading it back).`);
   reportLimits();
@@ -2001,6 +2036,7 @@ if (cmd === 'whoami') {
   try { ({ card, comment: commentBody } = buildCard(readBody(bodyFile))); } catch (err) { console.error(`\n${err.message}\n`); process.exit(2); }
   // @@ASKED is exempt: it is his own words, fenced on the card.
   refuseBranchLinks([card.context, card.needed, card.evidence].join('\n'), 'Nothing was posted and the status has NOT moved.');
+  refuseSqlWithoutBlock([card.context, card.needed, card.evidence].join('\n'), 'Nothing was posted and the status has NOT moved.');
   if (!noMove) { const stop = await alreadyAnsweredRefused(task, status); if (stop !== null) process.exit(stop); }
   if (!noMove) { const stop = await catchUpMergedRefused(task); if (stop !== null) process.exit(stop); }
   if (!noMove) { const stop = await alreadyAskedRefused(task, status); if (stop !== null) process.exit(stop); }
@@ -2271,7 +2307,8 @@ if (cmd === 'whoami') {
 
   // ── His close word on a Ready to launch ticket (SP-68) ──────────────────
   // Live once its work is merged (its own PR, or the PR a catch-up ticket
-  // was filed to unstick); otherwise the reason, said once under his word.
+  // was filed to unstick), or, with no PR anywhere, when the card he answered
+  // is a Close card (SP-375); otherwise the reason, said once under his word.
   // The decision is closePlan's (lib/relayLane.js). Returns true when it
   // decided this ticket, so the merge step does not also act on it.
   const relayCloseReadyToLaunch = async (task, comments) => {
@@ -2296,7 +2333,9 @@ if (cmd === 'whoami') {
       }
       unstuckPr = prStateOf(unstuckPullRequest(out.json.markdown_description || out.json.description || ''));
     }
-    const plan = closePlan({ verdict, answerReplies: replies, ownPr, unstuckPr });
+    // With no PR anywhere, the card he answered decides (SP-375): a Close card closes it.
+    const questionMove = questionCardMove({ comments, isMachine: isMachineAuthored });
+    const plan = closePlan({ verdict, answerReplies: replies, ownPr, unstuckPr, questionMove });
     if (plan.act === 'not-close') return false;
     if (plan.act === 'cannot-tell') {
       unchecked.push(`${task.id}: ${who} said to close it, but ${plan.why}`);

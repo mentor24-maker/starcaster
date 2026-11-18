@@ -225,3 +225,96 @@ test('a glow the import carried onto a Button is not reported as lost (86bctde3a
   const keptRow = row({ modules: [{ id: 'm', type: 'button', text: 'Go', settings: { buttonGlow: 'true', buttonGlowColor: '#00d9ff' } }] });
   assert.equal(find(F.compareSection(s, { rows: [keptRow], theme: THEME }), 'shadow').length, 0);
 });
+
+/* ---------------------------------------------------------------------------
+ * Links (task SC-855). Bayside, 2026-11-17: the imported Top Menu jumped to
+ * #services, #about and #contact, no section carried those names, and the
+ * report run that evening had no category to say so in.
+ * ------------------------------------------------------------------------ */
+
+const linkEl = (sourceId, text, href, cls = 'link') => ({
+  sourceId, class: cls, html: `<a href="${href}">${text}</a>`, textContent: text,
+  textLength: text.length, computedStyles: {}, documentPosition: 0, depth: 1, assetRefs: [],
+});
+
+function baysideOriginal() {
+  return {
+    sections: [
+      { sourceId: 'hdr', type: 'unknown', screenshot: '', elements: [
+        linkEl('l1', 'Services', '#services'),
+        linkEl('l2', 'About', '#about'),
+        linkEl('l3', 'Contact', '#contact'),
+        linkEl('l4', 'Pool Care Guide', 'https://baysidepools.example/pool-care-guide/'),
+      ] },
+      { sourceId: 'hero', type: 'unknown', screenshot: '', elements: [
+        linkEl('b1', 'Get a quote', 'https://baysidepools.example/contact/', 'button'),
+      ] },
+    ],
+  };
+}
+
+function baysideRows() {
+  return [
+    { id: 'impmenu_top_x', title: 'Top Menu', modules: [{ type: 'navigation', settings: { navItems: JSON.stringify([
+      { id: 'n1', label: 'Services', href: '#services' },
+      { id: 'n2', label: 'About', href: '#about' },
+      { id: 'n3', label: 'Contact', href: '#contact' },
+      { id: 'n4', label: 'More', href: '#' },
+    ]) } }] },
+    { id: 'imps_hero', title: 'Hero', modules: [
+      { type: 'button', text: 'Get a quote', settings: { href: '/contact' } },
+      { type: 'text', text: '<p>See our <a href="/pool-care-guide">care guide</a>.</p>' },
+    ] },
+    { id: 'imps_svc', title: 'Services', modules: [] },
+  ];
+}
+
+const linkWhats = (out) => out.findings.map((f) => [f.what, f.imported]);
+
+test('Links: the three dead menu jumps are named, the links that came across are not', () => {
+  const out = F.linkFindings(baysideOriginal(), baysideRows(), { pageUrl: 'https://baysidepools.example/' });
+  assert.deepEqual(linkWhats(out), [
+    ['1 link(s) that jump to part of a page: "Services" (Top Menu)', 'jumps to #services, and nothing on the page has that name'],
+    ['1 link(s) that jump to part of a page: "About" (Top Menu)', 'jumps to #about, and nothing on the page has that name'],
+    ['1 link(s) that jump to part of a page: "Contact" (Top Menu)', 'jumps to #contact, and nothing on the page has that name'],
+  ]);
+  assert.deepEqual(out.notMeasured, []);
+  assert.equal(F.countByCategory(out.findings).links, 3);
+});
+
+test('Links: once the sections carry the names, the jumps land', () => {
+  const rows = baysideRows();
+  rows[2].anchorName = 'services';
+  rows[1].modules.push({ type: 'text', text: '<h2 id="about">About</h2><div id="contact"></div>' });
+  assert.deepEqual(F.linkFindings(baysideOriginal(), rows, { pageUrl: 'https://baysidepools.example/' }).findings, []);
+});
+
+test('Links: a link the original had and the import lost is named', () => {
+  const rows = baysideRows();
+  rows[1].modules.pop(); // the care-guide link is gone
+  const out = F.linkFindings(baysideOriginal(), rows, { pageUrl: 'https://baysidepools.example/' });
+  const missing = out.findings.filter((f) => /the original page had/.test(f.what));
+  assert.deepEqual(missing.map((f) => [f.what, f.imported]), [
+    ['1 link(s) the original page had: "Pool Care Guide" → https://baysidepools.example/pool-care-guide/', 'no link with those words or that destination'],
+  ]);
+});
+
+test('Links: a jump to another page is checked there, and is CANNOT TELL when that page was not read', () => {
+  const rows = baysideRows();
+  rows[1].modules.push(
+    { type: 'button', text: 'Our team', settings: { href: '/about#team' } },
+    { type: 'button', text: 'Their FAQ', settings: { href: 'page:77#sec-faq|/faq#faq' } },
+  );
+  const about = { id: 5, slug: 'about', layoutSections: [{ id: 's', anchorName: 'staff', modules: [] }] };
+  const out = F.linkFindings({ sections: [] }, rows, { pages: [about] });
+  assert.ok(out.findings.some((f) => /"Our team" \(Hero\)/.test(f.what) && /#team, and nothing on the page/.test(f.imported)));
+  assert.deepEqual(out.notMeasured.map((n) => n.category), ['links']);
+  assert.match(out.notMeasured[0].why, /^1 link\(s\) jump to part of a page this report did not read.*"Their FAQ" → page:77#sec-faq/);
+  about.layoutSections[0].anchorName = 'team';
+  assert.ok(!F.linkFindings({ sections: [] }, rows, { pages: [about] }).findings.some((f) => /Our team/.test(f.what)));
+});
+
+test('Links is one of the categories, so its count is reported even when zero', () => {
+  assert.ok(F.FIDELITY_CATEGORIES.some((c) => c.key === 'links'));
+  assert.equal(F.countByCategory([]).links, 0);
+});

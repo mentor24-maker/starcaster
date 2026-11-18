@@ -732,7 +732,8 @@ const buildTuned = (ids) => ({
     name: 'Book a Court',
     settings: {
       text: 'Book a court on the reservation system',
-      href: '/delray-beach-tennis-center-court-reservations',
+      // This page, so the Link picker also shows its Section list (SC-853).
+      href: '/panel-lattice-check',
       buttonSize: 'large', fontSize: '18', bold: 'true', underline: 'true',
       alignment: 'center', textColor: '#ffffff', buttonHoverColor: '#0b3a6b',
       borderStyle: 'solid', borderWidth: '2', borderColor: '#0f4f8f', borderRadius: '24',
@@ -989,6 +990,13 @@ const buildPanelCheckSection = (ids) => {
   return {
   id: 'section-panel-lattice-check',
   title: 'Panel Lattice Check',
+  /*
+   * An anchor name (task SC-853), so every page picker on this page that
+   * points at this page shows its "a section on that page" list — the Button
+   * below links here. With no named section the list never renders, and the
+   * check would pass over a control it never saw.
+   */
+  anchorName: 'panel-check-section-anchor-name-long-enough-to-measure',
   layout: 'single',
   locked: false,
   alignment: 'left',
@@ -1053,6 +1061,12 @@ const buildPanelCheckSection = (ids) => {
     background: { mode: 'gradient', color: '#1b2a4a', color2: '#4cbb17' },
     opacity: 45,
   },
+  /*
+   * A SHAPE (task SC-859), for the Overlay group's reason above: with no
+   * shape the Shape group renders one "None" dropdown and its Side, Color and
+   * Opacity rows are never measured.
+   */
+  shapeLayer: { shape: 'curve', side: 'left', color: '#ffffff', opacity: 71 },
   /*
    * AND A VIDEO CELL FILL, which is a THIRD panel again — and the one that
    * reached the operator staggered.

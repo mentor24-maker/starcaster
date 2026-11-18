@@ -151,6 +151,44 @@ value, a billing screen, a browser login, or a decision only he can make.
 Each of those is an `ask`, saying which of the four it is. Anything else, you
 run yourself.
 
+**SQL for Dane to run goes in the SQL handoff block (`DOCTRINE 6.5`).** Never
+paste the SQL and never list bare paths. One block per file, in the order they
+run, in `@@NEEDED` above the `Your move:` line; plain text, never in a code
+fence (a fenced link cannot be clicked); two blank lines above and below each
+block; one line outside the block saying what the file changes and whether it
+touches anything that exists. The link names a commit, never a branch: a file
+already on `main` links by `main`, a file only on your branch by the pushed
+commit (`git rev-parse HEAD` after `git push`). A whole card:
+
+```
+@@ASKED
+<his words that caused the ticket, verbatim>
+
+@@CONTEXT
+<50-100 words: what the file is for, and why only he can run it>
+
+@@NEEDED
+Run this file in the database's SQL editor, then reply here.
+
+It adds two new fields to assets; it changes nothing that exists.
+
+
+#################### RUN SQL IN SUPABASE ####################
+
+https://github.com/<owner>/<repo>/blob/<commit>/docs/SQL/<file>.sql
+
+##########################################################
+
+
+Your move: Reply "ran it" once it has run, so the pull request can go to review.
+```
+
+The fence above is only this page showing you the card; the card's text has
+none. `ask` and `comment` refuse a body that names a `.sql` file without its
+block (exit 2, nothing posted) and print the block to paste; fix the body and
+run it again. On 2026-11-17 this pass put "Run docs/SQL/... in Supabase" on
+SC-832's card as a bare path, which Dane could not open (SC-867).
+
 ## Never say something is waiting on Dane without checking
 
 ```bash

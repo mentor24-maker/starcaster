@@ -159,3 +159,121 @@ test('blocksStack: a list of blocks one above another, never a row of cards', ()
   // Unknown positions leave the old behaviour.
   assert.equal(blocksStack([[{ box: null }], [b(0, 500, 10, 10)], [b(0, 900, 10, 10)]]), false);
 });
+
+/*
+ * The white curve over the Contact Us photo (task SC-859). Divi draws it as a
+ * background mask, an SVG filling the RIGHT side, and flips it to the left
+ * with `transform: scale(-1,1)`, so the address sits on white and the photo
+ * shows on the right. The fixture predates the capture recording `transform`,
+ * so these tests add what the capture now records — `matrix(-1, 0, 0, 1, 0, 0)`
+ * is how a browser reports `scale(-1,1)` — on a copy, never in the fixture.
+ */
+const MASK = 'p2a0c975e-fe98da15';
+function withMaskTransform(transform) {
+  const ir = JSON.parse(JSON.stringify(IR));
+  for (const s of ir.pages[0].sections) for (const el of s.elements || []) {
+    if (el.sourceId === MASK) el.computedStyles.transform = transform;
+  }
+  return mapSite(ir, { existingSlugs: [] });
+}
+
+test('the Contact Us curve becomes a white shape on the left of its row', () => {
+  const out = withMaskTransform('matrix(-1, 0, 0, 1, 0, 0)');
+  const sections = out.pages[0].sections;
+  const contact = sections.find((s) => s.modules.some((m) => m.type === 'crm-form'));
+  assert.deepEqual(contact.shapeLayer, { shape: 'curve', side: 'left', color: '#ffffff', opacity: 71 });
+  // Only the contact band has one.
+  assert.equal(sections.filter((s) => s.shapeLayer).length, 1);
+  // Counted as mapped, reported, and not skipped.
+  assert.ok(!out.report.skipped.some((s) => s.sourceId === MASK), 'the mask is not skipped');
+  assert.deepEqual(out.report.shapes.map((s) => [s.sourceId, s.shape]), [[MASK, 'curve']]);
+  assert.ok(reconciles(out.report.elements), JSON.stringify(out.report.elements));
+  // Still no empty picture.
+  assert.equal(modulesOf(sections).filter((m) => m.type === 'image' && !m.settings.url).length, 0);
+});
+
+test('without a mirror the same curve stays on the right, as drawn', () => {
+  const { out } = home();
+  const contact = out.pages[0].sections.find((s) => s.modules.some((m) => m.type === 'crm-form'));
+  assert.equal(contact.shapeLayer.side, 'right');
+});
+
+test('a mask that cannot be matched is skipped with a reason naming it', () => {
+  const ir = JSON.parse(JSON.stringify(IR));
+  for (const s of ir.pages[0].sections) for (const el of s.elements || []) {
+    if (el.sourceId === MASK) {
+      // Two drawings in one SVG — not a single built-in shape.
+      const svg = '<svg viewBox="0 0 10 10" fill="#fff"><path d="M0,0H1V1Z"/><path d="M2,2H3V3Z"/></svg>';
+      el.computedStyles['background-image'] = `url("data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}")`;
+    }
+  }
+  const out = mapSite(ir, { existingSlugs: [] });
+  const skip = out.report.skipped.find((s) => s.sourceId === MASK);
+  assert.ok(skip, 'accounted');
+  assert.match(skip.reason, /background shape.*not carried over.*2 drawings/);
+  assert.equal(out.pages[0].sections.filter((s) => s.shapeLayer).length, 0);
+  assert.ok(reconciles(out.report.elements));
+});
+
+test('an Elementor shape divider is named in the report, not poured onto the page', () => {
+  const ir = JSON.parse(JSON.stringify(IR));
+  const contact = ir.pages[0].sections.find((s) => s.elements.some((e) => e.sourceId === MASK));
+  contact.elements.push({
+    sourceId: 'elementor-divider', class: 'image', textContent: '', textLength: 0, assetRefs: [],
+    html: '<div class="elementor-shape elementor-shape-bottom"><svg viewBox="0 0 1000 100"><path class="elementor-shape-fill" d="M0,0L1000,100H0Z"></path></svg></div>',
+    computedStyles: {}, documentPosition: 999, depth: 14, containers: ['97'],
+  });
+  const out = mapSite(ir, { existingSlugs: [] });
+  const skip = out.report.skipped.find((s) => s.sourceId === 'elementor-divider');
+  assert.ok(skip);
+  assert.match(skip.reason, /Elementor shape divider.*stylesheet/);
+  assert.ok(!modulesOf(out.pages[0].sections).some((m) => String(m.settings.importSourceIds || '').includes('elementor-divider')));
+  assert.ok(reconciles(out.report.elements));
+});
+
+/*
+ * The report must only say a shape landed when a row took it (SC-859 review).
+ */
+function maskElement(ir) {
+  for (const s of ir.pages[0].sections) for (const el of s.elements || []) if (el.sourceId === MASK) return { section: s, el };
+  throw new Error('fixture has no mask');
+}
+
+test('a mask in a band with nothing else carried over is skipped, not reported as landed', () => {
+  const ir = JSON.parse(JSON.stringify(IR));
+  const { section, el } = maskElement(ir);
+  const lone = JSON.parse(JSON.stringify(section));
+  lone.sourceId = 'lone-mask-band';
+  lone.elements = [{ ...JSON.parse(JSON.stringify(el)), sourceId: 'lone-mask' }];
+  ir.pages[0].sections.push(lone);
+  const out = mapSite(ir, { existingSlugs: [] });
+  const skip = out.report.skipped.find((s) => s.sourceId === 'lone-mask');
+  assert.ok(skip, 'accounted as skipped');
+  assert.match(skip.reason, /background shape.*no row to put it on/);
+  assert.ok(!out.report.shapes.some((s) => s.sourceId === 'lone-mask'), 'not listed as carried over');
+  assert.ok(reconciles(out.report.elements), JSON.stringify(out.report.elements));
+});
+
+test('a second mask on a row that already has one is reported as not carried over', () => {
+  const ir = JSON.parse(JSON.stringify(IR));
+  const { section, el } = maskElement(ir);
+  section.elements.push({ ...JSON.parse(JSON.stringify(el)), sourceId: 'mask-two', documentPosition: el.documentPosition + 0.5 });
+  const out = mapSite(ir, { existingSlugs: [] });
+  assert.deepEqual(out.report.shapes.map((s) => s.sourceId), [MASK]);
+  const skip = out.report.skipped.find((s) => s.sourceId === 'mask-two');
+  assert.ok(skip, 'the one that lost is accounted');
+  assert.match(skip.reason, /already carries another shape/);
+  assert.equal(out.pages[0].sections.filter((s) => s.shapeLayer).length, 1);
+  assert.ok(reconciles(out.report.elements), JSON.stringify(out.report.elements));
+});
+
+test('a mask whose size was not measured is refused, not guessed to fill its band', () => {
+  const ir = JSON.parse(JSON.stringify(IR));
+  delete maskElement(ir).el.box;
+  const out = mapSite(ir, { existingSlugs: [] });
+  const skip = out.report.skipped.find((s) => s.sourceId === MASK);
+  assert.ok(skip);
+  assert.match(skip.reason, /size .*was not measured/);
+  assert.equal(out.pages[0].sections.filter((s) => s.shapeLayer).length, 0);
+  assert.ok(reconciles(out.report.elements));
+});

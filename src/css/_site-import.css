@@ -386,6 +386,12 @@
   color: var(--subtext);
 }
 
+/* The Jump Links leftovers list sits straight under its heading rather than
+   inside a menus list, so it takes that list's size itself (SC-854). */
+.site-import-menus > .site-import-menus-reasons {
+  font-size: var(--text-sm);
+}
+
 @media (max-width: 900px) {
   .site-import-columns {
     flex-direction: column;

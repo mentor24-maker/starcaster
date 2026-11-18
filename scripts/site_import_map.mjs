@@ -187,7 +187,9 @@ const {
   mapSite, reportReconciles, mergeMappedSections, adoptLegacySectionIds,
   writeMappedPages, summarizePageWrites, dropStaleImportSections,
   buildMenuSection, planMenuTarget, attachMenuInstances, menuSiteLabel,
+  referenceSectionLinks, demoteEditedSectionLinks,
 } = require('./lib/site-import/dist/map.js');
+const { referenceJumpLinks } = require('./lib/siteImportJumpLinks.js');
 const { planImportTheme, saveImportTheme, undoLine } = require('./lib/siteImportTheme.js');
 const crmConfigStore = require('./lib/crmConfigStore.js');
 const crmFormsStore = require('./lib/crmFormsStore.js');
@@ -405,6 +407,13 @@ async function main() {
     out.report.elements.form -= form;
   }
   const protectedIds = new Set(protectedSections.map((p) => p.section.id));
+  // A jump link to a section a person edited would point at an anchor name
+  // the kept copy never received: list it as a leftover, not as linked, and
+  // do not store it by reference (review of SC-854). Before the dry run's
+  // report, so preview and apply say the same thing.
+  out.sectionLinks = demoteEditedSectionLinks(
+    out.report, out.sectionLinks || [], new Map(protectedSections.map((p) => [p.section.id, p.live])),
+  );
   const refreshLine = refresh
     ? refreshSummaryLine(refresh, planRefresh(out.pages, priorPageIds, existingPages), protectedIds.size, { recreateDeleted: RECREATE_DELETED })
     : '';
@@ -528,6 +537,7 @@ async function main() {
   }
   log(`Assets: promote ${out.report.assets.promoted}, not placed but kept ${out.report.assets.unplaced}, crops ${out.report.assets.cropsCopied}, left in namespace ${out.report.assets.leftInNamespace}`);
   logMenuPlan(job, out, prior);
+  logJumpLinks(out);
   logFormsPlan(out, prior);
 
   if (!reportReconciles(out.report)) {
@@ -799,6 +809,15 @@ async function main() {
     for (const problem of writeSummary.problems) warn(problem);
     process.exitCode = 1;
   }
+
+  // 4-. Jump links by reference, now that every page has its id (SC-854).
+  //     Never throws: the checkpoint below must still record these pages,
+  //     or the next run builds a second set. A failed page fails the run.
+  const jump = await referenceJumpLinks({
+    out, pageIds, ownedSectionIds, pagesStore, scope, referenceSectionLinks,
+    log, warn, error: (line) => console.error(`\n${line}`),
+  });
+  if (jump.failed.length) process.exitCode = 1;
 
   // 4a. Read the Form modules back: each must hold its form's id.
   if (out.forms.length) {
@@ -1220,6 +1239,22 @@ function logFormsPlan(out, prior) {
   for (const p of pictures) log(`  left as a picture on ${p.pagePath}: ${p.reason}`);
 }
 
+/** What became of the original's jump links (task SC-854), dry run and
+ *  apply alike — every one the import could not point anywhere, by name. */
+function logJumpLinks(out) {
+  const j = out.report.jumpLinks;
+  if (!j || (!j.linked && !j.skipLinks && !j.unresolved.length && !j.notRecorded)) {
+    log('\nJump links: the original has none.');
+    return;
+  }
+  log(`\nJump links: ${j.linked} now go to an imported section${j.skipLinks ? `; ${j.skipLinks} "skip to content" link(s) left out` : ''}.`);
+  if (j.unresolved.length) {
+    log(`  ${j.unresolved.length} could not be pointed at a section (kept as written, listed in the report):`);
+    for (const u of j.unresolved) log(`  - ${u.page}: "${u.label || u.href}" (${u.href}) — ${u.why}`);
+  }
+  if (j.notRecorded) log(`  ${j.notRecorded.links} not matched yet: ${j.notRecorded.why}`);
+}
+
 /** What the menu step will build — the dry run's promise, and --apply's. */
 function logMenuPlan(job, out, prior) {
   if (NO_MENUS) {
@@ -1259,8 +1294,11 @@ async function runMenus(job, scope, out, urlMap, checkpoints) {
       log(`Menus: no ${kind === 'top' ? 'Top' : 'Footer'} Menu — ${why.join('; ') || 'nothing to build'}.`);
       continue;
     }
-    // The logo's URL becomes the project's own copy, like every image.
-    const section = rewriteUrls(built, urlMap);
+    // The logo's URL becomes the project's own copy, like every image, and
+    // a jump link becomes a link to its section by reference (SC-854).
+    const section = referenceSectionLinks(
+      [rewriteUrls(built, urlMap)], out.sectionLinks || [], job.checkpoints?.map?.pageIds || {}
+    ).sections[0];
     const target = planMenuTarget(kind, savedSections, prior[kind] || '', siteLabel);
     let saved;
     let before = '';

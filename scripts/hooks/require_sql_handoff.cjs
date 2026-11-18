@@ -4,9 +4,17 @@
 /**
  * Claude Code Stop hook — enforces DOCTRINE.md §6.5.
  *
- * If this branch introduces a docs/SQL/*.sql file and the reply that is about
- * to be delivered does not hand it off in the SQL handoff block, refuse the
- * stop and say so. Exit 2 blocks the stop and shows stderr to the agent.
+ * If this branch introduces a docs/SQL/*.sql file, or the reply that is about
+ * to be delivered NAMES one (outside a code fence) -- on main as well as on a
+ * branch -- and the reply does not hand it off in the SQL handoff block, refuse
+ * the stop and say so. Exit 2 blocks the stop and shows stderr to the agent.
+ *
+ * The second half is SC-867 (2026-11-18): the hook used to ask only about SQL
+ * the branch adds and stood aside on main, so a reply pointing at a file merged
+ * days earlier and still waiting to be run -- the usual case, and the SC-832
+ * card on 2026-11-17 -- was never checked. The ticket door (`npm run clickup --
+ * ask` / `comment`, loop/scripts/lib/operatorCard.mjs) refuses the same thing
+ * on tickets; this is the same rule for a chat reply.
  *
  * WHY A STOP HOOK AND NOT A PRE-COMMIT CHECK
  * The failure is "the turn ended without the block". Pre-commit cannot see the
@@ -75,9 +83,12 @@ const {
   newSqlFiles,
   currentBranch,
   repoRoot,
-  isPushed,
   renderBlock,
   messageHandsOff,
+  messageHandsOffMerged,
+  mentionedSqlFiles,
+  onMain,
+  pushedCommit,
 } = require('../lib/sql_handoff.cjs');
 const { gitStateDir } = require('../lib/hook_state_dir.cjs');
 
@@ -233,12 +244,24 @@ function main(input) {
   if (!root) process.exit(0);
 
   const branch = currentBranch(root);
-  // On main there is no branch-qualified URL to give, and §6.5's whole point
-  // is the branch. Nothing to enforce here.
-  if (!branch || branch === 'main' || branch === 'HEAD') process.exit(0);
+  const message = String(payload?.last_assistant_message || '');
 
-  const sqlFiles = newSqlFiles(root);
+  // Two kinds of SQL to hand off, checked the same way:
+  //   - files THIS BRANCH adds or changes (none on main), linked by the
+  //     branch or its pushed commit;
+  //   - any other docs/SQL file the reply NAMES -- usually one already merged
+  //     and waiting to be run -- linked by main or a commit.
+  // Until SC-867 (2026-11-18) only the first kind was checked, and the hook
+  // stood aside on main entirely, so "Run docs/SQL/<merged file>.sql in
+  // Supabase" -- the SC-832 card, 2026-11-17 -- passed every check there was.
+  const onTopic = Boolean(branch) && branch !== 'main' && branch !== 'HEAD';
+  const branchFiles = onTopic ? newSqlFiles(root) : [];
+  const namedFiles = mentionedSqlFiles(message, root).filter((f) => !branchFiles.includes(f));
+  const sqlFiles = [...branchFiles, ...namedFiles];
   if (!sqlFiles.length) process.exit(0);
+  const handsOff = (sql) => (branchFiles.includes(sql)
+    ? messageHandsOff(message, branch, sql)
+    : messageHandsOffMerged(message, sql));
 
   // Nowhere at all to keep state means no refusal counter, and a hook that
   // refuses with no limit is the wedged conversation this file's header calls
@@ -254,11 +277,9 @@ function main(input) {
 
   const { state, save } = openState(files);
 
-  const message = String(payload?.last_assistant_message || '');
-
   // Anything handed off in this reply is now handed off for good.
   for (const sql of sqlFiles) {
-    if (messageHandsOff(message, branch, sql) && !state.handedOff.includes(sql)) {
+    if (handsOff(sql) && !state.handedOff.includes(sql)) {
       state.handedOff.push(sql);
     }
   }
@@ -315,39 +336,44 @@ function main(input) {
   state.refusals += 1;
   if (!save()) process.exit(0);
 
-  const pushed = isPushed(root);
+  const outstandingBranch = outstanding.filter((sql) => branchFiles.includes(sql));
+  const outstandingNamed = outstanding.filter((sql) => !branchFiles.includes(sql));
+  const commit = outstandingBranch.length ? pushedCommit(root) : '';
   const lines = [
-    `BLOCKED: this branch adds SQL the operator has to run, and your reply did not hand it off.`,
+    `BLOCKED: your reply names SQL the operator has to run, and did not hand it off.`,
     ``,
-    `DOCTRINE.md §6.5: SQL goes to him as the SQL handoff block with a`,
-    `branch-qualified GitHub URL — never a repo-relative path (his editor is on`,
-    `main, where the file does not exist yet) and never pasted statements.`,
+    `DOCTRINE.md §6.5: SQL goes to him as the SQL handoff block with a GitHub`,
+    `link he can click — never a bare or repo-relative path (he cannot open it),`,
+    `never pasted statements, never inside a code fence (the link goes dead).`,
     ``,
     `Outstanding: ${outstanding.join(', ')}`,
     ``,
   ];
 
-  if (!pushed) {
+  if (outstandingBranch.length && !commit) {
     lines.push(
-      `First push the branch, or the URL is a 404:`,
+      `This branch adds ${outstandingBranch.join(', ')}. Push it first, or the link is a 404:`,
       `  git push -u origin ${branch}`,
-      ``,
-      `Then add to your reply, as PLAIN TEXT (never inside a code fence — a fence`,
-      `makes the link unclickable, which defeats the whole handoff), with two`,
-      `blank lines above and below:`,
-      ``
-    );
-  } else {
-    lines.push(
-      `Add to your reply, as PLAIN TEXT (never inside a code fence — a fence makes`,
-      `the link unclickable, which defeats the whole handoff), with two blank`,
-      `lines above and below:`,
+      `then \`npm run sql:handoff\` prints the block linked by the pushed commit,`,
+      `which keeps working after the branch is deleted on merge.`,
       ``
     );
   }
 
+  lines.push(
+    `Add to your reply, as PLAIN TEXT, with two blank lines above and below each:`,
+    ``
+  );
+
   for (const sql of outstanding) {
-    lines.push(renderBlock(branch, sql), ``);
+    let ref = 'main';
+    if (outstandingBranch.includes(sql)) ref = commit || branch;
+    else if (!onMain(root, sql)) ref = '<commit>';
+    lines.push(``, renderBlock(ref, sql), ``, ``);
+  }
+
+  if (outstandingNamed.some((sql) => !onMain(root, sql))) {
+    lines.push(`Replace <commit> with the pushed commit that carries the file (git log -1 --format=%h -- <file>).`, ``);
   }
 
   lines.push(

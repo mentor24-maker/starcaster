@@ -18,6 +18,7 @@ import {
   type BuilderGradientLayer
 } from "./builder-gradient-layers";
 export * from "./builder-gradient-layers";
+export * from "./section-shape-layer";
 import {
   HEADLINE_ROTATOR_DEFAULT_FONT_SIZE,
   HEADLINE_ROTATOR_DEFAULT_MIN_HEIGHT,
@@ -30,6 +31,7 @@ import { normalizeAnchorName } from "@/lib/page-link";
 
 export { normalizeBuilderAssetUrl, resolvePublicBuilderAssetUrl, safeText } from "@/lib/builder-asset-url";
 import { backgroundImageUrlFor } from "@/lib/image-renditions";
+import { normalizeSectionShapeLayer, type SectionShapeLayer } from "./section-shape-layer";
 import { normalizeProximityEffectSettings } from "./proximity-effects";
 import {
   BACKGROUND_PARALLAX_SPEED_INERT,
@@ -728,6 +730,14 @@ export type BuilderTemplateSection = {
   deviceOverrides?: BuilderSectionDeviceOverrides;
   background: BackgroundSettings;
   overlayScreen?: RowOverlayScreenSettings;
+  /**
+   * A curve, wave or slant in one colour, painted over the background (and
+   * its overlay screen) and under the content — Divi's background mask,
+   * Elementor's shape divider (task SC-859). Absent on nearly every row, and
+   * only written when a shape is chosen, so an untouched row's saved JSON
+   * does not change. See `section-shape-layer.ts`.
+   */
+  shapeLayer?: SectionShapeLayer;
   cellBackgrounds: Record<string, BackgroundSettings>;
   /**
    * A tint/dimmer screen over ONE cell's background, keyed by column — the
@@ -3659,6 +3669,7 @@ export function normalizeLayoutSections(value: unknown): BuilderTemplateSection[
       const deviceOverrides = normalizeSectionDeviceOverrides(normalizedSection.deviceOverrides);
       const anchorName = normalizeAnchorName(normalizedSection.anchorName);
       const cellDeviceOverrides = normalizeCellDeviceOverrides(normalizedSection.cellDeviceOverrides, layout);
+      const shapeLayer = normalizeSectionShapeLayer(normalizedSection.shapeLayer);
 
       return {
         id: safeText(normalizedSection.id, 120) || `section-${sectionIndex + 1}`,
@@ -3717,6 +3728,11 @@ export function normalizeLayoutSections(value: unknown): BuilderTemplateSection[
         ...(cellDeviceOverrides ? { cellDeviceOverrides } : {}),
         background: normalizeBackgroundSettings(normalizedSection.background),
         overlayScreen: normalizeRowOverlayScreenSettings(normalizedSection.overlayScreen),
+        // Spread for the same reason as deviceOverrides: a row with no shape
+        // must serialize without the key at all.
+        // Kept at opacity 0 too, so dragging the strength down and back up
+        // does not lose the shape the operator chose.
+        ...(shapeLayer.shape !== "none" ? { shapeLayer } : {}),
         cellBackgrounds: normalizeCellBackgrounds(normalizedSection.cellBackgrounds, layout),
         cellOverlayScreens: normalizeCellOverlayScreens(normalizedSection.cellOverlayScreens, layout),
         cellPadding: cellPadding,

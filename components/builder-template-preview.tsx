@@ -7,6 +7,7 @@ import { usePathname } from "next/navigation";
 import { type CSSProperties, type FormEvent, type MouseEvent, Suspense, createContext, createElement, useCallback, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
 import { type PageAddressMap, resolvePageLinksInHtml, resolvePageLinksInSettings } from "@/lib/page-link";
 import { handleSectionJumpClick, useJumpToAddressSection } from "@/lib/section-jump";
+import { type HeadingAnchorAllocator, addHeadingAnchors, applyHeadingAnchors, planHeadingAnchors } from "@/lib/heading-anchors";
 import {
   EMPTY_MEDIA_FILTERS,
   MEDIA_ASPECTS,
@@ -28,6 +29,7 @@ import {
   formatRichTextContent,
   getBuilderBackgroundStyle,
   getBuilderRowOverlayScreenStyle,
+  getSectionShapeLayerStyle,
   getLayoutColumns,
   groupJoinedSections,
   isPlainTextVariant,
@@ -294,6 +296,80 @@ const PageAddressContext = createContext<PageAddressMap | null>(null);
  * through BuilderModulePreview too).
  */
 const SiteWideBugReportContext = createContext(false);
+
+/**
+ * The page's heading anchors (task SC-856): the id each Text module's headings
+ * get, planned once for the whole page so a repeated heading is numbered
+ * across modules (`junior-programs`, `junior-programs-2`), plus an allocator
+ * holding every id the page uses, for rich text that arrives later (a blog
+ * post's body). Null outside a drawn page (an email), where nothing is added.
+ */
+type HeadingAnchorPlan = { ids: Map<string, string[]>; allocator: HeadingAnchorAllocator };
+const HeadingAnchorContext = createContext<HeadingAnchorPlan | null>(null);
+
+/**
+ * Rich text with its heading anchors. A module the page-wide plan covers takes
+ * its planned ids; anything else is numbered against a FORK of the page's ids,
+ * so drawing it twice gives the same ids both times.
+ */
+function useAnchoredRichText(html: string, moduleId?: string): string {
+  const plan = useContext(HeadingAnchorContext);
+  return useMemo(() => {
+    if (!plan || !html) return html;
+    const planned = moduleId ? plan.ids.get(moduleId) : undefined;
+    return planned ? applyHeadingAnchors(html, planned) : addHeadingAnchors(html, plan.allocator.fork());
+  }, [plan, html, moduleId]);
+}
+
+function TextModulePreview({ module }: { module: import("@/lib/builder-template").BuilderTemplateModule }) {
+  const variant = module.settings.variant ?? "";
+  // Simple Text keeps every other text-module behaviour (alignment, width,
+  // background) and changes only how the copy itself is turned into HTML —
+  // plus the type overrides, which are its own since it has no type scale.
+  const isPlainText = isPlainTextVariant(module.settings);
+  const formatted = isPlainText ? formatPlainTextContent(module.text) : formatRichTextContent(module.text);
+  // Rich text only: Simple Text is the operator's own markup, left as typed.
+  const anchored = useAnchoredRichText(isPlainText ? "" : formatted, module.id);
+  const html = isPlainText ? formatted : anchored;
+
+  return (
+    <div
+      className={`builder-preview-text builder-preview-text-${variant || "default"}`}
+      style={{
+        ...getTextModuleWidthStyle(module.settings),
+        ...(isPlainText ? getPlainTextModuleStyle(module.settings) : {}),
+        ...getTextModuleRhythmStyle(module.settings),
+        ...getTextModuleFrameStyle(module.settings)
+      }}
+      dangerouslySetInnerHTML={{ __html: html || "" }}
+    />
+  );
+}
+
+/**
+ * A blog post's body, its headings anchored like a Text module's (task SC-856).
+ * The body is fetched after the page has drawn, so the address's `#heading` is
+ * looked for again once it is on screen — the page's own look found nothing.
+ */
+function BlogPostBodyHtml({ body, jumpToAddress }: { body: string; jumpToAddress: boolean }) {
+  const html = useAnchoredRichText(formatRichTextContent(body) || "");
+  useJumpToAddressSection(jumpToAddress, html);
+  return <div className="blog-post-body builder-preview-text" dangerouslySetInnerHTML={{ __html: html }} />;
+}
+
+/** Every Text module on the page, in the order the page shows them. */
+function planPageHeadingAnchors(layoutSections: BuilderTemplateSection[]): HeadingAnchorPlan {
+  const entries: Array<{ key: string; html: string }> = [];
+  const reserved: string[] = [];
+  for (const section of layoutSections || []) {
+    if (section.anchorName) reserved.push(section.anchorName);
+    for (const module of section.modules || []) {
+      if (module.type !== "text" || isPlainTextVariant(module.settings) || !module.id) continue;
+      entries.push({ key: module.id, html: formatRichTextContent(module.text) });
+    }
+  }
+  return planHeadingAnchors(entries, reserved);
+}
 
 type ContactFormField = {
   id: string;
@@ -1905,6 +1981,14 @@ export function BuilderTemplatePreview({
   const sectionJumpsEnabled = !emailPreview && (liveSite || previewMode);
   useJumpToAddressSection(sectionJumpsEnabled, layoutSections);
 
+  // Every heading in the page's rich text gets an anchor from its words,
+  // numbered across the whole page (task SC-856). Added as it is drawn, never
+  // saved. Not in an email, where nothing can jump to it.
+  const headingAnchorPlan = useMemo(
+    () => (emailPreview ? null : planPageHeadingAnchors(layoutSections)),
+    [emailPreview, layoutSections]
+  );
+
   function handleAdminLogoutLinkClick(event: MouseEvent<HTMLDivElement>) {
     if (emailPreview) return;
     // Not stopped: the link's own handlers (a phone menu closing itself) still run.
@@ -2065,6 +2149,7 @@ export function BuilderTemplatePreview({
   return (
     <PageAddressContext.Provider value={pageAddresses}>
     <SiteWideBugReportContext.Provider value={siteWideBugReportActive}>
+    <HeadingAnchorContext.Provider value={headingAnchorPlan}>
     <div
       className={
         shellClassName
@@ -2119,6 +2204,7 @@ export function BuilderTemplatePreview({
         />
       ) : null}
     </div>
+    </HeadingAnchorContext.Provider>
     </SiteWideBugReportContext.Provider>
     </PageAddressContext.Provider>
   );
@@ -2336,6 +2422,11 @@ function BuilderSectionPreview({
   const sectionOverlayScreenStyle = isOverlayLayoutCollapsed
     ? undefined
     : getBuilderRowOverlayScreenStyle(section.overlayScreen);
+  // The section's shape layer (task SC-859): a curve, wave or slant over the
+  // background and tint, under the columns. Undefined when there is none, so
+  // no element is mounted and the row renders exactly as before.
+  const sectionShapeLayerStyle = isOverlayLayoutCollapsed ? undefined : getSectionShapeLayerStyle(section.shapeLayer);
+  const sectionHasLayers = Boolean(sectionBackgroundLayer || sectionOverlayScreenStyle || sectionShapeLayerStyle);
 
   // A function of the row, not a constant, so the tablet and phone rules below
   // are computed by exactly this code on the row as each device sees it.
@@ -2413,9 +2504,7 @@ function BuilderSectionPreview({
       // out is the point of 86bbwmp2y rather than a side effect — a dropdown in
       // a tinted row was cut off for the same reason it was in a video one.
       // (`row-overlay-screen-only-leaves-the-row-uncontained` holds this.)
-      ...(sectionBackgroundLayer || sectionOverlayScreenStyle
-        ? { position: "relative" }
-        : {}),
+      ...(sectionHasLayers ? { position: "relative" } : {}),
       display: "grid",
       gridTemplateColumns: sectionGridTemplate,
       ...(isOverlayLayoutCollapsed ? { gap: 0 } : getSectionColumnGapStyle(s)),
@@ -2471,9 +2560,7 @@ function BuilderSectionPreview({
       }${
         section.widthMode === "full-width" ? " builder-preview-section-full-width" : ""
       }${
-        sectionBackgroundLayer || sectionOverlayScreenStyle
-          ? " builder-preview-section-layered"
-          : ""
+        sectionHasLayers ? " builder-preview-section-layered" : ""
       }${
         // Drops the stylesheet's default section corner, which the overlay
         // screen would otherwise inherit and paint (86bcvqemm).
@@ -2503,6 +2590,14 @@ function BuilderSectionPreview({
       ) : null}
       {sectionOverlayScreenStyle ? (
         <div className="builder-preview-row-overlay-screen" style={sectionOverlayScreenStyle} />
+      ) : null}
+      {sectionShapeLayerStyle ? (
+        <div
+          className="builder-preview-row-shape-layer"
+          data-shape={section.shapeLayer?.shape}
+          data-shape-side={section.shapeLayer?.side}
+          style={sectionShapeLayerStyle}
+        />
       ) : null}
       {columnKeys.map((columnKey) => {
         const columnModules = section.modules.filter((module) => module.column === columnKey);
@@ -3031,26 +3126,7 @@ function BuilderModulePreviewBody({
   }
 
   if (module.type === "text") {
-    // Simple Text keeps every other text-module behaviour (alignment, width,
-    // background) and changes only how the copy itself is turned into HTML —
-    // plus the type overrides, which are its own since it has no type scale.
-    const isPlainText = isPlainTextVariant(module.settings);
-    const html = isPlainText
-      ? formatPlainTextContent(module.text)
-      : formatRichTextContent(module.text);
-
-    return (
-      <div
-        className={`builder-preview-text builder-preview-text-${variant || "default"}`}
-        style={{
-          ...getTextModuleWidthStyle(module.settings),
-          ...(isPlainText ? getPlainTextModuleStyle(module.settings) : {}),
-          ...getTextModuleRhythmStyle(module.settings),
-          ...getTextModuleFrameStyle(module.settings)
-        }}
-        dangerouslySetInnerHTML={{ __html: html || "" }}
-      />
-    );
+    return <TextModulePreview module={module} />;
   }
 
   if (module.type === "code") {
@@ -10355,10 +10431,7 @@ function BlogPostViewPreview({
           ) : null}
         </div>
         {post.body ? (
-          <div
-            className="blog-post-body builder-preview-text"
-            dangerouslySetInnerHTML={{ __html: formatRichTextContent(post.body) || "" }}
-          />
+          <BlogPostBodyHtml body={post.body} jumpToAddress={liveSite} />
         ) : null}
       </article>
     );
@@ -10398,10 +10471,7 @@ function BlogPostViewPreview({
         {excerpt ? <p className="blog-post-excerpt">{excerpt}</p> : null}
       </div>
       {body ? (
-        <div
-          className="blog-post-body builder-preview-text"
-          dangerouslySetInnerHTML={{ __html: formatRichTextContent(body) || "" }}
-        />
+        <BlogPostBodyHtml body={body} jumpToAddress={false} />
       ) : (
         <p className="blog-post-body" style={{ color: "#9ca3af" }}>Post body will appear here when opened with ?post=slug.</p>
       )}

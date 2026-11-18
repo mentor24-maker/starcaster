@@ -460,6 +460,7 @@ export function BuilderGalaxyModuleSettings({ module, onUpdateModule, themeColor
                   control: "picker",
                   source: "pages",
                   valueKind: "path",
+                  allowSections: true,
                   noneLabel: "— No link —",
                   placeholder: "https://",
                   visibleWhen: (settings) => proximityIsInline(settings.placement),

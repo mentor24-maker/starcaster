@@ -8100,6 +8100,21 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 }
 
 /*
+ * THE SECTION'S SHAPE LAYER (task SC-859) — a curve, wave or slant drawn as
+ * an SVG background. Same rung as the overlay screen and AFTER it in the
+ * markup, so it paints over the photo and the tint; the columns sit at
+ * z-index 2 (`.builder-preview-section-layered > .builder-preview-column`
+ * below), so text stays on top of the shape.
+ */
+.builder-preview-row-shape-layer {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/*
  * Every section carries a default corner from the generated sheet (24px, 16px
  * on a phone). On a section with no fill it is invisible; the screen above
  * inherits it and paints it, so an overlay band arrived with rounded corners
