@@ -4,6 +4,7 @@ import {
   leftoverReason,
   mapReportUrl,
   summarizeBuildReport,
+  summarizeJumpLinks,
   summarizeMenus,
 } from './site-import-build-report';
 
@@ -203,5 +204,31 @@ describe('summarizeMenus', () => {
     if (failed.predates) throw new Error('read as predating menus');
     expect(failed.lines[0].built).toBe('saved section ss_1 (could not read its name: HTTP 500)');
     expect(failed.lines[1].built).toBe('no saved section was recorded for it on this import');
+  });
+});
+
+describe('summarizeJumpLinks (SC-854)', () => {
+  it('says a report from before jump links predates them, never "none"', () => {
+    const out = summarizeJumpLinks({ pages: [] });
+    expect(out.predates).toBe(true);
+  });
+
+  it('names every link that could not land, with its reason', () => {
+    const out = summarizeJumpLinks({
+      jumpLinks: {
+        linked: 3,
+        skipLinks: 1,
+        unresolved: [{ page: '/', href: '#respond', label: 'Leave a reply', why: 'nothing the import built on / carries the id "respond"' }],
+      },
+    });
+    if (out.predates) throw new Error('should not predate');
+    expect(out.line).toBe('3 jump links now go to an imported section; 1 "skip to content" link left out on purpose; 1 could not be pointed at a section (listed below).');
+    expect(out.leftovers).toEqual([{ page: '/', href: '#respond', label: 'Leave a reply', why: 'nothing the import built on / carries the id "respond"' }]);
+  });
+
+  it('says plainly when the original has none', () => {
+    const out = summarizeJumpLinks({ jumpLinks: { linked: 0, skipLinks: 0, unresolved: [] } });
+    if (out.predates) throw new Error('should not predate');
+    expect(out.line).toMatch(/no links that jump/);
   });
 });

@@ -31,7 +31,10 @@
                 "computedStyles": {},
                 "documentPosition": 0,
                 "depth": 4,
-                "assetRefs": []
+                "assetRefs": [],
+                "anchors": [
+                  "root"
+                ]
               },
               {
                 "sourceId": "p2a0c975e-e98024c4",

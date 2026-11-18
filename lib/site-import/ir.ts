@@ -392,6 +392,18 @@ export type ElementIR = {
    * listed. Absent when there are none, and on IRs normalized before it.
    */
   inlineStyles?: InlineStyleRun[];
+  /**
+   * The original's element ids that a jump link to would land HERE — on this
+   * element, the first thing a visitor sees after scrolling to `#<id>` (task
+   * SC-854). An id is filed on the first countable element at or after the
+   * element carrying it, in document order: Bayside's `<div id="contact-us"
+   * class="et_pb_section">` lands on its "Contact Us" heading, and an empty
+   * `<a id="team"></a>` placed before a band lands on that band's first line.
+   * Each id appears once per page, outermost first. Absent when none land
+   * here, and on IRs normalized before SC-854 — which is NOT "the original
+   * had no ids": nobody looked.
+   */
+  anchors?: string[];
 };
 
 export type InlineStyleRun = {

@@ -187,6 +187,7 @@ const {
   mapSite, reportReconciles, mergeMappedSections, adoptLegacySectionIds,
   writeMappedPages, summarizePageWrites, dropStaleImportSections,
   buildMenuSection, planMenuTarget, attachMenuInstances, menuSiteLabel,
+  referenceSectionLinks,
 } = require('./lib/site-import/dist/map.js');
 const { planImportTheme, saveImportTheme, undoLine } = require('./lib/siteImportTheme.js');
 const crmConfigStore = require('./lib/crmConfigStore.js');
@@ -528,6 +529,7 @@ async function main() {
   }
   log(`Assets: promote ${out.report.assets.promoted}, not placed but kept ${out.report.assets.unplaced}, crops ${out.report.assets.cropsCopied}, left in namespace ${out.report.assets.leftInNamespace}`);
   logMenuPlan(job, out, prior);
+  logJumpLinks(out);
   logFormsPlan(out, prior);
 
   if (!reportReconciles(out.report)) {
@@ -799,6 +801,9 @@ async function main() {
     for (const problem of writeSummary.problems) warn(problem);
     process.exitCode = 1;
   }
+
+  // 4-. Jump links by reference, now that every page has its id (SC-854).
+  await referenceJumpLinks(out, pageIds, ownedSectionIds, scope);
 
   // 4a. Read the Form modules back: each must hold its form's id.
   if (out.forms.length) {
@@ -1221,6 +1226,57 @@ function logFormsPlan(out, prior) {
 }
 
 /** What the menu step will build — the dry run's promise, and --apply's. */
+/** What became of the original's jump links (task SC-854), dry run and
+ *  apply alike — every one the import could not point anywhere, by name. */
+function logJumpLinks(out) {
+  const j = out.report.jumpLinks;
+  if (!j || (!j.linked && !j.skipLinks && !j.unresolved.length)) {
+    log('\nJump links: the original has none.');
+    return;
+  }
+  log(`\nJump links: ${j.linked} now go to an imported section${j.skipLinks ? `; ${j.skipLinks} "skip to content" link(s) left out` : ''}.`);
+  if (j.unresolved.length) {
+    log(`  ${j.unresolved.length} could not be pointed at a section (kept as written, listed in the report):`);
+    for (const u of j.unresolved) log(`  - ${u.page}: "${u.label || u.href}" (${u.href}) — ${u.why}`);
+  }
+}
+
+/**
+ * --apply (task SC-854): the mapper wrote each jump link as a plain address
+ * ("/#contact-us") because page ids did not exist yet. Now they do, so store
+ * each by reference — page id and section id — the way the Builder's link
+ * picker does, and read every changed page back. Only sections this run owns
+ * are touched: one somebody edited since is left as they left it.
+ */
+async function referenceJumpLinks(out, pageIds, ownedSectionIds, scope) {
+  if (!out.sectionLinks.length) return;
+  let pagesChanged = 0;
+  let linksReferenced = 0;
+  for (const page of out.pages) {
+    const pageId = pageIds[page.key];
+    if (!pageId) continue;
+    const owned = new Set(ownedSectionIds.get(String(pageId)) || []);
+    const current = must(await pagesStore.getPage(pageId, scope), `read /${page.slug} for jump links`);
+    const sections = current.layoutSections || [];
+    const mine = sections.filter((s) => owned.has(s.id));
+    const { sections: swapped, referenced } = referenceSectionLinks(mine, out.sectionLinks, pageIds);
+    if (!referenced) continue;
+    const byId = new Map(swapped.map((s) => [s.id, s]));
+    const next = sections.map((s) => byId.get(s.id) || s);
+    // Spread the page and pass the ARRAY (landmine 13), then read it back.
+    must(await pagesStore.updatePage(pageId, { ...current, layoutSections: next }, scope), `store jump links on /${page.slug}`);
+    const after = must(await pagesStore.getPage(pageId, scope), `re-read /${page.slug}`);
+    const stored = (JSON.stringify(after.layoutSections || []).match(new RegExp(`page:${pageId}#`, 'g')) || []).length;
+    const expected = (JSON.stringify(next).match(new RegExp(`page:${pageId}#`, 'g')) || []).length;
+    if (stored < expected) {
+      throw new Error(`/${page.slug} (page ${pageId}): ${expected} section link(s) written, ${stored} read back.`);
+    }
+    pagesChanged += 1;
+    linksReferenced += referenced;
+  }
+  log(`Jump links: stored ${linksReferenced} link(s) by reference on ${pagesChanged} page(s); read back.`);
+}
+
 function logMenuPlan(job, out, prior) {
   if (NO_MENUS) {
     log(`\nMenus: skipped (${NAV ? '--nav writes the header master instead' : '--no-menus'}).`);
@@ -1259,8 +1315,11 @@ async function runMenus(job, scope, out, urlMap, checkpoints) {
       log(`Menus: no ${kind === 'top' ? 'Top' : 'Footer'} Menu — ${why.join('; ') || 'nothing to build'}.`);
       continue;
     }
-    // The logo's URL becomes the project's own copy, like every image.
-    const section = rewriteUrls(built, urlMap);
+    // The logo's URL becomes the project's own copy, like every image, and
+    // a jump link becomes a link to its section by reference (SC-854).
+    const section = referenceSectionLinks(
+      [rewriteUrls(built, urlMap)], out.sectionLinks || [], job.checkpoints?.map?.pageIds || {}
+    ).sections[0];
     const target = planMenuTarget(kind, savedSections, prior[kind] || '', siteLabel);
     let saved;
     let before = '';

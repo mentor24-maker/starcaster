@@ -328,6 +328,8 @@ export type CountableVisit =
       domPath: string;
       depth: number;
       parentNode: DomNode;
+      /** The text node itself, so its place in document order is exact. */
+      textNode?: DomNode;
     };
 
 /** What the walk needs from the desktop capture to recognise a picture drawn
@@ -413,6 +415,7 @@ function walkCountables(
           domPath: `${f.path}/#text[${f.textIdx++}]`,
           depth: f.depth + 1,
           parentNode: f.node,
+          textNode: child,
         });
       }
       continue;
@@ -1627,6 +1630,72 @@ function degradedPage(
   };
 }
 
+/* ---------------------------------------------------------------------------
+ * Jump-link targets (task SC-854)
+ *
+ * A menu that scrolls to `#contact-us` needs to know which part of the page
+ * carried that id. The 2026-11-17 sweep found 683 jump links across nine
+ * imported sites and not one of their targets in the capture, so the import
+ * could not tell which section a link meant even when the original said so
+ * plainly. Each id is filed on the element a visitor would land on.
+ * ------------------------------------------------------------------------ */
+
+/** The longest id worth keeping: anything longer is generated, never linked. */
+const ANCHOR_ID_MAX = 100;
+/** Subtrees whose ids are never a place on the page (SVG gradients, scripts). */
+const NO_ANCHOR_TAGS = new Set([...SKIP_TAGS, "svg", "select", "option"]);
+
+/** Every node under `root`, numbered in document (pre-)order. */
+function documentOrder(root: DomNode): Map<DomNode, number> {
+  const order = new Map<DomNode, number>();
+  const stack: DomNode[] = [root];
+  let n = 0;
+  while (stack.length) {
+    const node = stack.pop()!;
+    order.set(node, n++);
+    const kids = node.children || [];
+    for (let i = kids.length - 1; i >= 0; i--) stack.push(kids[i]);
+  }
+  return order;
+}
+
+/**
+ * File every id in `body` on the first countable element at or after the
+ * element carrying it. `landings` are the page's elements with their place in
+ * document order, ascending. An id with nothing after it is dropped: there is
+ * nothing to land on. Exported for the test.
+ */
+export function fileAnchors(
+  body: DomNode,
+  order: Map<DomNode, number>,
+  landings: { order: number; el: ElementIR }[]
+): void {
+  const seen = new Set<string>();
+  const stack: DomNode[] = [...(body.children || [])].reverse();
+  while (stack.length) {
+    const node = stack.pop()!;
+    if (node.type !== "tag") continue;
+    if (NO_ANCHOR_TAGS.has((node.name || "").toLowerCase())) continue;
+    const id = String((node.attribs || {}).id || "").trim();
+    if (id && id.length <= ANCHOR_ID_MAX && !seen.has(id)) {
+      seen.add(id);
+      const at = order.get(node) ?? -1;
+      // First landing at or after `at` (binary search; landings are sorted).
+      let lo = 0;
+      let hi = landings.length;
+      while (lo < hi) {
+        const mid = (lo + hi) >> 1;
+        if (landings[mid].order < at) lo = mid + 1;
+        else hi = mid;
+      }
+      const landing = landings[lo];
+      if (landing) (landing.el.anchors ||= []).push(id);
+    }
+    const kids = node.children || [];
+    for (let i = kids.length - 1; i >= 0; i--) stack.push(kids[i]);
+  }
+}
+
 function normalizePage(
   pageKey: string,
   pageIdx: number,
@@ -1707,6 +1776,9 @@ function normalizePage(
   const usedIds = new Set<string>();
   const assetUses: PageBuild["assetUses"] = [];
   let position = 0;
+  const order = documentOrder(body);
+  /** Each element with its place in document order, for fileAnchors. */
+  const landings: { order: number; el: ElementIR }[] = [];
 
   walkCountables(body, (v) => {
     const baseSourceId = computeSourceId(pageKey, v.domPath);
@@ -1769,6 +1841,9 @@ function normalizePage(
       if (assetRefs.length) assetUses.push({ sourceId, assetIds: assetRefs });
     }
 
+    const landingNode = v.kind === "element" ? v.node : v.textNode || v.parentNode;
+    landings.push({ order: order.get(landingNode) ?? 0, el });
+
     const target =
       v.kind === "element"
         ? candidateFor(v.node, candidateIndex)
@@ -1785,6 +1860,7 @@ function normalizePage(
       perCandidate.set(target, list);
     }
   }, facts);
+  fileAnchors(body, order, landings);
 
   // Sections in candidate document order; only candidates that actually
   // received content become sections. Loose content (rare: text sitting
