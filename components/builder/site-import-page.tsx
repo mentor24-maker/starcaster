@@ -11,6 +11,7 @@ import {
 } from "./site-import-build-report";
 import { SiteImportThemePanel, importThemeRecordOf } from "./site-import-theme-panel";
 import { SiteImportBuildControls } from "./site-import-build-controls";
+import { SiteImportFidelityPanel } from "./site-import-fidelity-panel";
 import { buildIsActive, buildRequestOf } from "./site-import-build-controls-model";
 
 /**
@@ -631,6 +632,8 @@ export default function SiteImportPage() {
                   )}
                 </div>
               ) : null}
+
+              <SiteImportFidelityPanel checkpoints={job.checkpoints as Record<string, unknown>} />
 
               {job.status === "complete" && checkpointOf(job, "normalize")?.blobPath ? (
                 <SiteImportThemePanel
