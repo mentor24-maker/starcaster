@@ -314,7 +314,19 @@ export type MapReport = {
    * "skip to content" links left out on purpose, and `unresolved` lists the
    * rest with the reason, one entry per page and address.
    */
-  jumpLinks: { linked: number; skipLinks: number; unresolved: UnresolvedJumpLink[] };
+  jumpLinks: {
+    linked: number;
+    skipLinks: number;
+    unresolved: UnresolvedJumpLink[];
+    /**
+     * Set when the IR predates jump-link capture (SiteIR.anchorsRecorded
+     * absent and no element carrying anchors): the ids were never looked for,
+     * so `links` same-site jump links could not be matched, and `why` says so
+     * and how to refresh it. Those links are NOT in `unresolved` — a per-id
+     * "missing" reason there would be false (review of SC-854).
+     */
+    notRecorded?: { links: number; why: string };
+  };
   menus: {
     top: { items: number; topLevel: number; logo: boolean } | null;
     footer: { items: number } | null;
@@ -2894,6 +2906,12 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
     return name;
   };
   const sectionLinks = new Map<string, SectionLinkTarget>();
+  /** Did the normalizer look for ids at all? An IR from before SC-854 has
+   *  neither the flag nor a single filed anchor. */
+  const anchorsLooked =
+    ir.anchorsRecorded === true ||
+    (ir.pages || []).some((p) => (p.sections || []).some((s) => (s.elements || []).some((el) => el.anchors?.length)));
+  let notRecordedLinks = 0;
   const unresolvedSeen = new Set<string>();
   const leftUnresolved = (onPage: string, href: string, label: string, why: string) => {
     const key = `${onPage}\u0000${href}`;
@@ -2911,6 +2929,8 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
     const at = raw.indexOf("#");
     if (at === -1) return { href: localizeHref(raw) };
     const hash = raw.slice(at + 1);
+    // A text fragment ("#:~:text=…") highlights words; it is not a place.
+    if (hash.startsWith(":~:")) return { href: localizeHref(raw) };
     // "#" alone is a menu toggle, "#!/x" a script's route: not a place.
     if (!hash || hash.startsWith("!") || hash.startsWith("/")) return { href: at === 0 ? raw : localizeHref(raw.slice(0, at)) };
     let abs: URL;
@@ -2920,6 +2940,9 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
       return { href: raw };
     }
     if (!sameSite(abs.href, ir.sourceUrl)) return { href: raw };
+    // "/files/menu.pdf#page=3" opens a file at a page: an asset, left alone
+    // exactly as before jump links were read.
+    if (!looksLikeHtmlUrl(abs.href)) return { href: localizeHref(raw) };
     let id = hash;
     try {
       id = decodeURIComponent(hash);
@@ -2940,6 +2963,11 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
       return { href: `${localizeHref(bare.href)}#${hash}` };
     }
     const section = entry.byId.get(id);
+    if (!section && !anchorsLooked) {
+      // Nobody looked for the ids on this IR: never call one missing.
+      notRecordedLinks += 1;
+      return { href: `${entry.local}#${hash}` };
+    }
     if (!section) {
       leftUnresolved(onPage, raw, label, `nothing the import built on ${entry.local} carries the id "${id}"`);
       return { href: `${entry.local}#${hash}` };
@@ -2950,6 +2978,9 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
     return { href: fallback };
   };
 
+  /** Marks an href the whole-<a> pass already rewrote, so the plain pass
+   *  below leaves it alone; stripped before the text is stored. */
+  const DONE = "\u0001";
   const localizeHtml = (html: string, baseUrl: string, onPage: string): string =>
     html
       // Jump links first, a whole <a> at a time: a skip link loses its tag
@@ -2957,12 +2988,18 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
       .replace(/<a\b([^>]*?)\bhref="([^"]*#[^"]*)"([^>]*)>([\s\S]*?)<\/a>/gi, (whole, pre, href, post, inner) => {
         const next = localizeLink(String(href), baseUrl, String(inner).replace(/<[^>]+>/g, " "), onPage);
         if (next.drop) return inner;
-        return next.href === href ? whole : `<a${pre}href="${next.href}"${post}>${inner}</a>`;
+        return `<a${pre}${DONE}href="${next.href}"${post}>${inner}</a>`;
       })
-      .replace(/href="([^"]*)"/g, (whole, href) => {
-        if (String(href).includes("#")) return whole; // handled above
-        const next = localizeHref(String(href));
-        return next === href ? whole : `href="${next}"`;
+      // Every other href — including one with "#" the pass above could not
+      // match (an attribute holding ">") — is still localized, so no link
+      // keeps pointing at the client's LIVE site. Here a skip link keeps its
+      // address as written: without its whole tag it cannot be unwrapped.
+      .replace(new RegExp(`(${DONE}?)href="([^"]*)"`, "g"), (whole, done, href) => {
+        if (done) return `href="${href}"`;
+        const raw = String(href);
+        const next = raw.includes("#") ? localizeLink(raw, baseUrl, "", onPage) : { href: localizeHref(raw) };
+        const out = next.drop ? raw : next.href;
+        return out === raw ? whole : `href="${out}"`;
       });
   for (const page of pages) {
     const irPage = irPageOfKey.get(page.key);
@@ -3002,6 +3039,15 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
       }
       item.href = next.href;
     }
+  }
+  if (notRecordedLinks) {
+    report.jumpLinks.notRecorded = {
+      links: notRecordedLinks,
+      why:
+        `this import was prepared before the import recorded where jump links land, so its ids were never looked for. ` +
+        `The capture already holds them: re-run the normalize stage on the existing capture ` +
+        `(node scripts/site_import_worker.mjs --stage normalize --job ${ir.jobId || "<job id>"}; no fresh capture needed), then Preview Build again.`,
+    };
   }
   report.menus = {
     top: menus.top

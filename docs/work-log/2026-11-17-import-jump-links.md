@@ -18,3 +18,12 @@ disappears without a word.
 
 Checked against Bayside's real capture and a fresh real-browser capture of
 its original: all three menu links land on their own sections.
+
+**After review (2026-11-18).** Review caught three things, now fixed. When
+the name sat *inside* a heading or a line of text (the way WordPress
+table-of-contents plugins write it), the link landed one section too low; it
+now lands on the heading or line that holds the name. Imports made before
+this change were reporting every jump link as "missing", which was untrue:
+nobody had looked yet. They now say the import is older and how to refresh it
+from the capture already saved, with no new capture needed. And links to a
+file at a page number (`menu.pdf#page=3`) are no longer mistaken for jump links.

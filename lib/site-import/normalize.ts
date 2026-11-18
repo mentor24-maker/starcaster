@@ -1659,16 +1659,35 @@ function documentOrder(root: DomNode): Map<DomNode, number> {
   return order;
 }
 
+/** The order number of the last node inside `node` (itself when it has no
+ *  children): `node`'s subtree is exactly the orders from its own to this. */
+function subtreeEnd(node: DomNode, order: Map<DomNode, number>): number {
+  let last = node;
+  while (last.children && last.children.length) last = last.children[last.children.length - 1];
+  return order.get(last) ?? order.get(node) ?? -1;
+}
+
 /**
- * File every id in `body` on the first countable element at or after the
- * element carrying it. `landings` are the page's elements with their place in
- * document order, ascending. An id with nothing after it is dropped: there is
- * nothing to land on. Exported for the test.
+ * File every id in `body` on the element a visitor lands on when they jump
+ * to it, in this order:
+ *  1. the countable element that carries the id itself;
+ *  2. else the nearest countable element the id sits INSIDE — an
+ *     `<h2><span id="faq">FAQ</span></h2>` (what WordPress table-of-contents
+ *     plugins write) is the heading, and `<p><a id="team"></a>Our team…</p>`
+ *     is that paragraph. The element containing a node comes BEFORE it in
+ *     document order, so "the first one after" alone filed these on the next
+ *     element, one section too low (review of SC-854);
+ *  3. else the first countable element after it — a wrapper such as
+ *     Bayside's `<div id="contact-us" class="et_pb_section">` lands on its
+ *     first heading.
+ * `landings` are the page's elements with their place in document order,
+ * ascending, and `end` the last order inside each (its subtree). An id with
+ * nothing to land on is dropped. Exported for the test.
  */
 export function fileAnchors(
   body: DomNode,
   order: Map<DomNode, number>,
-  landings: { order: number; el: ElementIR }[]
+  landings: { order: number; end: number; el: ElementIR }[]
 ): void {
   const seen = new Set<string>();
   const stack: DomNode[] = [...(body.children || [])].reverse();
@@ -1688,7 +1707,14 @@ export function fileAnchors(
         if (landings[mid].order < at) lo = mid + 1;
         else hi = mid;
       }
-      const landing = landings[lo];
+      let landing = landings[lo] && landings[lo].order === at ? landings[lo] : undefined;
+      // Nearest landing that CONTAINS the id: scan back from the last one
+      // that starts before it. A full scan only for an id nothing contains,
+      // over a page's few hundred landings.
+      for (let i = lo - 1; !landing && i >= 0; i--) {
+        if (landings[i].end >= at) landing = landings[i];
+      }
+      landing ||= landings[lo];
       if (landing) (landing.el.anchors ||= []).push(id);
     }
     const kids = node.children || [];
@@ -1778,7 +1804,7 @@ function normalizePage(
   let position = 0;
   const order = documentOrder(body);
   /** Each element with its place in document order, for fileAnchors. */
-  const landings: { order: number; el: ElementIR }[] = [];
+  const landings: { order: number; end: number; el: ElementIR }[] = [];
 
   walkCountables(body, (v) => {
     const baseSourceId = computeSourceId(pageKey, v.domPath);
@@ -1842,7 +1868,7 @@ function normalizePage(
     }
 
     const landingNode = v.kind === "element" ? v.node : v.textNode || v.parentNode;
-    landings.push({ order: order.get(landingNode) ?? 0, el });
+    landings.push({ order: order.get(landingNode) ?? 0, end: subtreeEnd(landingNode, order), el });
 
     const target =
       v.kind === "element"
@@ -2074,6 +2100,7 @@ export function normalizeSite(input: NormalizeInput): NormalizeOutput {
     irVersion: IR_VERSION,
     jobId: String(input?.jobId ?? ""),
     sourceUrl: String(input?.sourceUrl ?? ""),
+    anchorsRecorded: true,
     capturedAt: String(input?.capturedAt ?? ""),
     pages,
     assets,

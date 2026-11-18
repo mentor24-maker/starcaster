@@ -232,3 +232,15 @@ describe('summarizeJumpLinks (SC-854)', () => {
     expect(out.line).toMatch(/no links that jump/);
   });
 });
+
+describe('summarizeJumpLinks on an import from before jump-link capture', () => {
+  it('says the links were not matched because nobody looked, with how to refresh', () => {
+    const out = summarizeJumpLinks({
+      jumpLinks: { linked: 0, skipLinks: 0, unresolved: [], notRecorded: { links: 3, why: 'this import was prepared before …; re-run the normalize stage' } },
+    });
+    if (out.predates) throw new Error('a report with jump links does not predate the report field');
+    expect(out.line).toBe('0 jump links now go to an imported section; 3 jump links not matched yet: this import was prepared before …; re-run the normalize stage.');
+    expect(out.line).not.toMatch(/no links that jump/);
+    expect(out.leftovers).toEqual([]);
+  });
+});

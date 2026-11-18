@@ -3,6 +3,7 @@
     "irVersion": "1.0",
     "jobId": "job-fixture-strands",
     "sourceUrl": "https://strandsmovie.com/",
+    "anchorsRecorded": true,
     "capturedAt": "2026-10-13T00:00:00.000Z",
     "pages": [
       {
@@ -33,7 +34,8 @@
                 ],
                 "anchors": [
                   "page-container",
-                  "main-header"
+                  "main-header",
+                  "logo"
                 ]
               },
               {
@@ -47,7 +49,6 @@
                 "depth": 8,
                 "assetRefs": [],
                 "anchors": [
-                  "logo",
                   "et-top-navigation",
                   "top-menu-nav",
                   "top-menu"

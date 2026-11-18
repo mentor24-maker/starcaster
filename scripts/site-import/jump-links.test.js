@@ -162,3 +162,80 @@ test('the capture files each id on the element a visitor lands on', () => {
   assert.equal(on('Call us.'), undefined, 'an SVG gradient id is not a place on the page');
   assert.equal(on('We are here.'), undefined);
 });
+
+/** One page through the real normalizer, for the filing cases. */
+function normalizeOne(body) {
+  const html = `<html><body>${body}</body></html>`;
+  const { ir } = normalizeSite({
+    jobId: 'j', sourceUrl: 'https://site.test/', capturedAt: '', assets: [],
+    pages: [{
+      desktop: {
+        url: 'https://site.test/', finalUrl: 'https://site.test/', viewport: 'desktop', html,
+        styles: {}, rects: {}, fullPageScreenshot: '', sectionScreenshots: {}, elementScreenshots: {},
+        assetUrls: [], fontFamilies: [], meta: { title: '', metaDescription: '', ogTags: {}, canonicalUrl: '', lang: '' },
+      },
+    }],
+  });
+  return ir;
+}
+
+test('an id INSIDE a line of text is filed on that line, not the one after it', () => {
+  // Review of SC-854: the element containing an id comes before it in
+  // document order, so "the first one after" filed these one section low.
+  const ir = normalizeOne(
+    '<section data-scim="1"><h2 data-scim="2">Team</h2><p data-scim="3"><a id="team"></a>Our team is here.</p></section>' +
+    '<section data-scim="4"><h2 data-scim="5">Pricing</h2><p data-scim="6">Plans.</p></section>'
+  );
+  const els = ir.pages[0].sections.flatMap((s) => s.elements);
+  const holder = els.filter((e) => (e.anchors || []).includes('team'));
+  assert.equal(holder.length, 1, JSON.stringify(els.map((e) => [e.textContent, e.anchors])));
+  assert.match(holder[0].textContent, /Our team is here/);
+  assert.equal(els.find((e) => e.textContent === 'Pricing').anchors, undefined, 'not the next section\'s heading');
+});
+
+test('an id on a span inside a heading lands on that heading (table-of-contents plugins)', () => {
+  const ir = normalizeOne(
+    '<section data-scim="1"><h2 data-scim="2"><span id="faq">FAQ</span></h2><p data-scim="3">Answers follow.</p></section>'
+  );
+  const els = ir.pages[0].sections.flatMap((s) => s.elements);
+  assert.deepEqual(els.find((e) => e.textContent === 'FAQ').anchors, ['faq']);
+  assert.equal(els.find((e) => e.textContent === 'Answers follow.').anchors, undefined);
+  assert.equal(ir.anchorsRecorded, true, 'a fresh IR says its ids were looked for');
+});
+
+test('an import from before jump-link capture says so, never that each id is missing', () => {
+  const old = fresh();
+  delete old.anchorsRecorded;
+  for (const el of old.pages.flatMap((p) => p.sections.flatMap((s) => s.elements))) delete el.anchors;
+  const out = mapBayside(old);
+  const j = out.report.jumpLinks;
+  assert.deepEqual(j.unresolved, [], 'no per-id "missing" reason: nobody looked');
+  assert.equal(j.notRecorded.links, 3);
+  assert.match(j.notRecorded.why, /prepared before/);
+  assert.match(j.notRecorded.why, new RegExp(`--stage normalize --job ${old.jobId}`));
+  assert.match(j.notRecorded.why, /no fresh capture needed/);
+  // The links still point at the right page, as written.
+  const byLabel = Object.fromEntries(out.menus.top.items.map((i) => [i.label, i.href]));
+  assert.equal(byLabel['Contact Us'], '/#contact-us');
+});
+
+test('a file opened at a page and a text fragment are not jump links', () => {
+  const out = mapBayside(baysideWithLinks(
+    `<a href="${SITE}files/menu.pdf#page=3">menu</a> <a href="#:~:text=Barrow">quote</a> <a href="${SITE}#:~:text=Barrow">home quote</a>`
+  ));
+  assert.deepEqual(out.report.jumpLinks.unresolved, []);
+  const text = out.pages[0].sections.flatMap((s) => s.modules).map((m) => m.text || '').join('');
+  assert.match(text, new RegExp(`href="${SITE}files/menu\\.pdf#page=3">menu`), 'a file link is left exactly as written');
+  assert.match(text, /href="#:~:text=Barrow">quote/);
+});
+
+test('an href the whole-link pass cannot match is still localized, never left pointing at the live site', () => {
+  const out = mapBayside(baysideWithLinks(
+    `<a title="a>b" href="${SITE}#services">odd services</a> <a title="c>d" href="${SITE}">odd home</a>`
+  ));
+  const text = out.pages[0].sections.flatMap((s) => s.modules).map((m) => m.text || '').join('');
+  assert.doesNotMatch(text, new RegExp(`href="${SITE}`), text);
+  assert.match(text, /href="\/#services">odd services/);
+  assert.match(text, /href="\/">odd home/);
+  assert.doesNotMatch(text, /\u0001/, 'the pass marker never reaches the stored text');
+});

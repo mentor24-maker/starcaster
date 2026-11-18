@@ -1225,12 +1225,11 @@ function logFormsPlan(out, prior) {
   for (const p of pictures) log(`  left as a picture on ${p.pagePath}: ${p.reason}`);
 }
 
-/** What the menu step will build — the dry run's promise, and --apply's. */
 /** What became of the original's jump links (task SC-854), dry run and
  *  apply alike — every one the import could not point anywhere, by name. */
 function logJumpLinks(out) {
   const j = out.report.jumpLinks;
-  if (!j || (!j.linked && !j.skipLinks && !j.unresolved.length)) {
+  if (!j || (!j.linked && !j.skipLinks && !j.unresolved.length && !j.notRecorded)) {
     log('\nJump links: the original has none.');
     return;
   }
@@ -1239,6 +1238,7 @@ function logJumpLinks(out) {
     log(`  ${j.unresolved.length} could not be pointed at a section (kept as written, listed in the report):`);
     for (const u of j.unresolved) log(`  - ${u.page}: "${u.label || u.href}" (${u.href}) — ${u.why}`);
   }
+  if (j.notRecorded) log(`  ${j.notRecorded.links} not matched yet: ${j.notRecorded.why}`);
 }
 
 /**
@@ -1277,6 +1277,7 @@ async function referenceJumpLinks(out, pageIds, ownedSectionIds, scope) {
   log(`Jump links: stored ${linksReferenced} link(s) by reference on ${pagesChanged} page(s); read back.`);
 }
 
+/** What the menu step will build — the dry run's promise, and --apply's. */
 function logMenuPlan(job, out, prior) {
   if (NO_MENUS) {
     log(`\nMenus: skipped (${NAV ? '--nav writes the header master instead' : '--no-menus'}).`);

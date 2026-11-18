@@ -3,6 +3,7 @@
     "irVersion": "1.0",
     "jobId": "job-fixture-jsx",
     "sourceUrl": "https://example-app.com/",
+    "anchorsRecorded": true,
     "capturedAt": "2026-08-05T12:00:00.000Z",
     "pages": [
       {

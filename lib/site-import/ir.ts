@@ -542,6 +542,15 @@ export type SiteIR = {
   irVersion: string;
   jobId: string;
   sourceUrl: string;
+  /**
+   * True when the normalizer looked for the original's element ids and filed
+   * them as ElementIR.anchors (task SC-854). Absent on IRs normalized before
+   * that: their captures hold the ids (full outerHTML), but nobody read them,
+   * so a jump link's target being absent there means "not looked for", never
+   * "the original had none". Re-running the normalize stage on the existing
+   * capture fills them in.
+   */
+  anchorsRecorded?: boolean;
   /** ISO timestamp of the capture run (supplied by the worker). */
   capturedAt: string;
   pages: PageIR[];

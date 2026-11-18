@@ -3,6 +3,7 @@
     "irVersion": "1.0",
     "jobId": "job-fixture-wordpress",
     "sourceUrl": "https://www.delraytennis.com/",
+    "anchorsRecorded": true,
     "capturedAt": "2026-08-06T06:03:04.460Z",
     "pages": [
       {
@@ -4638,6 +4639,10 @@
                 "assetRefs": [],
                 "containers": [
                   "109"
+                ],
+                "anchors": [
+                  "news-context",
+                  "news-container"
                 ]
               },
               {
@@ -4665,8 +4670,6 @@
                   "462"
                 ],
                 "anchors": [
-                  "news-context",
-                  "news-container",
                   "text-2"
                 ]
               },

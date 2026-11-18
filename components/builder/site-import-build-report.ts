@@ -40,6 +40,10 @@ export type MapReportData = {
     linked?: number;
     skipLinks?: number;
     unresolved?: { page: string; href: string; label?: string; why: string }[];
+    /** Set when the import predates jump-link capture: these links were
+     *  never matched because nobody looked for the ids, not because the
+     *  original lacks them. */
+    notRecorded?: { links?: number; why?: string };
   };
 };
 
@@ -68,12 +72,18 @@ export function summarizeJumpLinks(report: MapReportData): JumpLinksSummary {
     label: String(u.label || ""),
     why: String(u.why || ""),
   }));
-  if (!linked && !skip && !leftovers.length) {
+  const notRecorded = Number(j.notRecorded?.links) || 0;
+  if (!linked && !skip && !leftovers.length && !notRecorded) {
     return { predates: false, line: "The original site has no links that jump to a part of a page.", leftovers };
   }
   const parts = [`${pluralize(linked, "jump link")} now ${linked === 1 ? "goes" : "go"} to an imported section`];
   if (skip) parts.push(`${pluralize(skip, '"skip to content" link')} left out on purpose`);
   if (leftovers.length) parts.push(`${leftovers.length} could not be pointed at a section (listed below)`);
+  if (notRecorded) {
+    parts.push(
+      `${pluralize(notRecorded, "jump link")} not matched yet: ${String(j.notRecorded?.why || "this import predates jump-link capture")}`
+    );
+  }
   return { predates: false, line: `${parts.join("; ")}.`, leftovers };
 }
 
