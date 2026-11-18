@@ -78,7 +78,8 @@ test('one plain band split over two rows stays one band', () => {
   // Services is one white band on the original; split into a heading row and
   // a cards row, the theme's alternating bands painted the heading row grey.
   const { sections } = home();
-  const heading = sections.findIndex((s) => s.modules.some((m) => /<h2>Services<\/h2>/.test(m.text || '')));
+  // The heading keeps its own black, written inline (SC-861).
+  const heading = sections.findIndex((s) => s.modules.some((m) => /<h2[^>]*>Services<\/h2>/.test(m.text || '')));
   const rows = sections.findIndex((s) => s.modules.some((m) => /Early Stage CEO Advisory/.test(m.text || '')));
   assert.equal(rows, heading + 1);
   assert.equal(sections[heading].joinWithPrevious, undefined, 'the band starts at the heading');

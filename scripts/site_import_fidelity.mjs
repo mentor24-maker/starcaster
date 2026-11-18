@@ -453,8 +453,10 @@ async function main() {
       console.log(`  ${key}  CANNOT TELL — ${entry.reason}`);
       continue;
     }
+    // The page shell's colours come from the theme it names or the default;
+    // its TYPE only from a theme it names (SC-861) — the live site's rule.
     const theme = themes.find((t) => t.id === builderPage.themeId) || themes[0] || null;
-    const themeText = fidelity.themeTextOf(theme);
+    const themeText = fidelity.themeTextOf(fidelity.themeForPageType(builderPage, themes));
     const pageSurfaces = [...surfaceColors, String(theme?.typography?.palette?.surface || '').toLowerCase()].filter(Boolean);
     const rows = builderPage.layoutSections || [];
 
