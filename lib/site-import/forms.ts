@@ -38,6 +38,11 @@ export interface FormField {
   sourceName?: string;
   /** How many source controls this question was read from (a radio group's options are one each). */
   controls: number;
+  /**
+   * "half" when the source laid this question out at half width, beside
+   * another (First / Last, City / Zip). Absent means full width (SC-860).
+   */
+  width?: "half";
 }
 
 export interface KeptItem { name: string; value: string; why: string }
@@ -64,6 +69,12 @@ export interface DataCaptureForm {
   dropped: DroppedItem[];
   /** Things the reader guessed about, e.g. an input type it does not know. */
   notes: Note[];
+  /**
+   * Where the source put its labels: "above" each box (nearly every form on
+   * the web) or "beside" it, which a few plugins offer as a setting and
+   * mark with a class (SC-860).
+   */
+  labelPosition: "above" | "beside";
 }
 
 export interface NotDataCaptureForm { kind: "not-data-capture"; reason: string }
@@ -167,6 +178,23 @@ function looksLikeOpaqueValue(v: string): boolean {
   if (/^\{.*\}$|^\[.*\]$/.test(v.trim())) return true; // JSON blob (hs_context)
   return false;
 }
+
+/* ------------------------------------------------------- layout (SC-860) */
+
+/**
+ * Classes form plugins put on a question (or the row block holding it) to lay
+ * it out at half width. WPForms: wpforms-one-half (its Name field's First /
+ * Last blocks, and any field given that layout). Gravity Forms: gf_left_half
+ * / gf_right_half (legacy CSS-ready classes), gfield--width-half (2.5+),
+ * ginput_left / ginput_right (a Name or Address field's two halves).
+ * Elementor: elementor-col-50. Divi: et_pb_contact_field_half. Formidable:
+ * frm_half. Ninja Forms and themes: one-half. HubSpot: form-columns-2 holds
+ * two questions side by side.
+ */
+const HALF_CLASS = /(^|\s)(wpforms-one-half|gf_left_half|gf_right_half|gfield--width-half|ginput_left|ginput_right|elementor-col-50|et_pb_contact_field_half|frm_half|one-half|form-columns-2)(\s|$)/;
+
+/** Classes that put labels BESIDE their boxes: Gravity Forms left/right label placement, Formidable, Ninja Forms. */
+const BESIDE_CLASS = /(^|\s)(left_label|right_label|frm_left_container|frm_right_container|label-left|label-right)(\s|$)/;
 
 /* ---------------------------------------------------------------- reader */
 
@@ -286,6 +314,10 @@ export function readSourceForm(html: string): SourceFormReading {
     return clean(attr(c, "value"));
   };
 
+  /** Did the source lay this control's question out at half width? */
+  const isHalf = (c: El): boolean => ancestors(c, root).some((a) => HALF_CLASS.test(attr(a, "class")));
+  const half = (c: El): { width?: "half" } => (isHalf(c) ? { width: "half" } : {});
+
   const isRequired = (c: El): boolean =>
     c.attribs !== undefined && ("required" in c.attribs
       || attr(c, "aria-required").toLowerCase() === "true"
@@ -373,7 +405,7 @@ export function readSourceForm(html: string): SourceFormReading {
       if (type === "checkbox" && members.length === 1) {
         const s = controlLabel(c);
         const label = s.text || humanize(name);
-        fields.push({ key: claimKey("", label), label, type: "boolean", required: isRequired(c) || s.starred, options: [], sourceName: name || undefined, controls: 1 });
+        fields.push({ key: claimKey("", label), label, type: "boolean", required: isRequired(c) || s.starred, options: [], sourceName: name || undefined, controls: 1, ...half(c) });
         continue;
       }
       const s = groupLabel(members);
@@ -386,6 +418,7 @@ export function readSourceForm(html: string): SourceFormReading {
         options: members.map(optionLabel),
         sourceName: name || undefined,
         controls: members.length,
+        ...half(c),
       });
       continue;
     }
@@ -440,8 +473,23 @@ export function readSourceForm(html: string): SourceFormReading {
 
     const label = s.text || humanize(name) || "Untitled question";
     if (!s.text) notes.push({ what: `question "${label}"`, why: "the source gave this box no visible label, so its name was used" });
-    fields.push({ key: claimKey(preferred, label), label, type: fieldType, required, options, sourceName: name || undefined, controls: 1 });
+    fields.push({ key: claimKey(preferred, label), label, type: fieldType, required, options, sourceName: name || undefined, controls: 1, ...half(c) });
   }
+
+  // A lone half question has nobody to share its row with: the source's
+  // half-width box sat beside something this reader did not keep (a CAPTCHA,
+  // a dropped control), and a single half box with empty space beside it is
+  // not what the visitor saw. Halves are kept only in runs of two or more.
+  for (let i = 0; i < fields.length; i++) {
+    if (fields[i].width !== "half") continue;
+    let j = i;
+    while (j < fields.length && fields[j].width === "half") j++;
+    if (j - i < 2) delete fields[i].width;
+    i = j - 1;
+  }
+
+  const besideNodes = [root, ...($root.find("[class]").toArray() as unknown as El[])];
+  const labelPosition: "above" | "beside" = besideNodes.some((n) => BESIDE_CLASS.test(attr(n, "class"))) ? "beside" : "above";
 
   return {
     kind: "data-capture",
@@ -449,6 +497,7 @@ export function readSourceForm(html: string): SourceFormReading {
     heading: readHeading($, $.root().get(0) as unknown as El),
     submitLabel: readSubmitLabel($, root),
     fields, kept, dropped, notes,
+    labelPosition,
   };
 }
 

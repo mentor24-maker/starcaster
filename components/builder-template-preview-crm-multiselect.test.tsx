@@ -78,7 +78,8 @@ async function renderCrmForm(liveSite: boolean, fields: unknown[] = FIELDS) {
 const text = () => document.body.textContent ?? "";
 const fieldFor = (label: string) =>
   Array.from(container!.querySelectorAll<HTMLElement>(".builder-crm-form-multiselect-field"))
-    .find((f) => f.querySelector("span")?.textContent === label) ?? null;
+    // A required question's label ends in the Required Mark (SC-860).
+    .find((f) => f.querySelector("span")?.textContent?.replace(/\*$/, "") === label) ?? null;
 const buttonFor = (label: string) => fieldFor(label)!.querySelector<HTMLButtonElement>(".builder-crm-form-multiselect-button")!;
 const boxes = (name: string) => Array.from(container!.querySelectorAll<HTMLInputElement>(`input[type="checkbox"][name="${name}"]`));
 const key = (el: Element, k: string) =>

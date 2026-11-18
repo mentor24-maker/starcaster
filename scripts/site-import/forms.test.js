@@ -205,3 +205,45 @@ test('a bare data-parsley-required marks a field required; ="false" does not', (
     + '<input type="text" name="n" aria-label="Nickname" data-parsley-required="false"><button>Go</button></form>');
   assert.deepEqual(r.fields.map((f) => f.required), [true, false]);
 });
+
+/* ---- Layout: labels above, half-width questions (task SC-860) ----
+ * bayside-wpforms.html is verbatim from the production import's IR for
+ * Bayside's home page (2026-11-18; its anti-spam token zeroed). Its Name
+ * question is one label over two boxes side by side, every label sits above
+ * its box, and the import used to rebuild it with labels beside and First and
+ * Last on separate rows. */
+
+test('Bayside: First and Last are read as two half-width questions, labels above', () => {
+  const r = read('bayside-wpforms.html');
+  assert.equal(r.kind, 'data-capture');
+  assert.equal(r.labelPosition, 'above');
+  assert.deepEqual(r.fields.map((f) => [f.label, f.width || 'full']), [
+    ['Name', 'half'], ['Last', 'half'], ['Email', 'full'], ['Company', 'full'],
+    ['Phone', 'full'], ['Question or Comment', 'full'],
+  ]);
+  assert.deepEqual(r.fields.map((f) => f.required), [true, true, true, false, false, false]);
+});
+
+test('a lone half-width question is read as full width — nothing shared its row', () => {
+  const r = readSourceForm('<form>'
+    + '<div class="gfield gf_left_half"><label for="a">City</label><input id="a" name="city"></div>'
+    + '<div class="gfield"><label for="b">Notes</label><textarea id="b" name="notes"></textarea></div>'
+    + '<button>Send</button></form>');
+  assert.deepEqual(r.fields.map((f) => f.width || 'full'), ['full', 'full']);
+});
+
+test('Gravity Forms halves pair up, and a left-label form reads as labels beside', () => {
+  const r = readSourceForm('<form><ul class="gform_fields left_label">'
+    + '<li class="gfield gf_left_half"><label for="c">City</label><input id="c" name="input_1"></li>'
+    + '<li class="gfield gf_right_half"><label for="z">Zip</label><input id="z" name="input_2"></li>'
+    + '<li class="gfield"><label for="e">Email</label><input type="email" id="e" name="input_3"></li>'
+    + '</ul><button>Send</button></form>');
+  assert.equal(r.labelPosition, 'beside');
+  assert.deepEqual(r.fields.map((f) => [f.label, f.width || 'full']), [['City', 'half'], ['Zip', 'half'], ['Email', 'full']]);
+});
+
+test('a form with no layout classes reads as labels above, every question full width', () => {
+  const r = read('plain-contact.html');
+  assert.equal(r.labelPosition, 'above');
+  assert.equal(r.fields.some((f) => f.width), false);
+});

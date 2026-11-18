@@ -8785,6 +8785,59 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   }
 }
 
+/* ── CRM form: labels above the boxes, half-width questions (task SC-860) ──
+ * Label Position "Above" turns the form's label|box grid into two equal
+ * tracks. Every question spans both unless it is half width, so two half
+ * questions in a row (First / Last, City / Zip) share a line — and each
+ * question is its own little column: label on top, box under it. The field
+ * wrappers are `display: contents` in the beside layout; here they are real
+ * boxes, so the label, the box and a choice group stack inside them.
+ * On a narrow form or a phone, a half question takes the whole row again. */
+.builder-react-root .builder-crm-form.is-labels-above {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 16px;
+  row-gap: 14px;
+}
+
+.builder-react-root .builder-crm-form.is-labels-above .builder-contact-form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  grid-column: 1 / -1;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.builder-react-root .builder-crm-form.is-labels-above .builder-contact-form-field.is-half {
+  grid-column: span 1;
+}
+
+.builder-react-root .builder-crm-form.is-labels-above .builder-contact-form-submit,
+.builder-react-root .builder-crm-form.is-labels-above .builder-contact-form-stub {
+  grid-column: 1 / -1;
+}
+
+@container crmform (max-width: 420px) {
+  .builder-react-root .builder-crm-form.is-labels-above .builder-contact-form-field.is-half {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 560px) {
+  .builder-react-root .builder-crm-form.is-labels-above .builder-contact-form-field.is-half {
+    grid-column: 1 / -1;
+  }
+}
+
+/* The mark after a required question's label (Required Mark: Asterisk). */
+.builder-react-root .builder-crm-form .builder-crm-form-required {
+  margin-left: 0.25em;
+  color: var(--btn-danger-flat);
+  font-weight: 700;
+}
+
 /* ── Event Manager: Harvest PDF (task 86bbztj0e) ─────────────────────────
  * The review table reuses the admin data table; what is new is a row of
  * seven day toggles and inputs sitting inside cells, which a tenant theme's

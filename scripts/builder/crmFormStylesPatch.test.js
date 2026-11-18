@@ -54,7 +54,25 @@ test('a whole styles object still wins when the CRM editor sends one', () => {
   const existing = { styles: SAVED_IN_CRM_EDITOR };
   const whole = { headingColor: 'theme:accent' };
   const input = resolveStylesPatch({ styles: whole, stylesPatch: { padding: '1px' } }, existing);
-  assert.equal(input.styles, whole);
+  // Every style it names is its own; the stylesPatch alongside it is ignored.
+  assert.equal(input.styles.headingColor, 'theme:accent');
+  assert.notEqual(input.styles.padding, '1px');
+  assert.equal('stylesPatch' in input, false);
+});
+
+test('a whole styles object keeps every style it does not name (SC-860)', () => {
+  // The Contacts › Forms editor sends all the styles IT knows and nothing
+  // about Label Position or Required Mark. Taken as sent, each save there
+  // would reset both to their defaults while reporting success.
+  const existing = { styles: { ...SAVED_IN_CRM_EDITOR, labelPosition: 'above', requiredMarker: 'none' } };
+  const fromCrmEditor = { ...SAVED_IN_CRM_EDITOR, headingColor: 'theme:accent' };
+  const input = resolveStylesPatch({ styles: fromCrmEditor }, existing);
+  assert.equal(input.styles.headingColor, 'theme:accent');
+  assert.equal(input.styles.labelPosition, 'above');
+  assert.equal(input.styles.requiredMarker, 'none');
+  // A save that DOES name them is obeyed.
+  const named = resolveStylesPatch({ styles: { ...fromCrmEditor, labelPosition: 'beside' } }, existing);
+  assert.equal(named.styles.labelPosition, 'beside');
 });
 
 test('the PUT route hands stylesPatch to the store', () => {
