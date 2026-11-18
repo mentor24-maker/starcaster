@@ -62,6 +62,17 @@ principle is completeness over fidelity.
 - **Blocks with ragged internals** — a bullet list in one card and not the
   next changes the class sequence, so the run stops matching.
 
+- **Blocks that stack one above another** (SC-858, 2026-11-17). A row of
+  cards always has blocks sharing a line — six cards are 3 + 3. Bayside
+  Partners' Services was four rows, each a 108px icon with a heading and a
+  paragraph beside it; it matched the shape `image+heading+text` four times
+  and came out as four tall squeezed cards with oversized icons. Now, when no
+  block starts before the one above it ends, the run is a list: each block
+  imports as its own two-column row (icon left at its own size, words right),
+  all inside the same band. A block with no recorded position leaves the
+  answer unknown, and the run stays a card grid as before.
+  (`blocksStack` in `lib/site-import/map.ts`; `GridItem.row` in `columns.ts`.)
+
 These are declined on purpose, not overlooked. Widen the rule only with a
 fixture that proves the widening does not resurrect the mega-menu.
 
