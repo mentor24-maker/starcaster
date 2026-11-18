@@ -1683,11 +1683,15 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
       navConsumed: false,
       reason: `a background shape (a mask drawn by CSS) that was not carried over — ${why}`,
     });
-    if (el.box && band && band.w > 0 && band.h > 0) {
-      const cover = (el.box.w * el.box.h) / (band.w * band.h);
-      if (cover < 0.9) {
-        return lost(`it covers ${Math.round(cover * 100)}% of its band, so it is a divider along an edge, and only full-band shapes are matched`);
-      }
+    // Without both boxes there is no telling a full-band mask from a thin
+    // divider along one edge, and guessing "full band" paints a divider over
+    // the whole row — so refuse, and say why.
+    if (!el.box || !(el.box.w > 0) || !(el.box.h > 0) || !band || !(band.w > 0) || !(band.h > 0)) {
+      return lost("its size or its band's size was not measured, so it cannot be told apart from a divider along one edge");
+    }
+    const cover = (el.box.w * el.box.h) / (band.w * band.h);
+    if (cover < 0.9) {
+      return lost(`it covers ${Math.round(cover * 100)}% of its band, so it is a divider along an edge, and only full-band shapes are matched`);
     }
     const match = matchSectionShape(bg, String(styles.transform || ""));
     if (!match.ok) return lost(match.reason);
@@ -2373,6 +2377,7 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
         while (moduleCells.length < modules.length) moduleCells.push(currentCell);
       };
 
+      const pendingShapes: { el: ElementIR; shape: NonNullable<Aside["shape"]> }[] = [];
       for (const el of section.elements || []) {
         const cell = grid.cells.get(el.sourceId) || currentCell;
         if (cell.band !== currentCell.band || cell.col !== currentCell.col) {
@@ -2388,15 +2393,10 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
         if (!aside) sourceElementIds.push(el.sourceId);
         if (aside) {
           if (aside.shape) {
-            // Carried onto the band's shape layer once its rows exist (below).
-            report.elements.mapped += 1;
-            dispositions.mapped += 1;
-            (report.shapes ||= []).push({
-              pagePath: page.path,
-              sourceId: el.sourceId,
-              shape: aside.shape.layer.shape,
-              what: aside.shape.note,
-            });
+            // Counted only once a row actually takes it (below) — a band with
+            // nothing carried over has no row to hold it, and reporting it as
+            // landed then would be a success line over a dropped shape.
+            pendingShapes.push({ el, shape: aside.shape });
           } else if (aside.navConsumed) {
             report.elements.navConsumed += 1;
           } else {
@@ -2736,7 +2736,19 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
       flushProse();
       tagNewModules();
 
-      if (!modules.length) continue; // nothing mappable (e.g. nav-only section)
+      const skipShape = (el: ElementIR, why: string) => {
+        report.elements.skipped += 1;
+        report.skipped.push({
+          sourceId: el.sourceId,
+          class: el.class,
+          reason: `a background shape (a mask drawn by CSS) that was not carried over — ${why}`,
+        });
+      };
+      if (!modules.length) {
+        // nothing mappable (e.g. nav-only section)
+        for (const { el } of pendingShapes) skipShape(el, "nothing else in its band was carried over, so there is no row to put it on");
+        continue;
+      }
       const built = splitIntoRows({
         section,
         baseId: `imps_${String(section.sourceId).replace(/[^a-zA-Z0-9]+/g, "")}`,
@@ -2753,19 +2765,36 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
         ground,
         cardLookOf,
       });
-      // A matched background mask (SC-859) goes on the row(s) holding the
+      // A matched background mask (SC-859) goes on the row holding the
       // elements of the band it painted. A band split into several rows gets
       // it on the FIRST: one shape over the top row reads as the original far
-      // better than the same curve repeated on every row.
-      for (const [, aside] of asideOf) {
-        if (!aside.shape) continue;
+      // better than the same curve repeated on every row. A row holds one
+      // shape, so a second mask landing on a row that already has one is
+      // reported as not carried over rather than quietly overwriting it.
+      for (const { el, shape } of pendingShapes) {
         const inBand = new Set(
           (section.elements || [])
-            .filter((e) => (e.containers || []).includes(aside.shape!.container))
+            .filter((e) => (e.containers || []).includes(shape.container))
             .map((e) => e.sourceId)
         );
         const row = built.find((r) => r.sourceElementIds.some((id) => inBand.has(id))) || built[0];
-        if (row) row.shapeLayer = aside.shape.layer;
+        if (!row) {
+          skipShape(el, "no row was built to put it on");
+          continue;
+        }
+        if (row.shapeLayer) {
+          skipShape(el, `the row it belongs on already carries another shape (${row.shapeLayer.shape}), and a row holds one`);
+          continue;
+        }
+        row.shapeLayer = shape.layer;
+        report.elements.mapped += 1;
+        row.dispositions.mapped += 1;
+        (report.shapes ||= []).push({
+          pagePath: page.path,
+          sourceId: el.sourceId,
+          shape: shape.layer.shape,
+          what: shape.note,
+        });
       }
       mappedSections.push(...built);
       pageModules += modules.length;

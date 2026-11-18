@@ -77,6 +77,34 @@ describe("matchSectionShape", () => {
     expect(matchSectionShape(svgUrl(wave))).toMatchObject({ ok: true, layer: { shape: "wave", side: "left" } });
   });
 
+  it("reads back every built-in shape on every side it paints (round trip)", () => {
+    for (const shape of ["curve", "wave", "slant"] as const) {
+      for (const side of ["left", "right", "top", "bottom"] as const) {
+        const style = getSectionShapeLayerStyle({ shape, side, color: "#336699", opacity: 80 });
+        const match = matchSectionShape(String(style?.backgroundImage));
+        expect({ shape, side, match }).toEqual({
+          shape,
+          side,
+          match: { ok: true, layer: { shape, side, color: "#336699", opacity: 80 }, note: `${shape} on the ${side}, #336699 at 80%` }
+        });
+      }
+    }
+  });
+
+  it("reads the colour the path is painted in, not the first fill in the text", () => {
+    const pathOwn = '<svg viewBox="0 0 100 100" fill="none"><path fill="#ffffff" d="M100,0L50,0L50,100L100,100Z"/></svg>';
+    expect(matchSectionShape(svgUrl(pathOwn))).toMatchObject({ ok: true, layer: { color: "#ffffff" } });
+    const styled = '<svg viewBox="0 0 100 100"><path style="opacity:1;fill:#fff" d="M100,0L50,0L50,100L100,100Z"/></svg>';
+    expect(matchSectionShape(svgUrl(styled))).toMatchObject({ ok: true, layer: { color: "#ffffff" } });
+    const unpainted = '<svg viewBox="0 0 100 100" fill="none"><path d="M100,0L50,0L50,100L100,100Z"/></svg>';
+    expect(matchSectionShape(svgUrl(unpainted))).toEqual({ ok: false, reason: "the shape has no fill colour" });
+  });
+
+  it("treats a matrix3d mirror (rotateY(180deg)) as a mirror", () => {
+    const m = matchSectionShape(svgUrl(BAYSIDE), "matrix3d(-1, 0, 0, 0, 0, 1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1)");
+    expect(m.ok && m.layer.side).toBe("left");
+  });
+
   it("refuses, with a reason, what it cannot match", () => {
     expect(matchSectionShape('url("photo.jpg")')).toEqual({ ok: false, reason: "the shape is not an SVG drawing" });
     const island = '<svg viewBox="0 0 100 100" fill="#fff"><path d="M40,40L60,40L60,60Z"/></svg>';

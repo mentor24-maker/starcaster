@@ -3669,6 +3669,7 @@ export function normalizeLayoutSections(value: unknown): BuilderTemplateSection[
       const deviceOverrides = normalizeSectionDeviceOverrides(normalizedSection.deviceOverrides);
       const anchorName = normalizeAnchorName(normalizedSection.anchorName);
       const cellDeviceOverrides = normalizeCellDeviceOverrides(normalizedSection.cellDeviceOverrides, layout);
+      const shapeLayer = normalizeSectionShapeLayer(normalizedSection.shapeLayer);
 
       return {
         id: safeText(normalizedSection.id, 120) || `section-${sectionIndex + 1}`,
@@ -3731,9 +3732,7 @@ export function normalizeLayoutSections(value: unknown): BuilderTemplateSection[
         // must serialize without the key at all.
         // Kept at opacity 0 too, so dragging the strength down and back up
         // does not lose the shape the operator chose.
-        ...(normalizeSectionShapeLayer(normalizedSection.shapeLayer).shape !== "none"
-          ? { shapeLayer: normalizeSectionShapeLayer(normalizedSection.shapeLayer) }
-          : {}),
+        ...(shapeLayer.shape !== "none" ? { shapeLayer } : {}),
         cellBackgrounds: normalizeCellBackgrounds(normalizedSection.cellBackgrounds, layout),
         cellOverlayScreens: normalizeCellOverlayScreens(normalizedSection.cellOverlayScreens, layout),
         cellPadding: cellPadding,

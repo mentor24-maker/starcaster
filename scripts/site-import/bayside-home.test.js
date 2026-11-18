@@ -230,3 +230,50 @@ test('an Elementor shape divider is named in the report, not poured onto the pag
   assert.ok(!modulesOf(out.pages[0].sections).some((m) => String(m.settings.importSourceIds || '').includes('elementor-divider')));
   assert.ok(reconciles(out.report.elements));
 });
+
+/*
+ * The report must only say a shape landed when a row took it (SC-859 review).
+ */
+function maskElement(ir) {
+  for (const s of ir.pages[0].sections) for (const el of s.elements || []) if (el.sourceId === MASK) return { section: s, el };
+  throw new Error('fixture has no mask');
+}
+
+test('a mask in a band with nothing else carried over is skipped, not reported as landed', () => {
+  const ir = JSON.parse(JSON.stringify(IR));
+  const { section, el } = maskElement(ir);
+  const lone = JSON.parse(JSON.stringify(section));
+  lone.sourceId = 'lone-mask-band';
+  lone.elements = [{ ...JSON.parse(JSON.stringify(el)), sourceId: 'lone-mask' }];
+  ir.pages[0].sections.push(lone);
+  const out = mapSite(ir, { existingSlugs: [] });
+  const skip = out.report.skipped.find((s) => s.sourceId === 'lone-mask');
+  assert.ok(skip, 'accounted as skipped');
+  assert.match(skip.reason, /background shape.*no row to put it on/);
+  assert.ok(!out.report.shapes.some((s) => s.sourceId === 'lone-mask'), 'not listed as carried over');
+  assert.ok(reconciles(out.report.elements), JSON.stringify(out.report.elements));
+});
+
+test('a second mask on a row that already has one is reported as not carried over', () => {
+  const ir = JSON.parse(JSON.stringify(IR));
+  const { section, el } = maskElement(ir);
+  section.elements.push({ ...JSON.parse(JSON.stringify(el)), sourceId: 'mask-two', documentPosition: el.documentPosition + 0.5 });
+  const out = mapSite(ir, { existingSlugs: [] });
+  assert.deepEqual(out.report.shapes.map((s) => s.sourceId), [MASK]);
+  const skip = out.report.skipped.find((s) => s.sourceId === 'mask-two');
+  assert.ok(skip, 'the one that lost is accounted');
+  assert.match(skip.reason, /already carries another shape/);
+  assert.equal(out.pages[0].sections.filter((s) => s.shapeLayer).length, 1);
+  assert.ok(reconciles(out.report.elements), JSON.stringify(out.report.elements));
+});
+
+test('a mask whose size was not measured is refused, not guessed to fill its band', () => {
+  const ir = JSON.parse(JSON.stringify(IR));
+  delete maskElement(ir).el.box;
+  const out = mapSite(ir, { existingSlugs: [] });
+  const skip = out.report.skipped.find((s) => s.sourceId === MASK);
+  assert.ok(skip);
+  assert.match(skip.reason, /size .*was not measured/);
+  assert.equal(out.pages[0].sections.filter((s) => s.shapeLayer).length, 0);
+  assert.ok(reconciles(out.report.elements));
+});

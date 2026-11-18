@@ -33,3 +33,25 @@ again with a fresh capture, because the capture it was built from never
 recorded the flip. Divider strips along a band's top or bottom edge, and
 Elementor shapes whose colour comes from the site's stylesheet, are named in
 the report but not carried over yet.
+
+**After review sent it back.** Four things were fixed in the same pull request:
+
+- **Waves were always read as curves.** The importer decides "wave" by
+  counting how many times the shape's edge changes direction. StarCaster's own
+  wave repeats a point at every bend, which hid each bend from the count, so
+  every wave came in as a curve. It now skips those repeats. A new test draws
+  each built-in shape on each side and checks the importer reads it back as
+  the same shape.
+- **The import report could say a shape landed when it didn't.** A shape is
+  now only counted as carried over once a section actually takes it. If its
+  band has nothing else to put on the page, or a second shape lands on a
+  section that already has one, the report lists it as not carried over and
+  says why.
+- **A shape whose size wasn't measured is no longer guessed.** Without the
+  sizes there is no telling a full-band shape from a thin strip along one
+  edge, so the importer now refuses it and names why, instead of painting a
+  strip across the whole section.
+- **Colours and flips are read more carefully.** The importer reads the colour
+  the shape is actually painted in (its own `fill`, or a `style="fill:…"`),
+  so a white shape no longer comes through black. It also recognises one more
+  way a browser writes "mirrored".

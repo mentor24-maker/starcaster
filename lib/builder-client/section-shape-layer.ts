@@ -235,9 +235,38 @@ export function svgFromBackgroundImage(backgroundImage: string): string | null {
   }
 }
 
+/**
+ * The colour the one path is actually painted in, the way SVG resolves it: the
+ * path's own `style="fill:…"`, then its `fill="…"`, then the same two on the
+ * `<svg>` it inherits from, then SVG's default, black. Reading only the first
+ * `fill="…"` in the text refused `<svg fill="none"><path fill="#fff">` and
+ * imported a `style="fill:#fff"` path as black over the client's photo.
+ */
+function shapeFill(svg: string): string {
+  const fromTag = (tag: string): string | null => {
+    const style = /\bstyle\s*=\s*"([^"]*)"/i.exec(tag);
+    const styleFill = style ? /(?:^|;)\s*fill\s*:\s*([^;]+)/i.exec(style[1]) : null;
+    if (styleFill) return styleFill[1].trim();
+    const attr = /\sfill\s*=\s*"([^"]+)"/i.exec(tag);
+    return attr ? attr[1].trim() : null;
+  };
+  const pathTag = /<path\b[^>]*>/i.exec(svg)?.[0] || "";
+  const svgTag = /<svg\b[^>]*>/i.exec(svg)?.[0] || "";
+  const own = fromTag(pathTag);
+  if (own && own.toLowerCase() !== "inherit") return own;
+  return fromTag(svgTag) || "#000000";
+}
+
 /** Is a CSS transform a left-right mirror? `matrix(-1, 0, 0, 1, …)`, `scale(-1, 1)`, `scaleX(-1)`. */
 function mirrors(transform: string): { x: boolean; y: boolean } {
   const t = (transform || "").trim();
+  // matrix3d(a1, b1, c1, d1, a2, b2, …): x scale is the 1st value, y the 6th
+  // (rotateY(180deg) computes to one with a1 = -1).
+  const m3 = /^matrix3d\(([^)]*)\)/i.exec(t);
+  if (m3) {
+    const v = m3[1].split(",").map((n) => Number(n.trim()));
+    if (v.length === 16) return { x: v[0] < 0, y: v[5] < 0 };
+  }
   const matrix = /^matrix\(\s*([-\d.e]+)\s*,\s*([-\d.e]+)\s*,\s*([-\d.e]+)\s*,\s*([-\d.e]+)/i.exec(t);
   if (matrix) return { x: Number(matrix[1]) < 0, y: Number(matrix[4]) < 0 };
   const scale = /scale\(\s*([-\d.]+)\s*(?:,\s*([-\d.]+))?\s*\)/i.exec(t);
@@ -269,9 +298,10 @@ export function matchSectionShape(backgroundImage: string, transform = ""): Sect
   const viewBox = /viewBox\s*=\s*"([-\d.\s,]+)"/i.exec(svg);
   const vb = viewBox ? viewBox[1].trim().split(/[\s,]+/).map(Number) : [];
   if (vb.length !== 4 || !(vb[2] > 0) || !(vb[3] > 0)) return { ok: false, reason: "the shape has no size to read" };
-  const fillAttr = /<(?:svg|path)\b[^>]*\bfill\s*=\s*"([^"]+)"/i.exec(svg);
-  const colour = parseCssColour(fillAttr ? fillAttr[1] : "#000000");
-  if (!colour) return { ok: false, reason: `the shape's colour "${fillAttr?.[1]}" could not be read` };
+  const fill = shapeFill(svg);
+  if (fill === "none") return { ok: false, reason: "the shape has no fill colour" };
+  const colour = parseCssColour(fill);
+  if (!colour) return { ok: false, reason: `the shape's colour "${fill}" could not be read` };
   const fillOpacityAttr = /\bfill-opacity\s*=\s*"([\d.]+)"/i.exec(svg);
   const alpha = colour.alpha * (fillOpacityAttr ? Math.max(0, Math.min(1, Number(fillOpacityAttr[1]))) : 1);
 
@@ -357,11 +387,18 @@ export function matchSectionShape(backgroundImage: string, transform = ""): Sect
   const free = norm
     .filter(([x, y]) => (across ? !near(x, 0) && !near(x, 100) : !near(y, 0) && !near(y, 100)))
     .map(([x, y]) => (across ? x : y));
+  // Compare each step with the last step that actually MOVED: a control point
+  // that repeats a coordinate (every wave here does, `50,12.5` twice) puts a
+  // zero step beside each bend, and comparing neighbours only would then never
+  // see a bend at all — every wave read as a curve (SC-859 review).
   let turns = 0;
-  for (let k = 2; k < free.length; k += 1) {
-    const a = free[k - 1] - free[k - 2];
-    const b = free[k] - free[k - 1];
-    if (a * b < 0) turns += 1;
+  let lastDirection = 0;
+  for (let k = 1; k < free.length; k += 1) {
+    const step = free[k] - free[k - 1];
+    if (Math.abs(step) < 1e-9) continue;
+    const direction = Math.sign(step);
+    if (lastDirection !== 0 && direction !== lastDirection) turns += 1;
+    lastDirection = direction;
   }
   const shape: SectionShapeKind = curveCommands === 0 ? "slant" : turns > 2 ? "wave" : "curve";
 
