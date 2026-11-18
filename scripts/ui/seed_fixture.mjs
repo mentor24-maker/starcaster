@@ -397,6 +397,16 @@ const buildTuned = (ids) => ({
     },
   },
 
+  // No heading list to seed: the module reads the page's headings (SC-863).
+  // A long title and non-default levels so every field in the panel is filled.
+  'table-of-contents': {
+    name: 'Table of Contents',
+    settings: {
+      title: LONG, headingLevels: 'all', indentSubheadings: 'false', alignment: 'center',
+      fontSize: '18', color: '#1d4ed8',
+    },
+  },
+
   'blog-toc': {
     name: 'On This Page',
     settings: {

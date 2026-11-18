@@ -12649,6 +12649,50 @@ a.builder-react-root .builder-event-calendar-item-title:hover,
 }
 
 /* ==================================================================== */
+/* TABLE OF CONTENTS — the page's headings as jump links (SC-863)       */
+/*                                                                      */
+/* Renders inside arbitrary tenant themes, so the list resets matter: a */
+/* theme's ul/li rules would otherwise bullet or indent it (§5.28). The */
+/* indent for a sub-heading is inline (padding-inline-start), from the */
+/* module's Indent Sub-headings setting; nothing here may override it. */
+/* ==================================================================== */
+.builder-preview-toc {
+  line-height: 1.5;
+}
+
+.builder-preview-toc-title {
+  font-weight: 700;
+  margin: 0 0 0.5em;
+}
+
+.builder-preview-toc > ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.builder-preview-toc-item {
+  margin: 0 0 0.35em;
+}
+
+.builder-preview-toc-item:last-child {
+  margin-bottom: 0;
+}
+
+.builder-preview-toc-item > a {
+  text-decoration: none;
+}
+
+.builder-preview-toc-item > a:hover,
+.builder-preview-toc-item > a:focus-visible {
+  text-decoration: underline;
+}
+
+.builder-preview-toc-item:not(.builder-preview-toc-depth-0) {
+  font-size: 0.94em;
+}
+
+/* ==================================================================== */
 /* BUILDER › WORKSPACE PAGES BAR — the buttons size their own box       */
 /* (task 86bcyrqan, 2026-11-05)                                         */
 /*                                                                      */

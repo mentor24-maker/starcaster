@@ -1444,6 +1444,97 @@ export const RENDER_CONTRACTS = [
     },
   },
   {
+    id: 'table-of-contents-lists-the-pages-headings-and-jumps-to-one',
+    why:
+      'Long pages gave a reader no way to jump between headings (task SC-863, slice 2 of the ' +
+      '2026-11-17 anchor sweep). The Table of Contents module reads the headings the page SHOWS, ' +
+      'with the anchors SC-856 gives them, so nothing stored can go stale. On a live page this puts ' +
+      'the module at the top and three H2s with two H3s three screens below; counts the links (five, ' +
+      'in page order), reads that an H3 sits a step in, clicks "Adults" and measures that the page ' +
+      'landed on that heading.',
+    section: {
+      layout: 'single',
+      spacers: 3,
+      leadSections: [{ modules: [{ type: 'table-of-contents', settings: {} }] }],
+      modules: [{
+        type: 'text',
+        text: '<h2>Juniors</h2><p>Kids.</p><h3>Ages 5 to 8</h3><h3>Ages 9 to 12</h3>' +
+          '<h2>Adults</h2><p>Grown-ups.</p><h2>Private Lessons</h2>',
+      }],
+    },
+    emulate: { liveSite: true, reducedMotion: 'reduce' },
+    click: 'nav.builder-preview-toc a[href="#adults"]',
+    selector: 'nav.builder-preview-toc li',
+    read: ['display'],
+    series: {
+      count: 1,
+      everyMs: 0,
+      read: ['paddingInlineStart'],
+      attrs: ['href', 'data-toc-depth'],
+      selectors: {
+        first: 'nav.builder-preview-toc li:nth-child(1)',
+        sub: 'nav.builder-preview-toc li:nth-child(2)',
+        firstLink: 'nav.builder-preview-toc li:nth-child(1) a',
+        lastLink: 'nav.builder-preview-toc li:nth-child(5) a',
+        heading: 'h2#adults',
+      },
+    },
+    expect(sample) {
+      if (!sample.found) return 'no Table of Contents list rendered on a live page that has five headings.';
+      if (sample.matches !== 5) return `the list has ${sample.matches} links; the page has three H2s and two H3s, so five were expected.`;
+      const frame = sample.series?.[0] || {};
+      if (!frame.firstLink || frame.firstLink.href !== '#juniors') return `the first link points at ${JSON.stringify(frame.firstLink?.href)}, expected #juniors (page order).`;
+      if (!frame.lastLink || frame.lastLink.href !== '#private-lessons') return `the last link points at ${JSON.stringify(frame.lastLink?.href)}, expected #private-lessons.`;
+      if (frame.sub?.['data-toc-depth'] !== '1') return `the H3 "Ages 5 to 8" is at depth ${JSON.stringify(frame.sub?.['data-toc-depth'])}, expected 1 (indented).`;
+      if (parseFloat(frame.sub.paddingInlineStart) <= parseFloat(frame.first?.paddingInlineStart || '0')) {
+        return `the H3 link is not indented: it starts ${frame.sub.paddingInlineStart} in, the H2 above it ${frame.first?.paddingInlineStart}.`;
+      }
+      if (!frame.heading) return 'no h2#adults on the page after the click, so where it landed could not be measured.';
+      if (Math.abs(frame.heading.top) > 4) {
+        return `after clicking "Adults" the heading sits ${Math.round(frame.heading.top)}px from the top of the window — the page did not jump to it.`;
+      }
+      return null;
+    },
+  },
+  {
+    id: 'table-of-contents-on-a-live-page-with-no-headings-renders-nothing',
+    why:
+      'A Table of Contents on a page with no headings must leave nothing on the live site — no lone ' +
+      '"On this page" title over empty space (landmine 16, task SC-863). Paired with the presence ' +
+      'contract above, which proves the list renders at all when there is something to list.',
+    section: {
+      layout: 'single',
+      modules: [
+        { type: 'table-of-contents', settings: {} },
+        { type: 'text', text: '<p>A page with no headings at all.</p>' },
+      ],
+    },
+    emulate: { liveSite: true },
+    selector: '.builder-preview-toc, .builder-only-note',
+    absent: true,
+  },
+  {
+    id: 'table-of-contents-in-the-builder-says-why-it-is-empty',
+    why:
+      'In the Builder, an empty Table of Contents must say WHY it is empty (landmine 17), and only ' +
+      'there (task SC-863). The same page as the contract above, not live.',
+    section: {
+      layout: 'single',
+      modules: [
+        { type: 'table-of-contents', settings: {} },
+        { type: 'text', text: '<p>A page with no headings at all.</p>' },
+      ],
+    },
+    selector: '.builder-only-note',
+    read: ['display'],
+    expect(sample) {
+      if (!sample.found) return 'the Builder showed nothing where an empty Table of Contents sits; it should name why it is empty.';
+      return sample.text.startsWith('No headings on this page yet')
+        ? null
+        : `the Builder note reads ${JSON.stringify(sample.text)}, not the sentence naming why the list is empty.`;
+    },
+  },
+  {
     id: 'button-link-to-a-named-section-lands-on-it',
     why:
       'SC-852 let a menu link to a section of a page; a "Contact us" button still could only send a ' +

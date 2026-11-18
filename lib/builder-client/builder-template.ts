@@ -28,6 +28,7 @@ import { normalizeBuilderAssetUrl, safeText } from "@/lib/builder-asset-url";
 import { escapeHtmlText, sanitizeInlineHtml, sanitizeRichTextHtml } from "@/lib/sanitize-html";
 import { rewriteRichTextImageSrcInHtml } from "@/lib/rich-text-image";
 import { normalizeAnchorName } from "@/lib/page-link";
+import { TABLE_OF_CONTENTS_DEFAULT_SETTINGS } from "./table-of-contents";
 
 export { normalizeBuilderAssetUrl, resolvePublicBuilderAssetUrl, safeText } from "@/lib/builder-asset-url";
 import { backgroundImageUrlFor } from "@/lib/image-renditions";
@@ -123,6 +124,7 @@ export const BUILDER_MODULE_TYPES = [
   "tractor-nav",
   "galaxy",
   "breadcrumb",
+  "table-of-contents",
   "blog-post-list",
   "blog-post-card",
   "blog-author-bio",
@@ -2636,6 +2638,7 @@ export function normalizeModuleType(value: unknown): BuilderTemplateModuleType {
     type === "tractor-nav" ||
     type === "galaxy" ||
     type === "breadcrumb" ||
+    type === "table-of-contents" ||
     type === "blog-post-list" ||
     type === "blog-post-card" ||
     type === "blog-author-bio" ||
@@ -4179,6 +4182,12 @@ export function createEmptyModule(
                             activeColor: "",
                             bold: "false",
                             alignment: "left"
+                          }
+                      : type === "table-of-contents"
+                        ? {
+                            // Nothing about the headings is stored: the list is
+                            // read from the page as it is shown (task SC-863).
+                            ...TABLE_OF_CONTENTS_DEFAULT_SETTINGS
                           }
                       : type === "blog-post-list"
                         ? {
