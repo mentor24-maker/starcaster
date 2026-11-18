@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
-import { createEmptySection, normalizeLayoutSections, type BuilderTemplateSection } from "@/lib/builder-template";
+import { createDefaultBackgroundSettings, createEmptySection, normalizeLayoutSections, type BuilderTemplateSection } from "@/lib/builder-template";
 import { BuilderSectionControls } from "./builder-section-controls";
 import { BuilderPageSectionsContext } from "./builder-page-sections-context";
 import { BuilderTemplatePreview } from "@/components/builder-template-preview";
@@ -97,7 +97,7 @@ describe("an anchor name through save, load and render", () => {
       { id: "a", anchorName: "services", modules: [] },
       { id: "b", modules: [] }
     ]);
-    const html = renderToStaticMarkup(<BuilderTemplatePreview layoutSections={sections} liveSite />);
+    const html = renderToStaticMarkup(<BuilderTemplatePreview layoutSections={sections} pageBackground={createDefaultBackgroundSettings()} liveSite />);
     expect(html).toMatch(/<section[^>]*\bid="services"/);
     expect((html.match(/<section[^>]*\bid="/g) || []).length).toBe(1);
   });
