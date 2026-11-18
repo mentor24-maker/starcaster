@@ -6,6 +6,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { type CSSProperties, type FormEvent, type MouseEvent, Suspense, createContext, createElement, useCallback, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
 import { type PageAddressMap, resolvePageLinksInHtml, resolvePageLinksInSettings } from "@/lib/page-link";
+import { handleSectionJumpClick, useJumpToAddressSection } from "@/lib/section-jump";
 import {
   EMPTY_MEDIA_FILTERS,
   MEDIA_ASPECTS,
@@ -323,8 +324,12 @@ function isNavPathActive(href: string, activePath: string) {
 function toPublicHref(href: string): string {
   const clean = href.trim();
   if (!clean || clean === "#" || /^https?:/i.test(clean) || clean.startsWith("mailto:")) return clean || "#";
-  if (clean.startsWith("/")) return clean === "/home" ? "/" : clean;
+  // The home page is "/", with or without a section named after it ("/home#team"
+  // → "/#team", task SC-852), so a link to the home page's own section from the
+  // home page stays on the page instead of loading /home.
+  if (clean.startsWith("/")) return clean === "/home" ? "/" : clean.startsWith("/home#") ? `/${clean.slice(5)}` : clean;
   if (clean === "home") return "/";
+  if (clean.startsWith("home#")) return `/${clean.slice(4)}`;
   return `/${clean.replace(/^\/+/, "")}`;
 }
 
@@ -1894,8 +1899,16 @@ export function BuilderTemplatePreview({
   // And any font-library font (lf:<slug>) — its files, for this project only.
   useLibraryFontFaces([theme, layoutSections], projectId || resolveSessionProjectId(), emailPreview);
 
+  // A link to a section of this page glides there, and an address naming a
+  // section lands on it once the sections exist (task SC-852). Visitor-facing
+  // pages only: in the editor a click selects, it does not navigate.
+  const sectionJumpsEnabled = !emailPreview && (liveSite || previewMode);
+  useJumpToAddressSection(sectionJumpsEnabled, layoutSections);
+
   function handleAdminLogoutLinkClick(event: MouseEvent<HTMLDivElement>) {
     if (emailPreview) return;
+    // Not stopped: the link's own handlers (a phone menu closing itself) still run.
+    if (sectionJumpsEnabled && handleSectionJumpClick(event)) return;
     const target = event.target;
     if (!(target instanceof Element)) return;
     const anchor = target.closest("a[href]");
@@ -2466,6 +2479,9 @@ function BuilderSectionPreview({
         // screen would otherwise inherit and paint (86bcvqemm).
         sectionOverlayScreenStyle ? " builder-preview-section-has-overlay-screen" : ""
       }`}
+      // The section's anchor name (task SC-852): `/#contact-us` lands here.
+      // Absent when the section has none, so no row gains an id it never had.
+      id={section.anchorName || undefined}
       style={gridStyle}
       {...(deviceCss ? { [BUILDER_DEVICE_SCOPE_ATTRIBUTE]: deviceScopeId } : {})}
     >
@@ -12274,8 +12290,13 @@ function toPreviewHref(href: string): string {
   if (!clean || clean.startsWith("#") || clean.startsWith("http") || clean.startsWith("mailto:") || clean.endsWith(".html")) {
     return clean || "#";
   }
-  const withoutTrailingSlash = clean.endsWith("/") && clean.length > 1 ? clean.slice(0, -1) : clean;
-  return `${withoutTrailingSlash}.html`;
+  // A section of a page ("/about#team") keeps its "#name" AFTER the ".html".
+  const hashAt = clean.indexOf("#");
+  const path = hashAt === -1 ? clean : clean.slice(0, hashAt);
+  const hash = hashAt === -1 ? "" : clean.slice(hashAt);
+  if (!path || path.endsWith(".html")) return clean;
+  const withoutTrailingSlash = path.endsWith("/") && path.length > 1 ? path.slice(0, -1) : path;
+  return `${withoutTrailingSlash}.html${hash}`;
 }
 
 type NavRenderItem = {
