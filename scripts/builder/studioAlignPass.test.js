@@ -284,12 +284,14 @@ test('only READY partners are compared — the other half not ready yet is found
   assert.deepEqual(partnersFor(rows[1], rows).map((p) => p.source.id), ['src_zoom']);
 });
 
-test('enqueueAlign dedupes, and the daemon runs align LAST', (t) => {
+test('enqueueAlign dedupes, and the daemon runs align last but for the rough cut, which reads the line-up', (t) => {
   const queue = tmpQueue(t);
   assert.equal(enqueueAlign(queue, { sourceId: 'src_zoom' }).created, true);
   assert.equal(enqueueAlign(queue, { sourceId: 'src_zoom' }).created, false);
   const stages = Object.keys(STAGE_RUNNERS);
-  assert.equal(stages[stages.length - 1], STAGE_ALIGN);
+  // The rough cut (Reel Spinner 4b) uses the line-up's chosen sound, so a
+  // line-up due in the same tick must run before it, never after.
+  assert.deepEqual(stages.slice(-2), [STAGE_ALIGN, 'rough_cut']);
 });
 
 test('readBackProblem compares across the store turning the pair round', () => {

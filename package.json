@@ -26,6 +26,7 @@
     "studio:music-shelf": "doppler run --scope \"$HOME/Studio\" --project starcaster --config prd --no-check-version -- node scripts/studio_build_music_shelf.cjs",
     "studio:backfill-moments": "doppler run --scope \"$HOME/Studio\" --project starcaster --config prd --no-check-version -- node scripts/studio_backfill_moments.cjs",
     "studio:backfill-align": "doppler run --scope \"$HOME/Studio\" --project starcaster --config prd --no-check-version -- node scripts/studio_backfill_align.cjs",
+    "studio:backfill-roughcuts": "doppler run --scope \"$HOME/Studio\" --project starcaster --config prd --no-check-version -- node scripts/studio_backfill_roughcuts.cjs",
     "studio:youtube-check": "doppler run --scope \"$HOME/Studio\" --project starcaster --config prd --no-check-version -- node scripts/studio_youtube_check.cjs",
     "studio:youtube-login": "doppler run --project starcaster --config prd --no-check-version -- node scripts/studio_youtube_login.cjs",
     "studio:youtube-test-upload": "doppler run --scope \"$HOME/Studio\" --project starcaster --config prd --no-check-version -- node scripts/studio_youtube_test_upload.cjs",
