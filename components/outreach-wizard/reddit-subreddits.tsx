@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { RowIcon, SortHeader, filterRows, sortRows, type SortState, type SortValue } from './outreach-table';
 
 /**
  * Reddit's Find creators stage, worked on the Outreach screen itself —
@@ -11,6 +12,12 @@ import React, { useCallback, useEffect, useState } from 'react';
  * rejects each one; only approved subreddits are watched. One can also be
  * added by name. Each approved subreddit says when the Mini last read it and
  * what it found — or why it could not — and its stated self-promotion rule.
+ *
+ * Since SC-890 the list is a sortable table with a filter bar, built from the
+ * shared pieces in outreach-table.tsx (the same look as YouTube's Find
+ * creators): Subreddit, Status, Suggested by, Why, Self-promotion rule, Last
+ * read and square icon actions. The Status filter opens on Suggested +
+ * Watching and replaces the old "Show rejected" button.
  */
 
 export const SUBREDDITS_PATH = '/api/outreach/reddit/subreddits';
@@ -65,29 +72,96 @@ export function suggestSummary(data: Record<string, any> | null): string {
   return parts.join(' ');
 }
 
-function SubredditCard({ s, busy, onDecide }: {
+export type SubredditSortKey = 'subreddit' | 'status' | 'lastRead';
+export type SubredditStatusFilter = 'open' | 'candidate' | 'approved' | 'rejected' | 'all';
+export type SubredditFilters = { search: string; status: SubredditStatusFilter };
+
+export const DEFAULT_SUBREDDIT_FILTERS: SubredditFilters = { search: '', status: 'open' };
+
+/** The word the table shows for a status: an approved subreddit is one the Mini watches. */
+export const SUBREDDIT_STATUS_WORD: Record<Subreddit['status'], string> = { candidate: 'Suggested', approved: 'Watching', rejected: 'Rejected' };
+
+const STATUS_FILTER_WORD: Record<SubredditStatusFilter, string> = {
+  open: 'suggested or watched ',
+  candidate: 'suggested ',
+  approved: 'watched ',
+  rejected: 'rejected ',
+  all: '',
+};
+
+/** What a column sorts by. A subreddit never read sorts last by Last read, whichever direction. */
+export function subredditSortValue(s: Subreddit, key: SubredditSortKey): SortValue {
+  if (key === 'subreddit') return s.name;
+  if (key === 'status') return SUBREDDIT_STATUS_WORD[s.status];
+  const t = s.lastReadAt ? new Date(s.lastReadAt).getTime() : NaN;
+  return Number.isFinite(t) ? t : null;
+}
+
+/** The rows the filter bar lets through; both filters must pass. */
+export function filterSubreddits(list: Subreddit[], f: SubredditFilters): Subreddit[] {
+  const needle = f.search.trim().toLowerCase().replace(/^\/?r\//, '');
+  return filterRows(list, [
+    needle ? (s) => s.name.toLowerCase().includes(needle) : null,
+    f.status === 'all' ? null : (s) => (f.status === 'open' ? s.status !== 'rejected' : s.status === f.status),
+  ]);
+}
+
+/**
+ * Why the table is empty, naming the filters in force, so an empty table
+ * never reads as a broken one (landmine 17): "No rejected subreddits match
+ * 'yoga'."
+ */
+export function emptySubredditsText(f: SubredditFilters): string {
+  const search = f.search.trim();
+  return `No ${STATUS_FILTER_WORD[f.status]}subreddits${search ? ` match '${search}'` : ''}.`;
+}
+
+/** The Last read cell: a subreddit that is not watched and was never read says so instead of "not read yet". */
+function lastReadCell(s: Subreddit): string {
+  if (!s.lastReadState && s.status !== 'approved') return 'Not watched';
+  return readText(s);
+}
+
+function SubredditRow({ s, busy, message, onDecide }: {
   s: Subreddit;
   busy: boolean;
+  message: { text: string; error: boolean } | null;
   onDecide: (s: Subreddit, status: Subreddit['status']) => void;
 }): React.ReactElement {
+  const label = `r/${s.name}`;
+  const href = `https://www.reddit.com/r/${encodeURIComponent(s.name)}/`;
   return (
-    <li className="reddit-sub-card" data-subreddit={s.name} data-status={s.status}>
-      <p className="reddit-sub-head">
-        <a href={`https://www.reddit.com/r/${encodeURIComponent(s.name)}/`} target="_blank" rel="noreferrer noopener">{`r/${s.name}`}</a>
-        <span className="outreach-wizard-muted">{s.suggestedBy === 'ai' ? ' · suggested' : ' · added by you'}</span>
-      </p>
-      {s.why ? <p className="reddit-sub-why">{s.why}</p> : null}
-      {s.status === 'approved' ? (
-        <>
-          <p className="outreach-wizard-muted" data-read-state={s.lastReadState || 'never'}>{readText(s)}</p>
-          {s.promotionRule ? <p className="reddit-sub-rule"><strong>Self-promotion rule:</strong> {s.promotionRule}</p> : null}
-        </>
+    <>
+      <tr className="reddit-sub-row" data-subreddit={s.name} data-status={s.status}>
+        <td className="reddit-sub-name"><a href={href} target="_blank" rel="noreferrer noopener">{label}</a></td>
+        <td className="reddit-sub-status">{SUBREDDIT_STATUS_WORD[s.status]}</td>
+        <td className="reddit-sub-by">{s.suggestedBy === 'ai' ? 'AI' : 'You'}</td>
+        <td className="reddit-sub-why">
+          {s.why ? <span className="reddit-sub-clamp" title={s.why}>{s.why}</span> : <span className="outreach-wizard-muted">—</span>}
+        </td>
+        <td className="reddit-sub-rule">
+          {s.promotionRule
+            ? <span className="reddit-sub-clamp" title={s.promotionRule}>{s.promotionRule}</span>
+            : <span className="outreach-wizard-muted">{s.lastReadState === 'read' ? 'None stated' : s.status === 'approved' || s.lastReadState ? 'Not read yet' : '—'}</span>}
+        </td>
+        <td className="reddit-sub-read" data-read-state={s.lastReadState || 'never'}>{lastReadCell(s)}</td>
+        <td className="actions-col">
+          <div className="table-actions-row">
+            {s.status !== 'approved' ? <RowIcon glyph="approve" tone="primary" label={`Approve ${label}`} disabled={busy} onClick={() => onDecide(s, 'approved')} /> : null}
+            {s.status === 'candidate' ? <RowIcon glyph="reject" label={`Reject ${label}`} disabled={busy} onClick={() => onDecide(s, 'rejected')} /> : null}
+            {s.status === 'approved' ? <RowIcon glyph="unwatch" label={`Stop Watching ${label}`} disabled={busy} onClick={() => onDecide(s, 'rejected')} /> : null}
+            <RowIcon glyph="open" label={`Open ${label} on Reddit`} href={href} />
+          </div>
+        </td>
+      </tr>
+      {message ? (
+        <tr className="reddit-sub-message-row" data-row-message={s.name}>
+          <td colSpan={7}>
+            <p className={message.error ? 'outreach-wizard-error' : 'outreach-wizard-notice'} role={message.error ? 'alert' : 'status'}>{message.text}</p>
+          </td>
+        </tr>
       ) : null}
-      <div className="outreach-wizard-stage-actions">
-        {s.status !== 'approved' ? <button type="button" className="btn" disabled={busy} onClick={() => onDecide(s, 'approved')}>Approve</button> : null}
-        {s.status !== 'rejected' ? <button type="button" className="btn" disabled={busy} onClick={() => onDecide(s, 'rejected')}>{s.status === 'approved' ? 'Stop watching' : 'Reject'}</button> : null}
-      </div>
-    </li>
+    </>
   );
 }
 
@@ -98,7 +172,10 @@ export default function RedditSubreddits({ onChanged }: { onChanged?: () => void
   const [error, setError] = useState('');
   const [readError, setReadError] = useState('');
   const [notice, setNotice] = useState('');
-  const [showRejected, setShowRejected] = useState(false);
+  const [filters, setFilters] = useState<SubredditFilters>(DEFAULT_SUBREDDIT_FILTERS);
+  const [sort, setSort] = useState<SortState<SubredditSortKey>>(null);
+  /** One row's own outcome (a decision saved or refused), shown directly under that row. */
+  const [rowMessage, setRowMessage] = useState<{ id: string; text: string; error: boolean } | null>(null);
 
   const load = useCallback(async () => {
     const api = getApi();
@@ -121,7 +198,7 @@ export default function RedditSubreddits({ onChanged }: { onChanged?: () => void
   };
 
   const findSubreddits = async () => {
-    setBusy('suggest'); setError(''); setNotice('');
+    setBusy('suggest'); setError(''); setNotice(''); setRowMessage(null);
     try {
       const reply = await post(`${SUBREDDITS_PATH}/suggest`, {});
       setNotice(suggestSummary(reply?.data || null));
@@ -135,7 +212,7 @@ export default function RedditSubreddits({ onChanged }: { onChanged?: () => void
   const addByName = async () => {
     const wanted = name.split(',').map((n) => n.trim()).filter(Boolean);
     if (!wanted.length) return;
-    setBusy('add'); setError(''); setNotice('');
+    setBusy('add'); setError(''); setNotice(''); setRowMessage(null);
     try {
       const reply = await post(SUBREDDITS_PATH, { names: wanted });
       const refused = (reply?.data?.refused || []) as Array<{ name: string; why: string }>;
@@ -150,22 +227,28 @@ export default function RedditSubreddits({ onChanged }: { onChanged?: () => void
   };
 
   const decide = async (s: Subreddit, status: Subreddit['status']) => {
-    setBusy(s.id); setError('');
+    setBusy(s.id); setError(''); setRowMessage(null);
     try {
       const reply = await post(`${SUBREDDITS_PATH}/${encodeURIComponent(s.id)}/decide`, { status });
       const saved = reply?.data as Subreddit;
       setSubs((list) => (list || []).map((x) => (x.id === s.id ? saved : x)));
-      setNotice(status === 'approved' ? `r/${s.name} approved — the Mini reads it within the next few passes.` : `r/${s.name} ${s.status === 'approved' ? 'is no longer watched' : 'rejected'}.`);
+      setRowMessage({
+        id: s.id,
+        error: false,
+        text: status === 'approved' ? `r/${s.name} approved — the Mini reads it within the next few passes.` : `r/${s.name} ${s.status === 'approved' ? 'is no longer watched' : 'rejected'}.`,
+      });
       onChanged?.();
     } catch (err) {
-      setError(`The decision was not saved: ${errorText(err)}`);
+      setRowMessage({ id: s.id, error: true, text: `The decision on r/${s.name} was not saved: ${errorText(err)}` });
     } finally { setBusy(''); }
   };
 
   const list = subs || [];
-  const waiting = list.filter((s) => s.status === 'candidate');
-  const approved = list.filter((s) => s.status === 'approved');
-  const rejected = list.filter((s) => s.status === 'rejected');
+  const rows = sortRows(filterSubreddits(list, filters), sort, subredditSortValue);
+  // A decision can move its row out of the filter (Reject under the default
+  // Suggested + Watching), and a message under a row nobody can see is lost,
+  // so that row's message shows above the table instead.
+  const hiddenRowMessage = rowMessage && !rows.some((s) => s.id === rowMessage.id) ? rowMessage : null;
 
   return (
     <div className="reddit-subs" data-reddit-subreddits>
@@ -182,25 +265,71 @@ export default function RedditSubreddits({ onChanged }: { onChanged?: () => void
       {notice ? <p className="outreach-wizard-notice" role="status">{notice}</p> : null}
       {error ? <p className="outreach-wizard-error" role="alert">{error}</p> : null}
       {readError ? <p className="outreach-wizard-error" role="alert">{readError}</p> : null}
-      {waiting.length ? (
-        <>
-          <p className="outreach-wizard-muted">{`Waiting for your decision (${waiting.length}):`}</p>
-          <ul className="reddit-sub-list">{waiting.map((s) => <SubredditCard key={s.id} s={s} busy={!!busy} onDecide={(x, st) => void decide(x, st)} />)}</ul>
-        </>
+      {hiddenRowMessage ? (
+        <p className={hiddenRowMessage.error ? 'outreach-wizard-error' : 'outreach-wizard-notice'} role={hiddenRowMessage.error ? 'alert' : 'status'} data-row-message-hidden>{hiddenRowMessage.text}</p>
       ) : null}
-      {approved.length ? (
-        <>
-          <p className="outreach-wizard-muted">{`Watched (${approved.length}):`}</p>
-          <ul className="reddit-sub-list">{approved.map((s) => <SubredditCard key={s.id} s={s} busy={!!busy} onDecide={(x, st) => void decide(x, st)} />)}</ul>
-        </>
-      ) : null}
-      {rejected.length ? (
-        <button type="button" className="btn" aria-expanded={showRejected} onClick={() => setShowRejected((v) => !v)}>
-          {showRejected ? 'Hide rejected' : `Show rejected (${rejected.length})`}
-        </button>
-      ) : null}
-      {showRejected && rejected.length ? (
-        <ul className="reddit-sub-list">{rejected.map((s) => <SubredditCard key={s.id} s={s} busy={!!busy} onDecide={(x, st) => void decide(x, st)} />)}</ul>
+      {/* The counts are the stage's own summary line, above; only an empty list needs a sentence here. */}
+      {subs && !list.length ? <p className="outreach-wizard-muted">No subreddits on the list yet — find some for your topics, or add one by name.</p> : null}
+      {list.length ? (
+        <div className="table-wrap reddit-subs-table-wrap">
+          <table className="reddit-subs-table">
+            {/* Fixed column widths (src/css/_outreach-wizard.css), the same
+                reason as YouTube's table: text wraps inside its column and
+                cannot push the Actions icons out of the card at 1280. */}
+            <colgroup>
+              <col className="reddit-subs-col-name" />
+              <col className="reddit-subs-col-status" />
+              <col className="reddit-subs-col-by" />
+              <col className="reddit-subs-col-why" />
+              <col className="reddit-subs-col-rule" />
+              <col className="reddit-subs-col-read" />
+              <col className="reddit-subs-col-actions" />
+            </colgroup>
+            <thead>
+              <tr className="table-filter-row">
+                <th>
+                  <input type="search" placeholder="Subreddit" aria-label="Search subreddit names" value={filters.search} onChange={(e) => setFilters({ ...filters, search: e.target.value })} />
+                </th>
+                {/* Two columns wide: "Suggested + Watching" needs more room than Status alone has at 1280. */}
+                <th colSpan={2}>
+                  <select aria-label="Status" className="reddit-subs-filter-status" value={filters.status} onChange={(e) => setFilters({ ...filters, status: e.target.value as SubredditStatusFilter })}>
+                    <option value="open">Suggested + Watching</option>
+                    <option value="candidate">Suggested</option>
+                    <option value="approved">Watching</option>
+                    <option value="rejected">Rejected</option>
+                    <option value="all">All</option>
+                  </select>
+                </th>
+                <th />
+                <th />
+                <th />
+                <th className="actions-col" />
+              </tr>
+              <tr>
+                <SortHeader label="Subreddit" sortKey="subreddit" sort={sort} onSort={setSort} />
+                <SortHeader label="Status" sortKey="status" sort={sort} onSort={setSort} />
+                <th scope="col">Suggested by</th>
+                <th scope="col">Why</th>
+                <th scope="col">Self-promotion rule</th>
+                <SortHeader label="Last Read" sortKey="lastRead" sort={sort} onSort={setSort} firstDir="desc" />
+                <th scope="col" className="actions-col">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.length ? rows.map((s) => (
+                <SubredditRow
+                  key={s.id}
+                  s={s}
+                  busy={!!busy}
+                  message={rowMessage && rowMessage.id === s.id ? rowMessage : null}
+                  onDecide={(x, st) => void decide(x, st)}
+                />
+              )) : (
+                <tr className="reddit-subs-empty-row"><td colSpan={7} data-empty-filter>{emptySubredditsText(filters)}</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       ) : null}
     </div>
   );
