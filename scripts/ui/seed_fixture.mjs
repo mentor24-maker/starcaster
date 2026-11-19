@@ -45,6 +45,7 @@ const videoAudioPairsStore = require(path.join(ROOT, 'lib/videoAudioPairsStore.j
 const youtubeOutreachStore = require(path.join(ROOT, 'lib/youtubeOutreachStore.js'));
 const substackNotesStore = require(path.join(ROOT, 'lib/substackNotesStore.js'));
 const substackMinerStore = require(path.join(ROOT, 'lib/substackMinerStore.js'));
+const youtubeCreatorsStore = require(path.join(ROOT, 'lib/youtubeCreatorsStore.js'));
 const assetsStore = require(path.join(ROOT, 'lib/assetsStore.js'));
 const substackContactCapture = require(path.join(ROOT, 'lib/acquire/SubstackContactCapture.js'));
 const youtubeOutreachCommentsStore = require(path.join(ROOT, 'lib/youtubeOutreachCommentsStore.js'));
@@ -2131,6 +2132,48 @@ try {
   console.error(`  failed to seed assets: ${err.message}`);
 }
 
+/**
+ * Channels for Engage › Outreach › YouTube › Find creators (SC-887), so its
+ * table has rows to measure at 1280/1440/1920: the longest name the fixture
+ * has (T-1 says it wraps, never truncates), a channel with a hidden
+ * subscriber count, one with three videos (the "+2 more"), each kind of
+ * suggestion, and one approved and one rejected. Idempotent by channel id —
+ * the store merges a second find, and a decided channel is left alone.
+ */
+async function seedYoutubeCreators(scope) {
+  const id = (n) => `UCfixture${String(n).padStart(15, '0')}`;
+  const channels = [
+    { channelId: id(1), name: `${LONG} Channel`, subscriberCount: 128400, keywordsHit: ['tennis', 'junior tennis', 'coaching', 'fitness'],
+      latestVideos: [{ videoId: 'fixtureVid1', title: `${LONG}: a whole morning of junior drills, start to finish` }, { videoId: 'fixtureVid2', title: 'Serve practice' }, { videoId: 'fixtureVid3', title: 'Footwork' }],
+      suggestion: { action: 'approved', reasons: [], confidence: 'high', why: 'Every recent video is about coaching juniors.' } },
+    { channelId: id(2), name: 'Hidden Count Tennis', subscriberCount: null, keywordsHit: ['tennis'], latestVideos: [{ videoId: 'fixtureVid4', title: 'Rally' }],
+      suggestion: { action: 'rejected', reasons: [], confidence: 'low', why: 'Mostly product reviews.' } },
+    { channelId: id(3), name: 'No Suggestion Yet', subscriberCount: 950, keywordsHit: ['coaching'], latestVideos: [] },
+    { channelId: id(4), name: 'Approved Channel', subscriberCount: 5200, keywordsHit: ['tennis'], latestVideos: [], decide: 'approved' },
+    { channelId: id(5), name: 'Rejected Channel', subscriberCount: 40, keywordsHit: ['fitness'], latestVideos: [], decide: 'rejected' },
+  ];
+  for (const c of channels) {
+    const { suggestion, decide, ...input } = c;
+    const saved = must(await youtubeCreatorsStore.upsertCreator({ ...input, channelUrl: `https://www.youtube.com/channel/${c.channelId}`, foundVia: 'keyword_search' }, scope), 'save YouTube creator');
+    if (saved.status !== 'candidate') continue;
+    if (suggestion) must(await youtubeCreatorsStore.recordSuggestion(saved.id, suggestion, scope), 'save YouTube creator suggestion');
+    if (decide) must(await youtubeCreatorsStore.decideCreator(saved.id, { status: decide }, scope), 'decide YouTube creator');
+  }
+  // Landmine 12: read the rows back through the project scope.
+  const listed = must(await youtubeCreatorsStore.listCreators(1000, scope), 'list YouTube creators');
+  const seen = new Set(listed.map((c) => c.channelId));
+  const missing = channels.filter((c) => !seen.has(c.channelId)).length;
+  if (missing) throw new Error(`${missing} YouTube creator(s) were written but do not read back in this project`);
+  return { total: channels.length };
+}
+
+let creatorsSeeded = null;
+try {
+  creatorsSeeded = await seedYoutubeCreators({ projectId: project.id, userId });
+} catch (err) {
+  console.error(`  failed to seed YouTube creators: ${err.message}`);
+}
+
 let minerSeeded = null;
 try {
   minerSeeded = await seedSubstackMiner({ projectId: project.id, userId });
@@ -2175,5 +2218,10 @@ console.log(
   assetsSeeded
     ? `Assets seeded — ${assetsSeeded.made} created, ${assetsSeeded.found} already present.`
     : 'WARNING: assets were NOT seeded; the Assets table will be empty and check:screens proves nothing there.'
+);
+console.log(
+  creatorsSeeded
+    ? `YouTube creators seeded — ${creatorsSeeded.total} channel(s): undecided with each kind of suggestion, one approved, one rejected.`
+    : 'WARNING: YouTube creators were NOT seeded; Engage › Outreach › Find creators will be empty and check:screens proves nothing there.'
 );
 console.log(`export UI_HARNESS_PROJECT_ID=${project.id}`);

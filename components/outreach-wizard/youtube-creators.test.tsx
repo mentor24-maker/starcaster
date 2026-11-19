@@ -2,12 +2,13 @@
 import { act } from "react-dom/test-utils";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import YoutubeCreators, { CREATORS_PATH, findSummaryText, subscriberText, type YoutubeCreator } from "./youtube-creators";
+import YoutubeCreators, { CREATORS_PATH, DEFAULT_FILTERS, emptyFilterText, filterCreators, findSummaryText, subscriberText, type YoutubeCreator } from "./youtube-creators";
 
 /**
  * Outreach wizard 15/19 (86bcrmbrf). Driven against a fake App.api that keeps
  * the channel list, so a decision is checked by what the server was sent AND
- * what the card shows afterwards.
+ * what the row shows afterwards. Since SC-887 the channels are a table: rows,
+ * not cards, and every row action is a square icon found by its label.
  */
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -77,20 +78,50 @@ function button(text: string, scope: ParentNode = host): HTMLButtonElement {
   return found as HTMLButtonElement;
 }
 
+/** A row icon, by the label that is both its tooltip and its accessible name. */
+function icon(label: string, scope: ParentNode = host): HTMLElement {
+  const found = scope.querySelector(`[aria-label="${label}"]`) as HTMLElement | null;
+  if (!found) throw new Error(`no icon "${label}"`);
+  expect(found.getAttribute("title")).toBe(label);
+  return found;
+}
+
+function choose(label: string, value: string) {
+  const select = host.querySelector(`select[aria-label="${label}"]`) as HTMLSelectElement;
+  if (!select) throw new Error(`no filter "${label}"`);
+  act(() => {
+    Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set!.call(select, value);
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+}
+
+function type(input: HTMLInputElement, value: string) {
+  act(() => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+}
+
+function rowNames(): string[] {
+  return Array.from(host.querySelectorAll("tbody tr[data-status] .yt-creator-name")).map((a) => a.textContent || "");
+}
+
 describe("YouTube creators", () => {
   it("shows each undecided channel with picture, subscribers, videos and suggestion; decided ones are tucked away", async () => {
     act(() => root.render(<YoutubeCreators />));
     await flush();
-    const cards = host.querySelectorAll('.yt-creator-list [data-status="candidate"]');
+    const cards = host.querySelectorAll('.table-wrap .yt-creators-table tbody [data-status="candidate"]');
     expect(cards.length).toBe(2);
     expect(cards[0].querySelector("img")?.getAttribute("src")).toBe("https://yt3.example.com/a.jpg");
-    expect(cards[0].textContent).toContain("12,400 subscribers");
+    expect(cards[0].textContent).toContain("12,400");
     expect(cards[0].textContent).toContain("On awareness");
-    expect(cards[0].textContent).toContain("Suggested: Approve (low confidence) — consciousness. Talks about minds.");
-    expect(cards[1].textContent).toContain("No suggestion yet.");
+    const suggestion = cards[0].querySelector(".yt-creator-suggestion") as HTMLElement;
+    expect(suggestion.textContent).toBe("Approve (low)");
+    expect(suggestion.getAttribute("title")).toBe("consciousness. Talks about minds.");
+    expect(cards[1].textContent).toContain("No suggestion yet");
     expect(host.textContent).toContain("Substack Miner's");
     expect(host.querySelector('[data-status="rejected"]')).toBeNull();
-    act(() => button("Show decided (1)").click());
+    choose("Status", "all");
     expect(host.querySelector('[data-status="rejected"]')?.textContent).toContain("Rejected — off topic");
   });
 
@@ -98,7 +129,7 @@ describe("YouTube creators", () => {
     act(() => root.render(<YoutubeCreators />));
     await flush();
     const card = host.querySelector('[data-status="candidate"]') as HTMLElement;
-    await act(async () => { button("Agree", card).click(); });
+    await act(async () => { icon("Agree: approve Channel 1", card).click(); });
     await flush();
     const sent = calls.find((c) => c.path.endsWith("/1/decide"));
     expect(sent?.body).toEqual({ status: "approved", decisionReasons: ["consciousness"], note: "" });
@@ -109,7 +140,7 @@ describe("YouTube creators", () => {
     act(() => root.render(<YoutubeCreators />));
     await flush();
     const card = host.querySelectorAll('[data-status="candidate"]')[1] as HTMLElement;
-    act(() => button("Reject", card).click());
+    act(() => icon("Reject Channel 2", card).click());
     const dialog = document.querySelector('[data-decision="rejected"]') as HTMLFormElement;
     expect(dialog).not.toBeNull();
     const note = dialog.querySelector("textarea") as HTMLTextAreaElement;
@@ -155,5 +186,74 @@ describe("YouTube creators — errors stay visible", () => {
     await act(async () => { button("Find channels").click(); });
     await flush();
     expect(host.textContent).toContain("Channels were found, but not suggested: There is nothing to judge from yet");
+  });
+});
+
+describe("YouTube creators — the table (SC-887)", () => {
+  beforeEach(() => {
+    list = [
+      creator("1", { name: "Mid Channel", subscriberCount: 5000, keywordsHit: ["consciousness"] }),
+      creator("2", { name: "Big Channel", subscriberCount: 90000, keywordsHit: ["yoga"], suggestion: { action: "rejected", reasons: ["sells courses"], confidence: "high", why: "Ads." } }),
+      creator("3", { name: "Hidden Channel", subscriberCount: null, keywordsHit: ["yoga", "consciousness"], suggestion: null }),
+      creator("4", { name: "Small Channel", subscriberCount: 40, keywordsHit: ["yoga"], status: "rejected", decisionReasons: ["off topic"] }),
+    ];
+  });
+
+  it("Subscribers sorts high to low, then low to high, and aria-sort follows; a hidden count stays last", async () => {
+    act(() => root.render(<YoutubeCreators />));
+    await flush();
+    choose("Status", "all");
+    const heading = host.querySelector('th[data-sort-key="subscribers"]') as HTMLElement;
+    expect(heading.getAttribute("aria-sort")).toBe("none");
+    act(() => (heading.querySelector("button") as HTMLButtonElement).click());
+    expect(heading.getAttribute("aria-sort")).toBe("descending");
+    expect(rowNames()).toEqual(["Big Channel", "Mid Channel", "Small Channel", "Hidden Channel"]);
+    act(() => (heading.querySelector("button") as HTMLButtonElement).click());
+    expect(heading.getAttribute("aria-sort")).toBe("ascending");
+    expect(rowNames()).toEqual(["Small Channel", "Mid Channel", "Big Channel", "Hidden Channel"]);
+  });
+
+  it("each filter narrows the rows and together they combine", async () => {
+    act(() => root.render(<YoutubeCreators />));
+    await flush();
+    expect(rowNames()).toEqual(["Mid Channel", "Big Channel", "Hidden Channel"]); // Undecided by default
+    choose("Keyword", "yoga");
+    expect(rowNames()).toEqual(["Big Channel", "Hidden Channel"]);
+    choose("Suggestion", "none");
+    expect(rowNames()).toEqual(["Hidden Channel"]);
+    choose("Suggestion", "");
+    type(host.querySelector('input[aria-label="Search channel names"]') as HTMLInputElement, "big");
+    expect(rowNames()).toEqual(["Big Channel"]);
+    choose("Status", "rejected");
+    expect(rowNames()).toEqual([]);
+    expect(host.querySelector("[data-empty-filter]")?.textContent).toBe("No rejected channels match 'big' and were found for 'yoga'.");
+  });
+
+  it("no row has a text button or text link for an action — only square icons with labels naming the row", async () => {
+    act(() => root.render(<YoutubeCreators />));
+    await flush();
+    choose("Status", "all");
+    const actionCells = host.querySelectorAll("tbody td.actions-col");
+    expect(actionCells.length).toBe(4);
+    for (const cell of Array.from(actionCells)) {
+      for (const el of Array.from(cell.querySelectorAll("button, a"))) {
+        expect(el.classList.contains("icon-btn")).toBe(true);
+        expect(el.textContent?.trim()).toBe("");
+        expect(el.querySelector("svg")).not.toBeNull();
+      }
+    }
+    icon("Approve Mid Channel");
+    icon("Reject Mid Channel");
+    icon("Agree: reject Big Channel");
+    expect(icon("Open Small Channel on YouTube").getAttribute("href")).toBe("https://www.youtube.com/channel/UC4");
+    expect(host.querySelector('[aria-label="Agree: approve Hidden Channel"]')).toBeNull(); // no suggestion, no Agree
+    expect(host.querySelector('[aria-label="Approve Small Channel"]')).toBeNull(); // already decided
+  });
+
+  it("the pure helpers say the same as the screen", () => {
+    expect(filterCreators(list, DEFAULT_FILTERS).map((c) => c.id)).toEqual(["1", "2", "3"]);
+    expect(filterCreators(list, { ...DEFAULT_FILTERS, status: "all", keyword: "YOGA" }).map((c) => c.id)).toEqual(["2", "3", "4"]);
+    expect(emptyFilterText({ ...DEFAULT_FILTERS, status: "rejected", search: "yoga" })).toBe("No rejected channels match 'yoga'.");
+    expect(emptyFilterText({ ...DEFAULT_FILTERS, status: "all" })).toBe("No channels.");
   });
 });

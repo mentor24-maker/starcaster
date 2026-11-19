@@ -479,9 +479,12 @@
   white-space: nowrap;
 }
 
-/* ── YouTube's Find creators (Outreach wizard 15/19) ───────────────────
-   components/outreach-wizard/youtube-creators.tsx. Cards wrap into as many
-   columns as fit and never force the page wider than the screen (T0). */
+/* ── YouTube's Find creators (Outreach wizard 15/19; table since SC-887) ──
+   components/outreach-wizard/youtube-creators.tsx, built from the shared
+   pieces in outreach-table.tsx. The table takes the canonical look from
+   _tables.css (T11); only the cells' own content is styled here. Every
+   ancestor sets min-width: 0 so the table cannot push the page wider than
+   the screen (T0, T8) — a long table scrolls inside its .table-wrap. */
 
 .yt-creators {
   display: flex;
@@ -499,68 +502,130 @@
   min-width: 0;
 }
 
-.yt-creator-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 18rem), 1fr));
-  gap: var(--space-3);
-  min-width: 0;
+.yt-creators-table-wrap {
+  margin-top: 0;
 }
 
-.yt-creator-card {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  min-width: 0;
-  padding: var(--space-3);
-  border: 1px solid var(--border-light);
-  border-radius: 8px;
+/* The heading's own button carries the click, so it must look like the
+   heading text, not a button: white on black, hover handled by the th. */
+.outreach-sort-btn {
+  all: unset;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  white-space: nowrap;
+}
+
+.outreach-sort-btn:focus-visible {
+  outline: 2px solid var(--focus-ring-color);
+  outline-offset: 2px;
 }
 
 .yt-creator-head {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
-  min-width: 0;
-}
-
-.yt-creator-head > div {
+  gap: var(--space-2);
   min-width: 0;
 }
 
 .yt-creator-avatar {
   flex: 0 0 auto;
-  width: 48px;
-  height: 48px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
   object-fit: cover;
   background: rgba(0, 0, 0, 0.08);
 }
 
-.yt-creator-name {
-  font-weight: 600;
-  overflow-wrap: anywhere;
+/* A channel name is never truncated (T-1): it wraps, between words where it
+   can, and the column keeps room for a real name rather than a letter stack. */
+.yt-creator-channel {
+  min-width: 9rem;
 }
 
-.yt-creator-meta {
-  opacity: 0.75;
-  overflow-wrap: anywhere;
+.yt-creator-name {
+  font-weight: 600;
+  overflow-wrap: break-word;
 }
 
 .yt-creator-videos {
-  margin: 0;
-  padding-left: 1.2em;
-  min-width: 0;
+  min-width: 10rem;
 }
 
-.yt-creator-videos li {
-  overflow-wrap: anywhere;
+.yt-creator-subs {
+  white-space: nowrap;
+  text-align: right;
 }
 
+.yt-creator-keywords,
+.yt-creator-videos,
+.yt-creator-status-reasons {
+  overflow-wrap: break-word;
+}
+
+/* Four 36px icons side by side. Tighter gaps than the shared row so the
+   column costs as little width as the icons allow. */
+.yt-creators-table .table-actions-row {
+  gap: 4px;
+}
+
+.yt-creator-more,
+.yt-creator-suggestion[title] {
+  cursor: help;
+}
+
+.yt-creator-more {
+  opacity: 0.75;
+  white-space: nowrap;
+}
+
+/* May wrap ("Approve" over "(high)"): at 1280 the table has no room to
+   spare, and the Actions icons must stay in reach without sliding it. */
 .yt-creator-suggestion {
-  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.yt-creator-suggestion[data-suggestion="approved"] {
+  color: var(--status-ok-ink);
+}
+
+.yt-creator-suggestion[data-suggestion="rejected"] {
+  color: var(--btn-danger-flat-hover);
+}
+
+/* The filter dropdowns fill their column with a floor, so they are never
+   squeezed to "Und"; their default option says just "Any" (the heading
+   under it and aria-label name the column), which fits that floor. */
+.yt-creators-table .table-filter-row select {
+  width: 100%;
+  min-width: 6.5rem;
+}
+
+/* "Undecided", the Status filter's default, needs a little more. Not
+   max-content: a select's natural width is its LONGEST option, so the
+   Keyword filter would grow to its longest keyword and push the table past
+   the screen at 1280. */
+.yt-creators-table .table-filter-row select.yt-creators-filter-status {
+  min-width: 7.75rem;
+}
+
+.yt-creators-table .table-filter-row input[type="search"] {
+  width: 100%;
+  min-width: 6.5rem;
+  max-width: 12rem;
+}
+
+.yt-creator-status-word {
+  white-space: nowrap;
+}
+
+.yt-creator-status-reasons {
+  opacity: 0.75;
+}
+
+.yt-creators-empty-row td {
+  text-align: center;
+  opacity: 0.8;
 }
 
 /* ── Reddit watch (Outreach wizard 18/19, task 86bcrmbwm) ─────────────────── */
