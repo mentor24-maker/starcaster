@@ -2,7 +2,7 @@
 import { act } from 'react-dom/test-utils';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import YoutubeConversations, { canAct, replyLabel, type YtComment, type YtVideo } from './youtube-conversations';
+import YoutubeConversations, { canAct, readNowNotice, replyLabel, type YtComment, type YtVideo } from './youtube-conversations';
 
 /**
  * Outreach wizard 16/19 (86bcrmbtn). The ranking, the grouping and the server
@@ -133,5 +133,50 @@ describe('YouTube Find conversations', () => {
     expect(replyLabel('', true)).toBe('Comment on the video');
     expect(canAct(video({ state: 'paused' }), 'Ugz1')).toBe(false);
     expect(canAct(video({ state: 'waiting', waitingOn: 'video' }), 'video')).toBe(true);
+  });
+
+  it('Read now holds itself while the read runs, then reloads the list and says what it read (SC-880)', async () => {
+    let finish: (v: unknown) => void = () => {};
+    const api = (window as any).App.api;
+    const lists = () => api.mock.calls.filter((c: unknown[]) => !c[1]).length;
+    api.mockImplementation(async (path: string, options?: RequestInit) => {
+      if (!options) return { data: { videos: listed, newCount: 1, reading: { state: 'not_read_yet', sentence: 'S.' }, skippedCount: 0, commentedCount: 0 } };
+      posts.push({ path, body: JSON.parse(String(options.body || '{}')) });
+      return new Promise((r) => { finish = r; });
+    });
+    const onChanged = vi.fn();
+    await render({ onChanged });
+    const before = lists();
+    await act(async () => { button('Read now').click(); });
+    const busy = button('Reading…');
+    expect(busy.disabled).toBe(true);
+    await act(async () => { busy.click(); });
+    expect(posts).toEqual([{ path: '/api/outreach/youtube/conversations/read-now', body: {} }]);
+    await act(async () => {
+      finish({ data: { channels: 3, read: 3, comments: 44, failed: [], notReached: [], quota: null } });
+    });
+    expect(button('Read now').disabled).toBe(false);
+    expect(lists()).toBe(before + 1);
+    expect(onChanged).toHaveBeenCalled();
+    expect(container!.textContent).toContain('Read 3 channels: 44 comments.');
+  });
+
+  it('Read now names each failure by channel, and a used-up quota with its time', () => {
+    expect(readNowNotice({
+      channels: 2, read: 1, comments: 4, failed: [{ channel: 'Channel B', error: 'YouTube did not list the uploads.' }], notReached: [], quota: null,
+    })).toBe('Read 1 channel: 4 comments. Channel B was not read: YouTube did not list the uploads.');
+    expect(readNowNotice({
+      channels: 2, read: 0, comments: 0, failed: [], notReached: [{ channel: 'Channel B', reason: 'quota' }], quota: { resetsAt: '2026-11-19T08:00:00.000Z' },
+    })).toBe("Read 0 channels: 0 comments. YouTube's quota is used up until Nov 19, 1:00am, so 2 channels could not be read.");
+  });
+
+  it('Read now says the channel list could not be read, never "no approved channels" over a failure', () => {
+    const said = readNowNotice({
+      channels: 0, read: 0, comments: 0, failed: [{ channel: '', error: 'the approved channels could not be read: connection refused' }], notReached: [], quota: null,
+    });
+    expect(said).toContain('The channel list was not read: the approved channels could not be read: connection refused');
+    expect(said).not.toContain('no approved channels');
+    expect(readNowNotice({ channels: 0, read: 0, comments: 0, failed: [], notReached: [], quota: null }))
+      .toBe('There are no approved channels to read. Approve channels in Find creators first.');
   });
 });

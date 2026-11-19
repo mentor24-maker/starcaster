@@ -355,3 +355,18 @@ test('Learn: lessons that cannot be read are Cannot tell, never done', async () 
   assert.equal(learn.state, 'cannot_tell');
   assert.match(learn.sentence, /^Cannot tell\. The lessons could not be read: .*outreach_lessons_setup\.sql/);
 });
+
+test('YouTube channels approved and simply waiting for their first read are a calm wait, not "Cannot tell" (SC-880)', async () => {
+  const sentence = '2 approved channels have not been read yet (A and B). The next scheduled read is at 2:23pm, or press Read now.';
+  const waiting = (newCount, videos) => fakeDeps({
+    youtubeConversations: { listYoutubeConversations: async () => ok({ videos, newCount, reading: { state: 'not_read_yet', sentence } }) },
+  });
+  const empty = find(await overview.buildOverview(scope, { deps: waiting(0, []), now: NOW }), 'youtube', 'conversations');
+  assert.equal(empty.state, 'waiting_read');
+  assert.equal(empty.sentence, sentence);
+  assert.ok(empty.inline, 'worked on this screen, so Read now shows');
+
+  const some = find(await overview.buildOverview(scope, { deps: waiting(2, [{ comments: [{}, {}] }]), now: NOW }), 'youtube', 'conversations');
+  assert.equal(some.state, 'needs_you', 'comments already found still need him');
+  assert.match(some.sentence, /^2 comments worth replying to on 1 video so far, best first\. 2 approved channels have not been read yet/);
+});
