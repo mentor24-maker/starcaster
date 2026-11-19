@@ -13,10 +13,18 @@
  * words. The browser's answer is a claim; on 2026-07-19 an agent claimed a
  * Facebook post that never happened (fixed in b0ec0724).
  *
- *   no link                         failed
- *   a link Reddit has no comment at failed
- *   other words, author, or post    failed
- *   Reddit refuses or cannot be read  left `posting` for Dane to check by hand
+ *   OpenClaw says it did not post   failed, in its own words
+ *   anything else short of proof    left `posting` for Dane to check by hand:
+ *     no link, a link that is not a comment on this post, the parent's link,
+ *     no comment at the link, other words, another author, removed, or
+ *     Reddit refusing the read
+ *
+ * WHY NOTHING UNPROVEN IS `failed` (SC-892). `failed` offers Try again, and Try
+ * again posts the same words on Dane's account a second time. On 2026-11-18
+ * OpenClaw posted a live r/polymath comment and returned a link with a
+ * 13-character id nobody could read; the Mini called it failed. A bad link
+ * proves the LINK is wrong, not that the comment did not go out, so every such
+ * case stays `posting` — never retried, and counted by the pace.
  *
  * MEASURED 2026-10-13, 11:50am, from the Mini: Reddit refuses its public JSON
  * to this machine (403 "blocked by network security" on www.reddit.com,
@@ -324,6 +332,8 @@ function createRedditAdapter(options = {}) {
     name: 'reddit',
     label: 'Reddit',
     handCheckWords: 'Open the post on Reddit and check by hand.',
+    // "Posted, but no link" is a hand check here, never failed (SC-892).
+    noLinkIsHandCheck: true,
     projectId,
     // Before any pass has read the row: the fixed pace, or the defaults.
     pace: fixedPace || { ...limits.REDDIT_PACE },
@@ -445,13 +455,23 @@ function createRedditAdapter(options = {}) {
 
     async verify(item, url) {
       const { accountName } = await settingsFor(item.accountKey);
+      // OpenClaw has already said it posted. Every answer below short of
+      // proof is `cannot-tell`, never `refuted`: a link that does not check
+      // out proves the link is wrong, not that nothing went out, and
+      // `refuted` means `failed`, whose Try again posts twice (SC-892).
+      const who = accountName ? `u/${accountName}` : 'the chosen account';
+      const unproven = (why) => ({
+        verdict: 'cannot-tell',
+        reason: `OpenClaw says it posted, but ${why} It will not be tried again. `
+          + `Open the post on Reddit and look for the comment under ${who}.`,
+      });
       const link = parsePermalink(url);
-      if (!link.ok) return { verdict: 'refuted', reason: `The link OpenClaw returned is not a link to a Reddit comment: ${link.why}.` };
+      if (!link.ok) return unproven(`the link it returned is not a link to a Reddit comment (${link.why}), so the Mini cannot check it.`);
       if (link.postId !== text(item.postId).toLowerCase()) {
-        return { verdict: 'refuted', reason: `The link OpenClaw returned is a comment on a different post (${link.postId}), not this one (${item.postId}).` };
+        return unproven(`the link it returned is a comment on a different post (${link.postId}), not this one (${item.postId}).`);
       }
       if (item.parentCommentId && link.commentId === text(item.parentCommentId).toLowerCase()) {
-        return { verdict: 'refuted', reason: 'The link OpenClaw returned is the comment being replied to, not the reply, so it proves nothing.' };
+        return unproven('the link it returned is the comment being replied to, not the reply, so it proves nothing.');
       }
       let read = null;
       for (let tries = 1; tries <= VERIFY_ATTEMPTS; tries += 1) {
@@ -459,30 +479,22 @@ function createRedditAdapter(options = {}) {
         if (!read.ok || read.found) break;
         if (tries < VERIFY_ATTEMPTS) await deps.sleep(VERIFY_WAIT_MS);
       }
-      if (!read.ok) return { verdict: 'cannot-tell', reason: `OpenClaw says it posted, but ${read.error}, so the link could not be checked.` };
-      if (!read.found) {
-        return { verdict: 'refuted', reason: 'OpenClaw returned a link, but Reddit has no comment at it, so it is not counted as posted.' };
-      }
+      if (!read.ok) return unproven(`${read.error.replace(/\.$/, '')}, so the link could not be checked.`);
+      if (!read.found) return unproven('Reddit has no comment at the link it returned.');
       if (GONE.has(text(read.text))) {
-        return {
-          verdict: 'refuted',
-          reason: `Reddit shows the comment at that link as ${text(read.text)} — the subreddit's moderators or Reddit's spam filter took it down, so it is not counted as posted.`,
-        };
+        return unproven(`Reddit shows the comment at that link as ${text(read.text)} — the subreddit's moderators or Reddit's spam filter may have taken it down.`);
       }
       if (read.linkId && read.linkId !== `t3_${text(item.postId).toLowerCase()}`) {
-        return { verdict: 'refuted', reason: 'The comment at that link is on a different post, not this one.' };
+        return unproven('the comment at that link is on a different post, not this one.');
       }
       if (item.parentCommentId && read.parentId && read.parentId !== `t1_${text(item.parentCommentId).toLowerCase()}`) {
-        return { verdict: 'refuted', reason: 'The comment at that link is on this post, but not under the comment it was meant to reply to.' };
+        return unproven('the comment at that link is on this post, but not under the comment it was meant to reply to.');
       }
-      if (signIn.redditUsername(read.author).toLowerCase() !== accountName.toLowerCase()) {
-        return { verdict: 'refuted', reason: `The comment at that link was written by "${read.author || 'nobody Reddit names'}", not ${accountName}.` };
+      if (signIn.redditUsername(read.author).toLowerCase() !== text(accountName).toLowerCase()) {
+        return unproven(`the comment at that link was written by "${read.author || 'nobody Reddit names'}", not ${accountName}.`);
       }
       if (commentWords(read.text) !== commentWords(item.text)) {
-        return {
-          verdict: 'refuted',
-          reason: `The comment at that link does not say what was approved. Reddit shows: "${commentWords(read.text).slice(0, 300)}"`,
-        };
+        return unproven(`the comment at that link does not say what was approved. Reddit shows: "${commentWords(read.text).slice(0, 300)}"`);
       }
       return { verdict: 'proven', reason: '' };
     },
