@@ -116,9 +116,25 @@ async function fakeApi(path: string, options: RequestInit = {}): Promise<Record<
     if (store.status === "unreadable") fail("status endpoint down", 502);
     return { ok: true, data: store.status || { account: "", pace: PACE, browserCheck: { state: "", message: "", checkedAt: null, signedInAt: null }, browserCheckError: "" } };
   }
-  const decision = path.match(/^\/api\/engage\/reddit-comments\/items\/([^/]+)\/(draft|approve|reject|paste|read-again)$/);
+  const decision = path.match(/^\/api\/engage\/reddit-comments\/items\/([^/]+)\/(draft|approve|reject|paste|read-again|hand-check)$/);
   if (decision) {
     const found = store.items.find((i) => i.id === decision[1]) || fail("Reddit comment not found in this project", 404);
+    if (decision[2] === "hand-check") {
+      // The store's refusals (lib/redditCommentsStore.js settleByHand), word for word where the screen shows them.
+      if (body.outcome === "live") {
+        if (!found.mayConfirmLive) fail(`This comment is ${found.status}, so it cannot be marked live by hand.`, 409);
+        const m = /\/comments\/([a-z0-9]+)\/[^/]*\/([a-z0-9]+)/i.exec(body.link || "");
+        if (!/\/comments\//.test(body.link || "")) fail(`${body.link} is a Reddit link but not to a post — a post's address has /comments/<id>/ in it.`);
+        const postId = /\/comments\/([a-z0-9]+)/i.exec(body.link)![1];
+        if (postId !== found.postId) fail(`That link is to a different Reddit post (${postId}), not the one this comment answers (${found.postId}).`);
+        if (!m) fail("That link is to the post itself, not to one comment on it. Open your comment (click its time, like \"2h ago\") and paste that address.");
+        Object.assign(found, { status: "posted", postedUrl: body.link, error: "", needsHandCheck: false, mayConfirmLive: false, mayMarkNotPosted: false, postedAt: "2026-11-18T20:13:00Z" });
+      } else {
+        if (!found.mayMarkNotPosted) fail(`This comment is ${found.status}, so there is nothing to mark as not posted.`, 409);
+        Object.assign(found, { status: "failed", postedUrl: "", error: "Checked by hand: it did not post.", needsHandCheck: false, mayConfirmLive: true, mayMarkNotPosted: false });
+      }
+      return { ok: true, data: { ...found } };
+    }
     if (decision[2] === "paste") {
       if (!["reading", "failed"].includes(found.readState || "")) fail("This post is already in, so there is nothing to paste.", 409);
       Object.assign(found, { postTitle: body.postTitle, postBody: body.postBody, postReadFrom: "pasted", readState: "", readError: "" });
@@ -563,6 +579,72 @@ describe("Reddit comments screen", () => {
     expect([...r.querySelectorAll("a")].map((a) => a.getAttribute("href"))).toContain("https://www.reddit.com/r/astronomy/comments/abc123/comment/def456/");
     await click(button("Approvals"));
     expect(text()).not.toContain("Maybe live");
+  });
+
+  it("a hand-check row offers It is live and It did not post; a good comment link makes it Posted (SC-893)", async () => {
+    stores.proj_doe.items = [item({
+      status: "posting", needsHandCheck: true, mayConfirmLive: true, mayMarkNotPosted: true, finalText: "Maybe live",
+      error: "OpenClaw says it posted, but the link could not be checked.",
+    })];
+    await mount();
+    await click(button("Posted"));
+    const id = stores.proj_doe.items[0].id;
+    button("It did not post", row(id));
+    await click(button("It is live", row(id)));
+    const input = row(id).querySelector("input") as HTMLInputElement;
+    expect(button("Save as posted", row(id)).disabled).toBe(true);
+    await type(input, "www.reddit.com/r/astronomy/comments/abc123/why_stars_twinkle/kq1zz9x/");
+    await click(button("Save as posted", row(id)));
+    const saved = requests.find((r) => r.path.endsWith(`/${id}/hand-check`));
+    expect(saved?.body).toEqual({ outcome: "live", link: "https://www.reddit.com/r/astronomy/comments/abc123/why_stars_twinkle/kq1zz9x/" });
+    expect(stores.proj_doe.items[0].status).toBe("posted");
+    await reload();
+    await click(button("Posted"));
+    const r = row(id);
+    expect(r.textContent).toContain("Posted");
+    expect(r.textContent).not.toContain("Check this one by hand");
+    expect([...r.querySelectorAll("a")].find((a) => a.textContent === "Open the comment")?.getAttribute("href"))
+      .toBe("https://www.reddit.com/r/astronomy/comments/abc123/why_stars_twinkle/kq1zz9x/");
+    expect([...r.querySelectorAll("button")].map((b) => b.textContent)).not.toContain("It is live");
+    expect([...r.querySelectorAll("button")].map((b) => b.textContent)).not.toContain("It did not post");
+  });
+
+  it("a link to the post itself, or to another post, is refused on the row and nothing moves (SC-893)", async () => {
+    stores.proj_doe.items = [item({ status: "posting", needsHandCheck: true, mayConfirmLive: true, mayMarkNotPosted: true, finalText: "Maybe live" })];
+    await mount();
+    await click(button("Posted"));
+    const id = stores.proj_doe.items[0].id;
+    await click(button("It is live", row(id)));
+    await type(row(id).querySelector("input") as HTMLInputElement, POST_LINK);
+    await click(button("Save as posted", row(id)));
+    expect(row(id).querySelector('[role="alert"]')?.textContent).toContain("That link is to the post itself, not to one comment on it.");
+    expect(stores.proj_doe.items[0].status).toBe("posting");
+    const input = row(id).querySelector("input") as HTMLInputElement;
+    await type(input, "https://www.reddit.com/r/astronomy/comments/zzz999/other/kq1zz9x/");
+    await click(button("Save as posted", row(id)));
+    expect(row(id).querySelector('[role="alert"]')?.textContent).toContain("That link is to a different Reddit post (zzz999)");
+    expect(stores.proj_doe.items[0].status).toBe("posting");
+  });
+
+  it("It did not post makes the row Failed; a failed row after OpenClaw said it posted still offers It is live only (SC-893)", async () => {
+    stores.proj_doe.items = [
+      item({ status: "posting", needsHandCheck: true, mayConfirmLive: true, mayMarkNotPosted: true, finalText: "Maybe live" }),
+      item({ status: "failed", mayConfirmLive: true, mayMarkNotPosted: false, finalText: "Said posted", error: "The link OpenClaw returned is not a link to a Reddit comment." }),
+      item({ status: "failed", mayConfirmLive: false, mayMarkNotPosted: false, finalText: "Never went", error: "Reddit said the thread is locked." }),
+    ];
+    await mount();
+    await click(button("Posted"));
+    const [checked, saidPosted, never] = stores.proj_doe.items;
+    await click(button("It did not post", row(checked.id)));
+    expect(stores.proj_doe.items[0].status).toBe("failed");
+    expect(row(checked.id).textContent).toContain("Failed to post");
+    expect(row(checked.id).textContent).toContain("Checked by hand: it did not post.");
+    expect(text()).toContain("Marked as not posted.");
+    const labels = (id: string) => [...row(id).querySelectorAll("button")].map((b) => b.textContent);
+    expect(labels(saidPosted.id)).toContain("It is live");
+    expect(labels(saidPosted.id)).not.toContain("It did not post");
+    expect(labels(never.id)).not.toContain("It is live");
+    expect(labels(never.id)).not.toContain("It did not post");
   });
 
   it("says which read failed when the list cannot be read", async () => {
