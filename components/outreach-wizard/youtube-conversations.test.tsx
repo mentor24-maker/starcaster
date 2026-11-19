@@ -167,6 +167,16 @@ describe('YouTube Find conversations', () => {
     })).toBe('Read 1 channel: 4 comments. Channel B was not read: YouTube did not list the uploads.');
     expect(readNowNotice({
       channels: 2, read: 0, comments: 0, failed: [], notReached: [{ channel: 'Channel B', reason: 'quota' }], quota: { resetsAt: '2026-11-19T08:00:00.000Z' },
-    })).toBe("Read 0 channels: 0 comments. YouTube's quota is used up until Nov 19, 1:00am, so 1 channel could not be read.");
+    })).toBe("Read 0 channels: 0 comments. YouTube's quota is used up until Nov 19, 1:00am, so 2 channels could not be read.");
+  });
+
+  it('Read now says the channel list could not be read, never "no approved channels" over a failure', () => {
+    const said = readNowNotice({
+      channels: 0, read: 0, comments: 0, failed: [{ channel: '', error: 'the approved channels could not be read: connection refused' }], notReached: [], quota: null,
+    });
+    expect(said).toContain('The channel list was not read: the approved channels could not be read: connection refused');
+    expect(said).not.toContain('no approved channels');
+    expect(readNowNotice({ channels: 0, read: 0, comments: 0, failed: [], notReached: [], quota: null }))
+      .toBe('There are no approved channels to read. Approve channels in Find creators first.');
   });
 });

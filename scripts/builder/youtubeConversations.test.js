@@ -433,6 +433,30 @@ test('the read-now route uses the session\'s project, never one named in the bod
   assert.equal(wrongVerb.statusCode, 405);
 });
 
+test('the read-now route logs a refusal, the way the scheduled read does', async () => {
+  const yt = {
+    readDue: () => ({
+      readProjectComments: async () => ({ ok: false, status: 503, error: 'No YouTube API key is set up, so no comments can be read.' }),
+      formatCommentsReadLog: () => [],
+    }),
+    finder: () => ({}),
+  };
+  const r = {
+    method: 'POST', headers: { 'x-forwarded-for': '10.0.9.1' }, socket: { remoteAddress: '127.0.0.1' },
+    projectContext: { project: { id: 'p1' } }, authUser: { id: 'u1' },
+    on(ev, fn) { if (ev === 'data') fn(Buffer.from('{}')); if (ev === 'end') fn(); return this; },
+  };
+  const logged = [];
+  const real = console.error;
+  console.error = (line) => logged.push(String(line));
+  const res = fakeRes();
+  try {
+    await route.handle(r, res, '/api/outreach/youtube/conversations/read-now', 'POST', { youtubeConversations: yt });
+  } finally { console.error = real; }
+  assert.equal(res.statusCode, 503);
+  assert.ok(logged.some((l) => /read-now REFUSED project=p1: No YouTube API key/.test(l)), `logged: ${logged.join(' | ')}`);
+});
+
 test('just-approved, never-read channels are a calm wait naming the next read in Mountain time', () => {
   // 20:30 UTC = 1:30pm Mountain, the time Dane hit this; the next run is 21:23 UTC = 2:23pm.
   const at = Date.parse('2026-11-18T20:30:00Z');
@@ -441,6 +465,16 @@ test('just-approved, never-read channels are a calm wait naming the next read in
   assert.equal(v.state, 'not_read_yet');
   assert.equal(v.sentence, '2 approved channels have not been read yet (A and B). The next scheduled read is at 2:23pm, or press Read now.');
   assert.doesNotMatch(v.sentence, /Cannot tell|refused|not running/);
+});
+
+test('a next read that falls on the next Mountain day says "tomorrow"', () => {
+  // 05:00 UTC Nov 19 = 10:00pm Mountain Nov 18; the next run is 06:23 UTC = 11:23pm, the same day.
+  assert.equal(finder.nextReadPhrase(Date.parse('2026-11-19T05:00:00Z')), '11:23pm');
+  // 06:30 UTC Nov 19 = 11:30pm Mountain Nov 18; the next run is 09:23 UTC = 2:23am Nov 19.
+  assert.equal(finder.nextReadPhrase(Date.parse('2026-11-19T06:30:00Z')), '2:23am tomorrow');
+  const at = Date.parse('2026-11-19T06:30:00Z');
+  const v = finder.readingVerdict([{ name: 'A', channelId: CH_A, lastCommentsReadAt: null, commentsReadError: '', updatedAt: new Date(at - 60000).toISOString() }], at);
+  assert.match(v.sentence, /The next scheduled read is at 2:23am tomorrow, or press Read now\.$/);
 });
 
 test('the fault wording stays for a failed read, a read over 12 hours old, and an approval over 12 hours old never read', () => {

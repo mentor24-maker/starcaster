@@ -124,10 +124,16 @@ function mountain(iso: string): string {
 /** The one line Read now leaves behind: what was read, and each failure by channel name. */
 export function readNowNotice(r: ReadNowReport | null | undefined): string {
   if (!r) return 'The read finished but did not say what it read. Reload the list to see.';
-  if (!r.channels) return 'There are no approved channels to read. Approve channels in Find creators first.';
+  const failed = r.failed || [];
+  // A list that could not be read leaves channels at 0 with the reason in
+  // `failed`: say the failure, never "no approved channels" over it.
+  if (!r.channels && !failed.length) return 'There are no approved channels to read. Approve channels in Find creators first.';
   const bits = [`Read ${plural(r.read, 'channel')}: ${plural(r.comments, 'comment')}.`];
-  for (const f of r.failed || []) bits.push(`${f.channel || 'The channel list'} was not read: ${f.error}`);
-  if (r.quota) bits.push(`YouTube's quota is used up until ${mountain(r.quota.resetsAt)}, so ${plural((r.notReached || []).length, 'channel')} could not be read.`);
+  for (const f of failed) bits.push(`${f.channel || 'The channel list'} was not read: ${f.error}`);
+  // The channel whose read hit the quota lands in neither `failed` nor
+  // `notReached`, so count what is left over rather than either list.
+  const unread = Math.max(0, (r.channels || 0) - (r.read || 0) - failed.length);
+  if (r.quota) bits.push(`YouTube's quota is used up until ${mountain(r.quota.resetsAt)}, so ${plural(unread, 'channel')} could not be read.`);
   else if ((r.notReached || []).length) bits.push(`${plural(r.notReached.length, 'channel')} ran out of time and will be read next time.`);
   return bits.join(' ');
 }

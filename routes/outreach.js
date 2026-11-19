@@ -281,7 +281,8 @@ async function handleYoutubeConversations(req, res, pathname, method, yt) {
     if (checkEndpointLimit(req, res, 'outreach.youtubeConversations.readNow')) return true;
     const due = yt.readDue();
     const result = await due.readProjectComments(scope);
-    if (result.ok) {
+    if (!result.ok) console.error(`[youtube-conversations] read-now REFUSED project=${scope.projectId}: ${result.error}`);
+    else {
       for (const line of due.formatCommentsReadLog(result.data)) {
         const tagged = line.replace('read-due', 'read-now');
         if (/ (FAILED|NOT REACHED|QUOTA) /.test(tagged)) console.error(tagged);
