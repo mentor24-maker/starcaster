@@ -8,6 +8,7 @@ import RedditConversations from './reddit-conversations';
 import YoutubeConversations from './youtube-conversations';
 import LearnControls from './learn-controls';
 import { MiniLimitBanner } from '../settings/mini-ai-limit';
+import { BuilderCollapseIcon } from '../builder/builder-collapse-icon';
 
 export { PROJECT_SWITCH_EVENT };
 
@@ -40,7 +41,8 @@ export { PROJECT_SWITCH_EVENT };
  * Mini watches) and Find conversations (the ranked posts it found) —
  * Outreach wizard 18/19, task 86bcrmbwm, ./reddit-subreddits.tsx and
  * ./reddit-conversations.tsx. The first stage that is not done is open and
- * highlighted.
+ * highlighted, and starts expanded; every stage opens and closes from its
+ * header, and Dane's choice is remembered per channel (task SC-886).
  *
  * The shape is the Engage panels' on purpose: it (re)loads when its page is
  * SHOWN and when the project is SWITCHED, and drops a reply that lands after a
@@ -105,6 +107,45 @@ export function readSavedChannel(): string {
   } catch {
     return '';
   }
+}
+
+/**
+ * Which stages Dane opened or closed, per channel (task SC-886). Only his own
+ * choices are kept; a stage he never touched follows the default — the open
+ * stage (the first not done) expanded, every other one collapsed.
+ */
+export const STAGES_STORAGE_PREFIX = 'starcaster:outreach-wizard:stages:';
+
+export type StageChoices = Record<string, boolean>;
+
+export function readSavedStages(channel: string): StageChoices {
+  try {
+    const raw = window.localStorage.getItem(`${STAGES_STORAGE_PREFIX}${channel}`);
+    if (!raw) return {};
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+    const out: StageChoices = {};
+    for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
+      if (typeof value === 'boolean') out[key] = value;
+    }
+    return out;
+  } catch {
+    return {}; // storage off or a damaged value — fall back to the default
+  }
+}
+
+export function saveStages(channel: string, choices: StageChoices): void {
+  try {
+    window.localStorage.setItem(`${STAGES_STORAGE_PREFIX}${channel}`, JSON.stringify(choices));
+  } catch {
+    /* storage is off — the choice holds until the page is reloaded */
+  }
+}
+
+/** Is this stage expanded? Dane's own choice first, else only the open stage. */
+export function stageExpanded(choices: StageChoices, stage: OutreachStage, index: number, openIndex: number): boolean {
+  const chosen = choices[stage.key];
+  return typeof chosen === 'boolean' ? chosen : index === openIndex;
 }
 
 export function saveChannel(key: string): void {
@@ -315,51 +356,77 @@ function EditIcon(): React.ReactElement {
 }
 
 /**
- * Every stage but the open one: a pencil at the right edge that opens the same
- * screen its button would. Without it a stage that is already done — approved
- * and rejected replies included — had no way back from here (task 86bcuar8y).
+ * One stage. Its header (number, name, state word) is a button that opens and
+ * closes it (task SC-886); a closed stage keeps its one-line sentence, so
+ * where it stands is readable without opening it, and does not mount its body
+ * at all — a closed Find conversations makes no request.
+ *
+ * Every stage but the open one also has a pencil at the right edge that opens
+ * the same screen its button would. Without it a stage that is already done —
+ * approved and rejected replies included — had no way back from here (task
+ * 86bcuar8y).
  */
-function StageRow({ stage, index, open, children }: {
+function StageRow({ stage, index, open, expanded, onToggle, channelKey, children }: {
   stage: OutreachStage;
   index: number;
   open: boolean;
+  expanded: boolean;
+  onToggle: () => void;
+  channelKey: string;
   children?: React.ReactNode;
 }): React.ReactElement {
+  const contentId = `outreach-stage-${channelKey}-${stage.key}`;
   return (
     <li
-      className={`outreach-wizard-stage outreach-wizard-stage--${stage.state}${open ? ' outreach-wizard-stage--open' : ''}`}
+      className={`outreach-wizard-stage outreach-wizard-stage--${stage.state}${open ? ' outreach-wizard-stage--open' : ''}${expanded ? ' outreach-wizard-stage--expanded' : ''}`}
       data-stage={stage.key}
       data-state={stage.state}
+      data-expanded={expanded ? 'true' : 'false'}
       aria-current={open ? 'step' : undefined}
     >
-      <span className="outreach-wizard-stage-number" aria-hidden="true">{stage.state === 'done' ? '✓' : index + 1}</span>
-      <div className="outreach-wizard-stage-body">
-        <p className="outreach-wizard-stage-head">
-          <strong>{stage.label}</strong>
-          <span className="outreach-wizard-stage-state">{STATE_WORDS[stage.state] || stage.state}</span>
-        </p>
-        <p className="outreach-wizard-stage-sentence">{stage.sentence}</p>
-        {children}
-        {open && stage.next ? (
-          <div className="outreach-wizard-stage-actions">
-            <a className="btn btn-primary" href={`#page=${stage.next.page}`} onClick={(e) => openPage(e, stage.next!.page)}>
-              {stage.next.label}
-            </a>
-          </div>
+      <div className="outreach-wizard-stage-top">
+        <button
+          type="button"
+          className="outreach-wizard-stage-toggle"
+          aria-expanded={expanded}
+          aria-controls={contentId}
+          onClick={onToggle}
+        >
+          <BuilderCollapseIcon expanded={expanded} className="outreach-wizard-stage-mark" />
+          <span className="outreach-wizard-stage-number" aria-hidden="true">{stage.state === 'done' ? '✓' : index + 1}</span>
+          <span className="outreach-wizard-stage-head">
+            <strong>{stage.label}</strong>
+            <span className="outreach-wizard-stage-state">{STATE_WORDS[stage.state] || stage.state}</span>
+          </span>
+        </button>
+        {!open && stage.next ? (
+          <a
+            className="btn tiny-btn icon-btn outreach-wizard-stage-edit"
+            href={`#page=${stage.next.page}`}
+            title={stage.next.label}
+            aria-label={stage.next.label}
+            data-stage-edit={stage.key}
+            onClick={(e) => openPage(e, stage.next!.page)}
+          >
+            <span className="icon-btn-glyph"><EditIcon /></span>
+          </a>
         ) : null}
       </div>
-      {!open && stage.next ? (
-        <a
-          className="btn tiny-btn icon-btn outreach-wizard-stage-edit"
-          href={`#page=${stage.next.page}`}
-          title={stage.next.label}
-          aria-label={stage.next.label}
-          data-stage-edit={stage.key}
-          onClick={(e) => openPage(e, stage.next!.page)}
-        >
-          <span className="icon-btn-glyph"><EditIcon /></span>
-        </a>
-      ) : null}
+      <p className="outreach-wizard-stage-sentence">{stage.sentence}</p>
+      <div id={contentId} className="outreach-wizard-stage-body" hidden={!expanded}>
+        {expanded ? (
+          <>
+            {children}
+            {open && stage.next ? (
+              <div className="outreach-wizard-stage-actions">
+                <a className="btn btn-primary" href={`#page=${stage.next.page}`} onClick={(e) => openPage(e, stage.next!.page)}>
+                  {stage.next.label}
+                </a>
+              </div>
+            ) : null}
+          </>
+        ) : null}
+      </div>
     </li>
   );
 }
@@ -372,6 +439,8 @@ export default function OutreachWizardPanel(): React.ReactElement {
   const [error, setError] = useState('');
   const [channel, setChannel] = useState<string>(() => readSavedChannel() || 'youtube');
   const pollTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Dane's open/close choices, per channel, once read or changed this visit.
+  const [stageChoices, setStageChoices] = useState<Record<string, StageChoices>>({});
 
   const load = useCallback(async () => {
     const api = getApp()?.api;
@@ -445,6 +514,15 @@ export default function OutreachWizardPanel(): React.ReactElement {
   const current = channels.find((c) => c.key === channel) || channels[0] || null;
   const openIndex = current ? openStageIndex(current.stages) : -1;
 
+  const choices: StageChoices = current ? (stageChoices[current.key] ?? readSavedStages(current.key)) : {};
+
+  const toggleStage = (stage: OutreachStage, index: number) => {
+    if (!current) return;
+    const next = { ...choices, [stage.key]: !stageExpanded(choices, stage, index, openIndex) };
+    setStageChoices((all) => ({ ...all, [current.key]: next }));
+    saveStages(current.key, next);
+  };
+
   const pick = (key: string) => {
     setChannel(key);
     saveChannel(key);
@@ -479,7 +557,15 @@ export default function OutreachWizardPanel(): React.ReactElement {
           ) : null}
           <ol className="outreach-wizard-stages">
             {current.stages.map((s, i) => (
-              <StageRow key={s.key} stage={s} index={i} open={i === openIndex}>
+              <StageRow
+                key={s.key}
+                stage={s}
+                index={i}
+                open={i === openIndex}
+                expanded={stageExpanded(choices, s, i, openIndex)}
+                onToggle={() => toggleStage(s, i)}
+                channelKey={current.key}
+              >
                 {s.key === 'connect' ? (
                   <ConnectControls key={current.key} channel={current} onChanged={() => void load()} onCheckAsked={startCheckPoll} />
                 ) : null}
