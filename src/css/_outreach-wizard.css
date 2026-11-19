@@ -50,12 +50,80 @@
 
 .outreach-wizard-stage {
   display: flex;
-  gap: var(--space-4);
-  align-items: flex-start;
+  flex-direction: column;
+  gap: var(--space-2);
   min-width: 0;
   padding: var(--space-4) var(--space-5);
   border: 1px solid var(--border-light);
   border-radius: 10px;
+}
+
+/* SC-886: the header row — the open/close button, then the pencil at the edge. */
+.outreach-wizard-stage-top {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.outreach-wizard-stage-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.outreach-wizard-stage-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+  border-radius: 6px;
+}
+
+/* The shared expand/collapse mark (BuilderCollapseIcon). Its builder styles are
+   scoped to .builder-react-root, which this screen is not inside. */
+.outreach-wizard-stage-mark {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  /* Closed: green, the builder's "expand" colour. Open: the accent, matching
+     the open stage's highlight. Tokens rather than the builder's hex values. */
+  border: 2px solid var(--status-ok-ink);
+  background: var(--status-ok-bg);
+  color: var(--status-ok);
+  line-height: 0;
+}
+
+.outreach-wizard-stage-toggle[aria-expanded="true"] .outreach-wizard-stage-mark {
+  border-color: var(--accent-dark);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent-dark);
+}
+
+.outreach-wizard-stage-mark .builder-collapse-icon-svg {
+  display: block;
+  width: 16px;
+  height: 16px;
+}
+
+/* Sentence and body line up under the stage's name, past the mark and number.
+   Scoped so it outranks `.outreach-wizard-panel p { margin: 0 }`. */
+.outreach-wizard-stage .outreach-wizard-stage-sentence,
+.outreach-wizard-stage .outreach-wizard-stage-body {
+  margin-left: calc(28px + 2em + 2 * var(--space-3));
 }
 
 .outreach-wizard-stage--open {
@@ -86,12 +154,16 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  flex: 1 1 auto;
   min-width: 0;
+}
+
+.outreach-wizard-stage-body[hidden] {
+  display: none;
 }
 
 .outreach-wizard-stage-head {
   display: flex;
+  flex: 1 1 auto;
   flex-wrap: wrap;
   gap: var(--space-2) var(--space-3);
   align-items: baseline;
@@ -156,7 +228,11 @@
 @media (max-width: 600px) {
   .outreach-wizard-stage {
     padding: var(--space-3) var(--space-4);
-    gap: var(--space-3);
+  }
+
+  .outreach-wizard-stage .outreach-wizard-stage-sentence,
+  .outreach-wizard-stage .outreach-wizard-stage-body {
+    margin-left: 0;
   }
 }
 
