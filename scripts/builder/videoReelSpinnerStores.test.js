@@ -435,6 +435,34 @@ test('edits: a new edit is a draft with both tenant columns on the stored row', 
   } finally { ctx.restore(); }
 });
 
+test('edits: a sent-back edit can go back to review UNCHANGED, only with a reason, which it keeps (Reel Spinner 4d)', async () => {
+  const ctx = withDb();
+  try {
+    const sourceId = await seedSource(ctx);
+    const edit = (await ctx.edits.createEdit(sourceId, { kind: 'full', keepRanges: [{ start_s: 0, end_s: 10 }] }, SCOPE_A)).data;
+    await walk(ctx, edit.id, [['rendering'], ['review', { roughCutDriveFileId: 'drive-1' }]]);
+    assert.equal((await ctx.edits.reviewEdit(edit.id, { status: 'sent_back', daneNote: 'Make it purple.' }, SCOPE_A)).ok, true);
+
+    const silent = await ctx.edits.moveEdit(edit.id, 'review', {}, SCOPE_A);
+    assert.equal(silent.status, 400);
+    assert.match(silent.error, /error is required when a sent-back edit goes back to review/);
+
+    const back = await ctx.edits.moveEdit(edit.id, 'review', { error: 'could not re-cut: colour is not an edit' }, SCOPE_A);
+    assert.equal(back.ok, true, JSON.stringify(back));
+    assert.equal(back.data.status, 'review');
+    assert.equal(back.data.error, 'could not re-cut: colour is not an edit');
+    assert.equal(back.data.recutCount, 0, 'a hand-back is not a re-cut');
+    assert.equal(back.data.roughCutDriveFileId, 'drive-1', 'the rough cut he watched is still the one shown');
+    assert.deepEqual(back.data.keepRanges, [{ start_s: 0, end_s: 10 }]);
+
+    // The next machine move clears it, as every move but failed does.
+    assert.equal((await ctx.edits.reviewEdit(edit.id, { status: 'sent_back', daneNote: 'Start at 2 s.' }, SCOPE_A)).ok, true);
+    const recut = await ctx.edits.moveEdit(edit.id, 'rendering', { keepRanges: [{ start_s: 2, end_s: 10 }] }, SCOPE_A);
+    assert.equal(recut.data.error, '');
+    assert.equal(recut.data.recutCount, 1);
+  } finally { ctx.restore(); }
+});
+
 test('edits: the whole road, rough cut to YouTube, with one send-back counted as a recut', async () => {
   const ctx = withDb();
   try {

@@ -495,6 +495,7 @@ module.exports = {
   soundingWords,
   keepRanges,
   soundSource,
+  soundFor,
   fullEdit,
   shortEdit,
   planEdits,
