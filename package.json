@@ -95,6 +95,7 @@
     "check:builder-notes": "node scripts/check_builder_only_notes.cjs --all",
     "check:live-placeholders": "node scripts/check_live_placeholders.cjs",
     "check:ai-metering": "node scripts/check_ai_metering.cjs",
+    "check:ai-door": "node scripts/check_ai_door.cjs",
     "check:screens": "node scripts/ui/check_screens.mjs",
     "seed:ui-fixture": "node scripts/ui/seed_fixture.mjs",
     "check:ui:report": "node scripts/check_ui_doctrine.cjs --report",
@@ -151,7 +152,7 @@
     "fonts:import": "node scripts/fonts_import_fontsource.mjs",
     "test:loop": "node --test \"loop/**/*.test.js\" \"loop/**/*.test.mjs\"",
     "test:runner": "node --test \"scripts/lib/*.test.mjs\"",
-    "verify": "npm run typecheck && npm run test:builder-ui && npm run build && npm run test:builder && npm run test:hooks && npm run check:syntax && node scripts/check_conventions.cjs && npm run check:ui && npm run check:models && npm run check:paths && npm run test:loop && npm run test:runner"
+    "verify": "npm run typecheck && npm run test:builder-ui && npm run build && npm run test:builder && npm run test:hooks && npm run check:syntax && node scripts/check_conventions.cjs && npm run check:ui && npm run check:models && npm run check:paths && npm run check:ai-door && npm run test:loop && npm run test:runner"
   },
   "devDependencies": {
     "@types/canvas-confetti": "^1.9.0",
