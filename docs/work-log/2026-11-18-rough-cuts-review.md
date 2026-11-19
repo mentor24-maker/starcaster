@@ -15,3 +15,13 @@ Mini has not made any yet, is still making some, or nothing is waiting.
 The website only records his answer and his note; the Mac Mini acts on them.
 After each click the screen reads the list back from the database, so what he
 sees is what was saved, the same as after a reload.
+
+**Second round, after review.** Each rough cut now also says which music is
+under it, in words ("Music: Inspired, Kevin MacLeod", or "No music picked").
+The list of music moved from the Mac Mini's folder into the shared code
+folder, because the website is never given the Mac Mini's folder and could
+not have read it there. The screen also reads the cuts waiting for Dane on
+their own, so a project with hundreds of finished edits can never hide the
+one that is waiting. A note that is not text is now refused instead of being
+saved as gibberish, and after a refused click the list reloads so old
+buttons do not linger.

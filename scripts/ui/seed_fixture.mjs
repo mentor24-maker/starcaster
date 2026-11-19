@@ -1887,7 +1887,12 @@ async function seedStudioFootage(scope) {
         ...(plan.kind === 'short' ? { momentIndex: plan.momentIndex } : {}),
       }, scope), 'create rough cut');
       must(await videoEditsStore.moveEdit(created.id, 'rendering', {}, scope), 'render rough cut');
-      must(await videoEditsStore.moveEdit(created.id, 'review', { roughCutDriveFileId: `fixture-rough-cut-${plan.kind}-${plan.momentIndex ?? 'full'}` }, scope), 'review rough cut');
+      must(await videoEditsStore.moveEdit(created.id, 'review', {
+        roughCutDriveFileId: `fixture-rough-cut-${plan.kind}-${plan.momentIndex ?? 'full'}`,
+        // The full edit carries a track so the card's music line has words to
+        // show; the short has none, so "No music picked" is drawn too.
+        ...(plan.kind === 'full' ? { musicTrack: 'inspired' } : {}),
+      }, scope), 'review rough cut');
       if (plan.sendBack) {
         must(await videoEditsStore.reviewEdit(created.id, { status: 'sent_back', daneNote: plan.sendBack }, scope), 'send back rough cut');
       }

@@ -37,6 +37,8 @@ export type RoughCut = {
   savedS: number | null;
   moment: { startS: number; endS: number; score: number; reasons: string[]; quote: string } | null;
   watchUrl: string | null;
+  /** The track under it, read-only (SC-837 picks it; lib/studioMusicShelf.js names it). */
+  music: { trackId: string; label: string };
   daneNote: string;
   recutCount: number;
   updatedAt: string;
@@ -47,6 +49,8 @@ export type RoughCuts = {
   edits: RoughCut[];
   counts: Record<Group | 'making', number>;
   truncated: boolean;
+  /** The waiting cuts are read on their own; true only if THAT read hit the limit. */
+  waitingTruncated?: boolean;
   readLimit: number;
   momentsError: string;
 };
@@ -181,6 +185,7 @@ function RoughCutItem({ edit, momentsError, onVerdict }: {
           <span>No rough cut file was recorded for it</span>
         )}
       </p>
+      <p className="studio-roughcut-line" data-testid="studio-roughcut-music">{`Music: ${edit.music?.label || 'No music picked'}`}</p>
       {edit.kind === 'short' && !edit.moment ? (
         <p className="studio-moments-note">
           {momentsError
@@ -288,9 +293,13 @@ export default function RoughCutsView(): React.ReactElement {
         body: JSON.stringify(verdict),
       });
       if (!body?.ok || body?.data?.status !== verdict.status) {
+        // Read the list again: a refusal (409, someone else's answer landed
+        // first) means the buttons shown are stale.
+        void load();
         return `Not saved: ${body?.error?.message || 'the server did not confirm it'}`;
       }
     } catch (err) {
+      void load();
       return `Not saved: ${err instanceof Error ? err.message : 'the request failed'}`;
     }
     const word = verdict.status === 'approved' ? 'Approved' : verdict.status === 'skipped' ? 'Skipped' : 'Sent back';
@@ -326,7 +335,9 @@ export default function RoughCutsView(): React.ReactElement {
         <button type="button" className="btn studio-roughcuts-refresh" onClick={() => void load()}>Refresh</button>
       </div>
       {view.truncated ? (
-        <p className="studio-moments-note">{`Only the first ${view.readLimit} edits were read, so these counts are a minimum.`}</p>
+        <p className="studio-moments-note">{view.waitingTruncated
+          ? `More than ${view.readLimit} rough cuts are waiting for you; only ${view.readLimit} are shown, so these counts are a minimum.`
+          : `Only ${view.readLimit} of the answered rough cuts were read, so those counts are a minimum. Every rough cut waiting for you is shown.`}</p>
       ) : null}
       {error ? <p className="studio-footage-error" role="alert">{error}</p> : null}
       {done ? <p className="studio-moments-note" role="status" data-testid="studio-roughcuts-done">{done}</p> : null}

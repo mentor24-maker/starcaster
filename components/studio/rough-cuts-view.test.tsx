@@ -38,6 +38,7 @@ function edit(id: string, extra: Partial<RoughCut> = {}): RoughCut {
     savedS: 26,
     moment: null,
     watchUrl: `https://drive.google.com/file/d/rc-${id}/view`,
+    music: { trackId: "", label: "No music picked" },
     daneNote: "",
     recutCount: 0,
     updatedAt: "",
@@ -245,6 +246,25 @@ describe("rough cuts screen", () => {
     await click(button(cards()[0], "Skip"));
     expect(q('[role="alert"]')!.textContent).toContain("Not saved: An edit cannot move");
     expect(cards()).toHaveLength(1);
+  });
+
+  it("after a refusal the list is read again, so stale buttons do not stay", async () => {
+    rows = [edit("e1")];
+    refuseWrites = "Not in review any more";
+    await mount();
+    const readsBefore = calls.filter((c) => c.method === "GET").length;
+    // Someone else's answer landed first: the row has moved on.
+    rows[0].status = "approved";
+    await click(button(cards()[0], "Skip"));
+    expect(calls.filter((c) => c.method === "GET").length).toBe(readsBefore + 1);
+    expect(cards()).toHaveLength(0);
+  });
+
+  it("each card names its music, read-only", async () => {
+    rows = [edit("e1", { music: { trackId: "inspired", label: "Inspired, Kevin MacLeod" } }), edit("e2")];
+    await mount();
+    const music = cards().map((c) => c.querySelector('[data-testid="studio-roughcut-music"]')!.textContent);
+    expect(music).toEqual(["Music: Inspired, Kevin MacLeod", "Music: No music picked"]);
   });
 
   it("with nothing made, says the Mac Mini has not made any", async () => {

@@ -657,8 +657,10 @@ Music (the other candidate):
 determined, playful, calm), in **Studio › Music** on Drive
 (folder `1By_hHjk2hwIXsuZCmTus-PBXriO1aTpH`). The list of what is on it, with
 each track's licence, credit line, mood, length and Drive file id, is
-`workers/studio/music-shelf.json`, committed. The audio files are never
-committed. The titles were chosen by hand for sitting under someone talking:
+`lib/studioMusicShelf.json`, committed. It lives in `lib/`, not beside the
+picker in `workers/`, because the website reads it too and Vercel never
+uploads `workers/` (a website require into that folder fails the deploy).
+The audio files are never committed. The titles were chosen by hand for sitting under someone talking:
 no vocals, no novelty pieces, between about two and five minutes long.
 
 **How a track is picked** (`workers/studio/music.js`):
@@ -672,7 +674,8 @@ no vocals, no novelty pieces, between about two and five minutes long.
    the same track and different edits spread across the shelf.
 
 The pick is stored as the track's id in `video_edits.music_track`; the
-rough-cut card (4c, SC-835) shows its title and artist from the manifest.
+rough-cut card (4c, SC-835) shows its title and artist from the manifest
+(`lib/studioMusicShelf.js` `trackLabel`), or "No music picked".
 
 **Adding or changing tracks:** edit the list in
 `scripts/studio_build_music_shelf.cjs` and run `npm run studio:music-shelf`.
@@ -801,7 +804,7 @@ For an agent session working on this, not for day-to-day use.
   `scripts/studio_backfill_roughcuts.cjs` is its catch-up.
 - Music (Reel Spinner 5a, SC-837): the picker `workers/studio/music.js`
   (pure; tests `scripts/builder/studioMusic.test.js`), the committed manifest
-  `workers/studio/music-shelf.json`, and the one-time builder
+  `lib/studioMusicShelf.json`, and the one-time builder
   `scripts/studio_build_music_shelf.cjs` (`npm run studio:music-shelf`).
 - The pipeline: `workers/studio/` — `drive.js` (watcher), `ingest.js`,
   `probe.js`, `proxy.js`, `queue.js` (the local work list on the Mini, SQLite,

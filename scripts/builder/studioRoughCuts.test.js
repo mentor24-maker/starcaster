@@ -269,3 +269,77 @@ test('a failed read is an error, never "no rough cuts yet"', async () => {
     ctx.restore();
   }
 });
+
+test('a waiting rough cut is shown even when the project has more edits than one read takes', async () => {
+  const ctx = withRoute();
+  try {
+    const { editId } = await waitingEdit(ctx, SCOPE_A);
+    const rows = ctx.db.data.get('video_edits');
+    const waitingRow = rows.find((r) => r.id === editId);
+    const { EDIT_READ_LIMIT } = require('../../routes/studioRoughCuts.js');
+    // More answered edits than the read limit, all updated BEFORE the waiting
+    // one, so a single oldest-first read of every status stops before it.
+    for (let i = 0; i < EDIT_READ_LIMIT + 5; i += 1) {
+      rows.push({
+        ...waitingRow,
+        id: `b0000000-0000-4000-8000-${String(i).padStart(12, '0')}`,
+        kind: 'short',
+        moment_index: i,
+        status: 'skipped',
+        updated_at: new Date(Date.UTC(2020, 0, 1) + i * 1000).toISOString(),
+      });
+    }
+    const { res, json } = await call(ctx.route, '/api/studio/rough-cuts', SCOPE_A);
+    assert.equal(res.statusCode, 200, res.body);
+    const data = json().data;
+    assert.equal(data.counts.waiting, 1, 'the cut waiting on Dane must never be the one cut off');
+    assert.ok(data.edits.some((e) => e.id === editId && e.group === 'waiting'));
+    assert.equal(data.truncated, true, 'the answered counts are a minimum, and the answer says so');
+    assert.equal(data.waitingTruncated, false);
+  } finally {
+    ctx.restore();
+  }
+});
+
+test('each rough cut names its music in words, and says when none was picked', async () => {
+  const ctx = withRoute();
+  try {
+    const picked = await waitingEdit(ctx, SCOPE_A);
+    const none = await waitingEdit(ctx, SCOPE_A);
+    const row = ctx.db.data.get('video_edits').find((r) => r.id === picked.editId);
+    row.music_track = 'inspired';
+    const data = (await call(ctx.route, '/api/studio/rough-cuts', SCOPE_A)).json().data;
+    const byId = Object.fromEntries(data.edits.map((e) => [e.id, e]));
+    assert.deepEqual(byId[picked.editId].music, { trackId: 'inspired', label: 'Inspired, Kevin MacLeod' });
+    assert.deepEqual(byId[none.editId].music, { trackId: '', label: 'No music picked' });
+  } finally {
+    ctx.restore();
+  }
+});
+
+test('a note that is not text is refused, never saved as "[object Object]"', async () => {
+  const ctx = withRoute();
+  try {
+    const { editId } = await waitingEdit(ctx, SCOPE_A);
+    for (const daneNote of [{}, ['cut it'], 42]) {
+      const { res } = await call(ctx.route, `/api/studio/rough-cuts/${editId}/review`, SCOPE_A, 'POST', { status: 'sent_back', daneNote });
+      assert.equal(res.statusCode, 400, `${JSON.stringify(daneNote)}: ${res.body}`);
+    }
+    const row = await storedStatus(ctx, editId, SCOPE_A);
+    assert.equal(row.status, 'review');
+    assert.equal(row.daneNote, '');
+  } finally {
+    ctx.restore();
+  }
+});
+
+test('a rough cut id that is not a valid address is a 400, not a crash', async () => {
+  const ctx = withRoute();
+  try {
+    const { res } = await call(ctx.route, '/api/studio/rough-cuts/%E0%A4%A/review', SCOPE_A, 'POST', { status: 'approved' });
+    assert.equal(res.statusCode, 400, res.body);
+    assert.match(String(res.body), /not a valid address/);
+  } finally {
+    ctx.restore();
+  }
+});
