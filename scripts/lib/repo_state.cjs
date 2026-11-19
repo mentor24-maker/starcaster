@@ -13,6 +13,7 @@
 
 const { execFileSync } = require('child_process');
 const path = require('path');
+const { readTicketOpenState } = require('../builder/ticketOpenState.js');
 
 const root = path.join(__dirname, '..', '..');
 const MAIN = 'main';
@@ -320,39 +321,21 @@ function mainWorktree(worktrees = worktreeInventory()) {
 }
 
 /**
- * Is a branch's stamped ClickUp task (Charter Q1) still open?
+ * Is a branch's stamped ticket (Charter Q1) still open?
  *
- * `clickup_direct.mjs task-open` uses THREE exit codes on purpose — 0 open,
- * 1 confirmed closed, 3 could not tell (network/auth/rate-limit) — because a
- * caller here is deciding whether to DELETE a branch. Collapsing "could not
- * tell" into either open or closed would be wrong in one direction or the
- * other; only a clean, confirmed 1 may ever say 'closed'.
+ * A caller here is deciding whether to DELETE a branch, so the answer is
+ * three-way and only a clean, confirmed read may ever say 'closed'. The
+ * reading itself lives in scripts/builder/ticketOpenState.js, shared with
+ * `npm run thread` so the two can never disagree (SC-875: both used to ask a
+ * door command that no longer exists).
  *
  * Returns 'open' | 'closed' | 'unknown'. A branch with no stamp at all (made
  * by hand, or predating this feature) is 'unknown' too — never touched by
- * the closed-task cleanup path.
+ * the closed-task cleanup path, and never even asks the tracker.
  */
 function isTaskOpen(taskId) {
   if (!taskId) return 'unknown';
-  try {
-    execFileSync('npm', ['run', 'clickup', '--', 'task-open', '--task', taskId], {
-      cwd: root,
-      stdio: ['ignore', 'pipe', 'ignore'],
-      encoding: 'utf8',
-    });
-    return 'open';
-  } catch (err) {
-    // Exit 1 alone is NOT enough to believe "closed". `npm run` and `doppler`
-    // both exit 1 on their OWN failures (not logged in, secrets unreachable)
-    // before the script even runs, and that must never authorize a delete.
-    // Require the command's positive marker — it prints `open:   false` only
-    // when it actually confirmed the task is closed/gone. Exit 1 without that
-    // marker is an unknown, not a closed. (The command itself now exits 3, not
-    // 1, on a network/auth failure — this is belt-and-braces behind it.)
-    const printed = `${err.stdout || ''}`;
-    if (err.status === 1 && /open:\s*false/.test(printed)) return 'closed';
-    return 'unknown';
-  }
+  return readTicketOpenState(taskId, { cwd: root }).state;
 }
 
 module.exports = {

@@ -45,6 +45,12 @@ function mapOfAScratchRepo() {
     path.join(SCRIPTS, 'lib', 'repo_state.cjs'),
     path.join(dir, 'scripts', 'lib', 'repo_state.cjs')
   );
+  // repo_state reads tickets through the shared open/closed reading (SC-875).
+  fs.mkdirSync(path.join(dir, 'scripts', 'builder'), { recursive: true });
+  fs.copyFileSync(
+    path.join(SCRIPTS, 'builder', 'ticketOpenState.js'),
+    path.join(dir, 'scripts', 'builder', 'ticketOpenState.js')
+  );
 
   const env = {
     ...process.env,
