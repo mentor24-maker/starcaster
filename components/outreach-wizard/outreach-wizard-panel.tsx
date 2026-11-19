@@ -55,7 +55,7 @@ const OVERVIEW_PATH = '/api/outreach/overview';
 /** Where the last channel picked is remembered, per viewer (this browser). */
 export const CHANNEL_STORAGE_KEY = 'starcaster:outreach-wizard:channel';
 
-export type StageState = 'done' | 'needs_you' | 'waiting_mini' | 'not_started' | 'cannot_tell';
+export type StageState = 'done' | 'needs_you' | 'waiting_mini' | 'waiting_read' | 'not_started' | 'cannot_tell';
 
 export type OutreachStage = {
   key: string;
@@ -92,6 +92,7 @@ export const STATE_WORDS: Record<StageState, string> = {
   done: 'Done',
   needs_you: 'Needs you',
   waiting_mini: 'Waiting on the Mini',
+  waiting_read: 'Waiting for the next read',
   not_started: 'Not started',
   cannot_tell: 'Cannot tell',
 };
