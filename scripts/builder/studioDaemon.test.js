@@ -217,9 +217,25 @@ test('runDaemon watches Drive by default, on its own cadence across ticks', asyn
   q.close();
 });
 
-test('the daemon\'s default watcher list is the Drive watch, then the cache sweep', () => {
-  assert.deepEqual(Object.keys(daemon.WATCHERS), [STAGE_WATCH, daemon.STAGE_CACHE_SWEEP]);
+test('the daemon\'s default watcher list is the Drive watch, the cache sweep, then the rescore watch', () => {
+  assert.deepEqual(Object.keys(daemon.WATCHERS), [STAGE_WATCH, daemon.STAGE_CACHE_SWEEP, daemon.STAGE_RESCORE_WATCH]);
   assert.equal(daemon.WATCHERS[STAGE_WATCH].everyMs, daemon.DEFAULT_DRIVE_WATCH_EVERY_MS);
+  assert.equal(daemon.WATCHERS[daemon.STAGE_RESCORE_WATCH].everyMs, 60 * 1000);
+});
+
+test('scoring runs right after cut marks, behind every stage that makes a new recording usable', () => {
+  const stages = Object.keys(daemon.STAGE_RUNNERS);
+  assert.equal(stages.indexOf('moments'), stages.indexOf('cut_marks') + 1);
+  for (const earlier of ['ingest', 'probe', 'proxy', 'transcribe']) {
+    assert.ok(stages.indexOf(earlier) < stages.indexOf('moments'), `${earlier} before moments`);
+  }
+});
+
+test('the rescore watch says OFF, COULD NOT TELL or OK in the tick line — never a quiet blank', () => {
+  const line = (r) => daemon.formatWatch({ stage: daemon.STAGE_RESCORE_WATCH, label: 'rescore watch', result: r });
+  assert.match(line({ ok: true, notConfigured: 'STUDIO_PROJECT_ID is not set' }), /rescore watch OFF: STUDIO_PROJECT_ID/);
+  assert.match(line({ ok: false, error: 'rescore requests could not be read: 503' }), /COULD NOT TELL: rescore requests could not be read/);
+  assert.match(line({ ok: true, processed: [{}], skipped: [] }), /OK: 1 rescore\(s\) queued, 0 already waiting/);
 });
 
 // ── The acceptance criterion: a stage throwing must not take the lane ───────

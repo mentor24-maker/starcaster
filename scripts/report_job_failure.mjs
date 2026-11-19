@@ -20,6 +20,11 @@
  * rather than shell logic no test and no review ever sees.
  *
  *   node scripts/report_job_failure.mjs --job bus-relay --status 1 --log <path>
+ *   node scripts/report_job_failure.mjs --job reel-spinner-scoring --reason "<plain words>"
+ *
+ * `--reason` is for a job that is STOPPED rather than one that exited
+ * non-zero: a long-running worker that cannot do its work at all says why in
+ * a sentence, and the post leads with that sentence instead of an exit status.
  *
  * KNOWN RESIDUAL, BY DESIGN (carried forward from Phase 0). This alert shares
  * the job's own dependencies — node, doppler, the network — so a failure in
@@ -50,6 +55,7 @@ const job = arg('job');
 const status = arg('status', '?');
 const logPath = arg('log');
 const tailLines = Number(arg('tail', '12')) || 12;
+const reason = arg('reason');
 
 if (!job) {
   console.error('report_job_failure: --job <name> is required. Nothing reported.');
@@ -97,6 +103,7 @@ const text = heartbeat.renderFailurePost({
   at,
   logTail,
   logPath,
+  reason,
 });
 
 try {

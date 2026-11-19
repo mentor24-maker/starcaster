@@ -58,6 +58,9 @@ const { runProxy, STAGE_PROXY } = require('./proxyPass.js');
 const { runTranscribe, STAGE_TRANSCRIBE } = require('./transcribePass.js');
 const { runCutMarks, STAGE_CUT_MARKS } = require('./cutMarksPass.js');
 const { runAlign, STAGE_ALIGN } = require('./alignPass.js');
+const {
+  runMoments, watchRescores, STAGE_MOMENTS, STAGE_RESCORE_WATCH, RESCORE_WATCH_EVERY_MS,
+} = require('./momentsPass.js');
 const { sweepReadyOriginals } = require('./evict.js');
 
 /** How long to wait after a tick that found nothing to do. */
@@ -167,6 +170,13 @@ const STAGE_RUNNERS = {
     label: 'cut marks',
     run: ({ queue, owner, env }) => runCutMarks({ queue, owner, env, max: 1 }),
   },
+  // Right after cut marks, and like them behind any new transcription: the
+  // moments backfill queues every recording at once, and each one is a few
+  // minutes waiting on an AI provider (workers/studio/momentsPass.js).
+  [STAGE_MOMENTS]: {
+    label: 'moments',
+    run: ({ queue, owner, env }) => runMoments({ queue, owner, env, max: 1 }),
+  },
   // After cut marks, for the same reason: the align backfill queues every
   // ready iPhone and Zoom recording at once, and none of it is urgent.
   [STAGE_ALIGN]: {
@@ -206,6 +216,13 @@ const WATCHERS = {
     label: 'cache sweep',
     everyMs: DEFAULT_CACHE_SWEEP_EVERY_MS,
     run: ({ queue, env }) => sweepReadyOriginals({ queue, env }),
+  },
+  // Clock-driven because the request is a stamp in the catalog
+  // (video_moments.rescore_requested_at, set from the screen), not a job.
+  [STAGE_RESCORE_WATCH]: {
+    label: 'rescore watch',
+    everyMs: RESCORE_WATCH_EVERY_MS,
+    run: ({ queue, env }) => watchRescores({ queue, env }),
   },
 };
 
@@ -553,6 +570,7 @@ function formatWatch(w) {
   if (w.error) return `${w.label} THREW: ${w.error.message} — the stages still ran this tick`;
   const r = w.result || {};
   if (w.stage === STAGE_CACHE_SWEEP) return formatSweep(w.label, r);
+  if (w.stage === STAGE_RESCORE_WATCH) return formatRescoreWatch(w.label, r);
   if (r.blocked) return `${w.label} BLOCKED (${r.blocked.kind}): ${r.blocked.reason}`;
   const queued = Array.isArray(r.processed) ? r.processed.length : 0;
   const skipped = Array.isArray(r.skipped) ? r.skipped.length : 0;
@@ -564,6 +582,15 @@ function formatWatch(w) {
   if (r.cursor && r.cursor.initialised) bits.push('started watching from now, nothing replayed');
   if (blind) bits.push(`${blind} thing(s) it could not check`);
   if (r.recovered) bits.push('the previous block has cleared');
+  return bits.join(', ');
+}
+
+/** The rescore watch's outcome, in the tick line. Silent-looking is not the same as clean. */
+function formatRescoreWatch(label, r) {
+  if (r.notConfigured) return `${label} OFF: ${r.notConfigured}`;
+  if (!r.ok) return `${label} COULD NOT TELL: ${r.error || 'no reason given'}`;
+  const bits = [`${label} OK: ${(r.processed || []).length} rescore(s) queued, ${(r.skipped || []).length} already waiting or blocked`];
+  if (r.truncated) bits.push('CANNOT TELL about requests past the first page');
   return bits.join(', ');
 }
 
@@ -733,7 +760,9 @@ module.exports = {
   DEFAULT_DRIVE_WATCH_EVERY_MS,
   DEFAULT_CACHE_SWEEP_EVERY_MS,
   STAGE_CACHE_SWEEP,
+  STAGE_RESCORE_WATCH,
   formatSweep,
+  formatRescoreWatch,
   DEFAULT_LOG_MAX_BYTES,
   DEFAULT_LOG_KEEP,
 };
