@@ -1913,6 +1913,33 @@ The rule:
 - The longer answer — the editor showing exactly what the theme shows — is
   the planning ticket 86bczqh0f.
 
+### 5.37 AI calls go through the door
+
+Every AI generation call goes through `generate()` in `lib/aiClient.js`. A
+feature says what it wants (`feature`, `tier: 'fast' | 'strong'`, `json`) and
+never which provider or model; the door uses the first provider on
+**Settings › APIs › AI provider** that can pay, falls through when one is out
+of credit, and meters the spend under the feature's name.
+
+The incident (from 2026-10-30): one Anthropic account ran out of credit and
+about twenty features stopped at once, while a funded OpenAI key sat unused.
+Each of them talked to Anthropic its own way, with its own key lookup and its
+own list of model names, so there was no one place to point them anywhere
+else. Moving them took five tickets (AI switch 1 to 5, SC-843 to SC-847).
+
+The rule:
+
+- **`npm run check:ai-door` blocks a provider's generate address (or SDK)
+  anywhere in `lib/`, `routes/` or `api/` outside the door**, in pre-commit
+  and CI. The door itself and the key and billing checks (`lib/aiKeys.js`,
+  `lib/credentialVerify.js`, `lib/anthropicBilling.js`) are allowed, because
+  they ask providers about keys and money, not to generate.
+- **A feature the door cannot serve yet goes on the check's `WAITING` list
+  with its reason and the ticket that moves it**, and the check prints that
+  list every run. As of 2026-11-18 there are two, both needing the AI to read
+  a file the door cannot send yet: the Theme Wizard and the flyer upload
+  (SC-895). Do not add to it to make a new feature easier to write.
+
 ## 6. Working in this repo
 
 ### 6.1 One worktree per thread, and trust nothing about the working directory
