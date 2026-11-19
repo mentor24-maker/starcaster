@@ -46,6 +46,8 @@ node scripts/check_build_paths.cjs --quiet
 node scripts/pin_asset_versions.cjs --stage
 node scripts/check_syntax.cjs --quiet
 node scripts/check_conventions.cjs
+# 5b. No AI call may go round the door (lib/aiClient.js generate, SC-847).
+node scripts/check_ai_door.cjs >/dev/null
 # 6. Render every Builder module type as a visitor sees it. The sibling of the
 #    grep in check_conventions: three placeholders reached live client sites
 #    through four review rounds because none of them was a phrase a grep could
