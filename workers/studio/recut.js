@@ -245,6 +245,10 @@ function checkRecut(answer, input) {
   const sounding = soundingWords(input.words, input.marks);
   const notes = [];
   const asked = [];
+  // The AI's own previous end, before widening: widening moves an end out to a
+  // word edge, which can reach past the next stretch's start without the AI
+  // having asked for an overlap. Those stretches are joined below.
+  let previousEnd = null;
   for (let i = 0; i < answer.keep.length; i += 1) {
     const item = answer.keep[i];
     const n = `stretch ${i + 1}`;
@@ -256,10 +260,10 @@ function checkRecut(answer, input) {
     if (item.end_s > duration + END_SLACK_S) {
       return { ok: false, reason: `${n} of the AI's answer ends at ${item.end_s} s, past the end of the ${secondsText(duration)}-second recording` };
     }
-    const previous = asked[asked.length - 1];
-    if (previous && item.start_s < previous.end - EPS) {
-      return { ok: false, reason: `${n} of the AI's answer starts at ${item.start_s} s, before the stretch before it ends (${round(previous.end)} s)` };
+    if (previousEnd !== null && item.start_s < previousEnd - EPS) {
+      return { ok: false, reason: `${n} of the AI's answer starts at ${item.start_s} s, before the stretch before it ends (${round(previousEnd)} s)` };
     }
+    previousEnd = item.end_s;
     const widened = widenToWords({ start: Math.max(0, item.start_s), end: Math.min(duration, item.end_s) }, sounding);
     notes.push(...widened.moved);
     asked.push(widened.range);

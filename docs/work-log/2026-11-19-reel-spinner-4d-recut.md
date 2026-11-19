@@ -24,3 +24,12 @@ When a video uses the sound from a second recording, the check now uses the
 same pairing the render uses. And a re-cut short is named on Drive the same
 way the first cut names it, so a retry finds it instead of uploading a
 second copy.
+
+Second review round: the check that keeps two kept stretches from
+overlapping was comparing against a stretch's end AFTER it had been nudged
+out to the edge of a word, so a perfectly good answer could be refused with
+an untrue reason ("starts before the stretch before it ends"). It now
+compares the AI's own numbers, and stretches the nudge made touch are simply
+joined. Also, if something unexpected breaks while the re-cut is rendering
+or uploading, the edit is marked failed and queued to render again, instead
+of sitting on "rendering" forever.

@@ -392,6 +392,20 @@ test('a render ffmpeg refuses: the edit fails with the reason, its new ranges ar
   assert.equal(retry[0].subjectId, SRC);
 });
 
+test('a throw while rendering or uploading fails the edit and queues a re-render, never leaving it in "rendering"', async (t) => {
+  const s = setup(t);
+  s.drive.getAccessToken = async () => { throw new Error('keychain locked'); };
+  s.drive.upload = async () => { throw new Error('socket hang up'); };
+  const report = await s.run();
+
+  assert.equal(report.failed.length, 1, JSON.stringify(report));
+  assert.equal(s.edit().status, 'failed', 'not stuck in rendering');
+  assert.match(s.edit().error, /threw an error/);
+  const retry = s.queue.listJobs({ stage: STAGE_ROUGH_CUT });
+  assert.equal(retry.length, 1, 'a rough-cut job renders it again');
+  assert.equal(s.asked.length, 1, 'the AI was paid once');
+});
+
 test('an edit that is no longer sent back is left alone', async (t) => {
   const s = setup(t);
   s.edit().status = 'approved';
@@ -455,6 +469,19 @@ test('a boundary inside a word is moved to the word\'s edge, so the word is kept
   assert.equal(checked.ok, true, JSON.stringify(checked));
   assert.equal(checked.ranges[0].start_s, 2.1);
   assert.match(checked.notes[0], /2\.30 s was inside "w21", so the stretch starts at 2\.10 s/);
+});
+
+test('two stretches the AI kept apart are not refused when widening to a word makes them touch', () => {
+  // w201 is said 20.1-20.45 s. The AI keeps [15, 20.3] and [20.4, 40]: they do
+  // not overlap, but 20.3 s is inside the word, so the first stretch's end
+  // widens to 20.45 s, past where the second starts. That is the rules' own
+  // widening, not the AI asking for an overlap, so the two are joined.
+  const checked = checkRecut({ keep: [{ start_s: 15, end_s: 20.3 }, { start_s: 20.4, end_s: 40 }] }, INPUT);
+  assert.equal(checked.ok, true, JSON.stringify(checked));
+  assert.ok(checked.ranges.some((r) => r.start_s <= 20.1 && r.end_s >= 20.45), 'the word is kept whole, in one stretch');
+  for (let i = 1; i < checked.ranges.length; i += 1) {
+    assert.ok(checked.ranges[i].start_s > checked.ranges[i - 1].end_s, 'the stretches stay in order and apart');
+  }
 });
 
 test('the rules refuse what they cannot check, each naming the stretch and why', () => {

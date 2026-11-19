@@ -412,26 +412,37 @@ async function recutJob({
     return completeIt('failed', `${why}${note}. Its new ranges are saved; rough-cut job ${queued.job.id} renders it again.`);
   };
 
-  const rendered = rough.renderToDisk({ paths, ranges, shiftS: shift.shiftS, picturePath, soundPath, ffmpeg, probeDuration, io, keptS });
-  if (!rendered.ok) {
-    if (rendered.machine) return failAndRetry('ffmpeg went missing mid-run; it will be rendered again');
-    return failAndRetry(`ffmpeg could not render the re-cut: ${rendered.why}`);
+  // From here the edit is in `rendering`. A throw must not reach queue.fail:
+  // its retry would find the edit already moved, finish as moved_on, and leave
+  // it sitting in "rendering" with nothing queued to render it.
+  try {
+    return await renderAndHandOver();
+  } catch (err) {
+    return failAndRetry(`rendering or uploading the re-cut threw an error: ${err.message}`);
   }
-  const name = rough.driveFileName(source, recut, edit.kind === 'short' ? moment : null);
-  const uploaded = await rough.uploadRender({ drive, queue, env, file: paths.video, bytes: rendered.bytes, name });
-  if (!uploaded.ok) return failAndRetry(`re-cut rendered, but not uploaded: ${uploaded.error}. The render is kept at ${paths.video}`);
 
-  const moved = await catalog.moveEdit(edit.id, 'review', { roughCutDriveFileId: uploaded.id }, scope);
-  const back = moved.ok ? await catalog.getEditById(edit.id, scope) : moved;
-  if (!back.ok || !back.data || back.data.status !== 'review' || text(back.data.roughCutDriveFileId) !== uploaded.id) {
-    const why = !moved.ok ? moved.error : `it read back as "${text(back.data && back.data.status) || 'nothing'}"`;
-    return failAndRetry(`re-cut uploaded to Drive as ${uploaded.id}, but the edit could not be marked for review: ${why}`);
+  async function renderAndHandOver() {
+    const rendered = rough.renderToDisk({ paths, ranges, shiftS: shift.shiftS, picturePath, soundPath, ffmpeg, probeDuration, io, keptS });
+    if (!rendered.ok) {
+      if (rendered.machine) return failAndRetry('ffmpeg went missing mid-run; it will be rendered again');
+      return failAndRetry(`ffmpeg could not render the re-cut: ${rendered.why}`);
+    }
+    const name = rough.driveFileName(source, recut, edit.kind === 'short' ? moment : null);
+    const uploaded = await rough.uploadRender({ drive, queue, env, file: paths.video, bytes: rendered.bytes, name });
+    if (!uploaded.ok) return failAndRetry(`re-cut rendered, but not uploaded: ${uploaded.error}. The render is kept at ${paths.video}`);
+
+    const moved = await catalog.moveEdit(edit.id, 'review', { roughCutDriveFileId: uploaded.id }, scope);
+    const back = moved.ok ? await catalog.getEditById(edit.id, scope) : moved;
+    if (!back.ok || !back.data || back.data.status !== 'review' || text(back.data.roughCutDriveFileId) !== uploaded.id) {
+      const why = !moved.ok ? moved.error : `it read back as "${text(back.data && back.data.status) || 'nothing'}"`;
+      return failAndRetry(`re-cut uploaded to Drive as ${uploaded.id}, but the edit could not be marked for review: ${why}`);
+    }
+    // Confirmed on Drive and on the row: only now does the local copy go.
+    rough.removeQuietly(paths.video, io);
+    rough.removeQuietly(paths.sidecar, io);
+    return completeIt('recut', `re-cut from the note: ${beforeS} s → ${round(keptS)} s${answer.changed ? ` (${answer.changed})` : ''}`,
+      { driveFileId: uploaded.id, driveName: name, bytes: rendered.bytes, renderMs: rendered.renderMs, uploadMs: uploaded.ms });
   }
-  // Confirmed on Drive and on the row: only now does the local copy go.
-  rough.removeQuietly(paths.video, io);
-  rough.removeQuietly(paths.sidecar, io);
-  return completeIt('recut', `re-cut from the note: ${beforeS} s → ${round(keptS)} s${answer.changed ? ` (${answer.changed})` : ''}`,
-    { driveFileId: uploaded.id, driveName: name, bytes: rendered.bytes, renderMs: rendered.renderMs, uploadMs: uploaded.ms });
 }
 
 /** Claim and re-cut up to `max` jobs. The daemon calls it with `max: 1`. An outage stops the run. */
