@@ -61,6 +61,7 @@ const { runAlign, STAGE_ALIGN } = require('./alignPass.js');
 const {
   runMoments, watchRescores, STAGE_MOMENTS, STAGE_RESCORE_WATCH, RESCORE_WATCH_EVERY_MS,
 } = require('./momentsPass.js');
+const { runRoughCut, STAGE_ROUGH_CUT } = require('./roughCutPass.js');
 const { sweepReadyOriginals } = require('./evict.js');
 
 /** How long to wait after a tick that found nothing to do. */
@@ -182,6 +183,13 @@ const STAGE_RUNNERS = {
   [STAGE_ALIGN]: {
     label: 'line-up',
     run: ({ queue, owner, env }) => runAlign({ queue, owner, env, max: 1 }),
+  },
+  // Last of all: a rough cut is minutes of ffmpeg per recording, and the
+  // backfill queues every scored recording at once. Nothing a new recording
+  // needs first should wait behind it (workers/studio/roughCutPass.js).
+  [STAGE_ROUGH_CUT]: {
+    label: 'rough cut',
+    run: ({ queue, owner, env }) => runRoughCut({ queue, owner, env, max: 1 }),
   },
 };
 
