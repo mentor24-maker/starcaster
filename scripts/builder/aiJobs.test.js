@@ -27,10 +27,12 @@ function startIntervalHours(script) {
   return Number(m[1]) / 3600;
 }
 
-test('the OpenClaw model is the one install_openclaw.sh configures, and it is priced', () => {
-  const m = read('scripts/install_openclaw.sh').match(/^MODEL="anthropic\/([^"]+)"/m);
-  assert.ok(m, 'install_openclaw.sh no longer sets MODEL the way this test reads it');
-  assert.equal(OPENCLAW_MODEL, m[1]);
+test('the OpenClaw model is one install_openclaw.sh configures, and it is priced', () => {
+  // The installer reads lib/openclawModels.json (SC-871). OpenAI is primary
+  // now; until SC-873 labels each call with the model that served it, this
+  // page's label must at least be one of the models OpenClaw can use.
+  const { order } = require('../../lib/openclawModels').load();
+  assert.ok(order.includes(`anthropic/${OPENCLAW_MODEL}`), `${OPENCLAW_MODEL} is not in lib/openclawModels.json`);
   // AI Quota 3/5 will price these calls; a model with no rate would read
   // "incomplete" from the first metered request.
   assert.equal(priceCall({ provider: 'anthropic', model: OPENCLAW_MODEL, promptTokens: 1 }).priced, true);
