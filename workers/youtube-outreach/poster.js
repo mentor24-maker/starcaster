@@ -37,7 +37,10 @@
  *      2026-07-19 an agent claimed a Facebook post that never happened (fixed
  *      in b0ec0724). No link is `failed`. A link the site disowns is `failed`.
  *      A link nobody could check is left `posting` for a person, because
- *      calling it failed could hide a comment that is live.
+ *      calling it failed could hide a comment that is live. Reddit goes
+ *      further (SC-892): once OpenClaw says it posted, no link, a bad link and
+ *      a link to the wrong comment are ALL a hand check, never `failed`,
+ *      because `failed` offers Try again and that posts twice.
  *
  * AND EVERY SIX HOURS, IT LOOKS AT ITS OWN BROWSER (7/7, task 86bcda6dt):
  * is OpenClaw answering, and is each account's profile still signed in as
@@ -100,6 +103,18 @@ async function settle(adapter, item, attempt) {
   }
 
   if (!text(attempt.url)) {
+    // On Reddit, "I posted it" with no link is a claim nobody could check, not
+    // proof that nothing went out — and `failed` offers Try again, which would
+    // post the same words on Dane's account twice (SC-892). So that site asks
+    // for a hand check here; YouTube and Substack keep `failed` as before.
+    if (adapter.noLinkIsHandCheck === true) {
+      const where = text(adapter.handCheckWords) || 'Check it by hand.';
+      const why = 'OpenClaw said it posted but returned no link to the comment, so the Mini cannot tell whether it went out. '
+        + `It will not be tried again. ${where}`
+        + (attempt.said ? ` OpenClaw said: ${attempt.said}` : '');
+      const res = await adapter.flagForHandCheck(item, { error: why, ...evidence });
+      return { outcome: 'hand-check', why, write: res };
+    }
     const why = 'The browser said it posted but returned no link to the comment, so it is not counted as posted.'
       + (attempt.said ? ` It said: ${attempt.said}` : '');
     const res = await adapter.markFailed(item, { error: why, ...evidence });
