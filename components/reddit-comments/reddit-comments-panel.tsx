@@ -84,6 +84,10 @@ export type RedditItem = {
   updatedAt: string;
   /** 4/4: the Mini could not prove either way whether it posted. */
   needsHandCheck?: boolean;
+  /** SC-893: Dane may mark this row live by hand, with the comment's link. */
+  mayConfirmLive?: boolean;
+  /** SC-893: Dane may mark this row as not posted by hand. */
+  mayMarkNotPosted?: boolean;
   /** 4/4: why an approved comment has not gone out yet, in the worker's words. */
   waitReason?: string;
 };
@@ -430,7 +434,23 @@ function ApprovedCard({ item, busy, error, onReject }: {
   );
 }
 
-function PostedRow({ item }: { item: RedditItem }): React.ReactElement {
+/**
+ * A row on Posted. A row the Mini could not settle offers Dane the two hand
+ * checks (SC-893): "It is live" takes the comment's link and makes it Posted;
+ * "It did not post" makes it Failed. The server checks the link is a comment
+ * on this post and says what is wrong when it is not.
+ */
+function PostedRow({ item, busy, error, onHandCheck }: {
+  item: RedditItem;
+  busy: string;
+  error: string;
+  onHandCheck: (body: { outcome: 'live' | 'not-posted'; link?: string }) => Promise<boolean>;
+}): React.ReactElement {
+  const [confirming, setConfirming] = useState(false);
+  const [link, setLink] = useState('');
+  const linkId = `rc-live-link-${item.id}`;
+  const offersLive = Boolean(item.mayConfirmLive) && item.status !== 'posted';
+  const offersNotPosted = Boolean(item.mayMarkNotPosted) && item.status !== 'posted';
   return (
     <li className="reddit-comments-posted-row" data-item-id={item.id}>
       {item.screenshotUrl ? (
@@ -443,12 +463,48 @@ function PostedRow({ item }: { item: RedditItem }): React.ReactElement {
         <p>{`${subredditLabel(item)} — ${item.postTitle || '(no title)'}`}</p>
         <p className="reddit-comments-text">{item.finalText || item.draftText}</p>
         {item.error ? <p className="reddit-comments-error">{item.error}</p> : null}
+        {confirming ? (
+          <div className="reddit-comments-paste">
+            <p className="reddit-comments-help">
+              Find the comment on Reddit, click its time (like &quot;2h ago&quot;) to open it on its own, then paste that address here.
+            </p>
+            <label className="reddit-comments-label" htmlFor={linkId}>Link to the Comment</label>
+            <input id={linkId} type="text" value={link} onChange={(e) => setLink(e.target.value)} />
+          </div>
+        ) : null}
+        {error ? <p className="reddit-comments-error" role="alert">{error}</p> : null}
         <div className="reddit-comments-actions reddit-comments-actions--start">
           {item.postedUrl ? (
             <a className="btn" href={item.postedUrl} target="_blank" rel="noopener noreferrer">Open the comment</a>
           ) : null}
           {item.targetUrl ? (
             <a className="btn" href={item.targetUrl} target="_blank" rel="noopener noreferrer">Open the post</a>
+          ) : null}
+          {offersLive && !confirming ? (
+            <button type="button" className="btn btn-save" disabled={Boolean(busy)} onClick={() => setConfirming(true)}>It is live</button>
+          ) : null}
+          {offersLive && confirming ? (
+            <>
+              <button
+                type="button"
+                className="btn btn-save"
+                disabled={Boolean(busy) || !link.trim()}
+                onClick={async () => {
+                  if (await onHandCheck({ outcome: 'live', link: withScheme(link) })) {
+                    setConfirming(false);
+                    setLink('');
+                  }
+                }}
+              >
+                {busy === 'hand-check' ? 'Saving…' : 'Save as posted'}
+              </button>
+              <button type="button" className="btn" disabled={Boolean(busy)} onClick={() => { setConfirming(false); setLink(''); }}>Cancel</button>
+            </>
+          ) : null}
+          {offersNotPosted && !confirming ? (
+            <button type="button" className="btn btn-danger" disabled={Boolean(busy)} onClick={() => { void onHandCheck({ outcome: 'not-posted' }); }}>
+              It did not post
+            </button>
           ) : null}
         </div>
       </div>
@@ -610,7 +666,7 @@ export default function RedditCommentsPanel(): React.ReactElement {
   };
 
   /** One row action; the server's refusal is shown on that row, word for word. */
-  const runAction = async (item: RedditItem, what: 'draft' | 'approve' | 'reject' | 'paste' | 'read-again', body?: Record<string, unknown>): Promise<boolean> => {
+  const runAction = async (item: RedditItem, what: 'draft' | 'approve' | 'reject' | 'paste' | 'read-again' | 'hand-check', body?: Record<string, unknown>): Promise<boolean> => {
     const api = getApi();
     if (!api) return false;
     const epoch = projectEpoch.current;
@@ -636,6 +692,10 @@ export default function RedditCommentsPanel(): React.ReactElement {
         setNotice('Saved — the post is in. Click Write with AI on it.');
       } else if (what === 'read-again') {
         setNotice('Asked the Mini to read it again.');
+      } else if (what === 'hand-check') {
+        setNotice(next?.status === 'posted'
+          ? 'Saved as posted, with its link.'
+          : 'Marked as not posted.');
       } else {
         setNotice(rejectNotice('Rejected. It will not be posted.', (reply?.data as { feedback?: DecisionFeedback })?.feedback));
       }
@@ -815,7 +875,15 @@ export default function RedditCommentsPanel(): React.ReactElement {
         <div className="reddit-comments-tabpanel" role="tabpanel" aria-label="Posted">
           {unread ? null : posted.length ? (
             <ul className="reddit-comments-list">
-              {posted.map((item) => <PostedRow key={item.id} item={item} />)}
+              {posted.map((item) => (
+                <PostedRow
+                  key={item.id}
+                  item={item}
+                  busy={busyFor(item)}
+                  error={errorFor(item)}
+                  onHandCheck={(body) => runAction(item, 'hand-check', body)}
+                />
+              ))}
             </ul>
           ) : (
             <p className="reddit-comments-empty">

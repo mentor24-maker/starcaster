@@ -869,3 +869,140 @@ test('reddit: with no lessons the prompt has no lessons heading, and the draft r
     ctx.restore();
   }
 });
+
+// ── Dane's hand check (SC-893) ─────────────────────────────────────────────
+
+const WORKER = { projectId: 'proj_a' };
+const LIVE_LINK = 'https://www.reddit.com/r/Meditation/comments/1abc2de/how_do_you_keep_going/kq1zz9x/';
+
+/** An approved comment the Mini has taken: `posting`, as the worker leaves it. */
+async function postingItem(store) {
+  const item = await draftedItem(store);
+  const approved = await store.approveItem(item.id, {}, SCOPE_A, { canonDocs: CANON });
+  assert.equal(approved.ok, true, approved.error);
+  const taken = await store.markPosting(item.id, WORKER);
+  assert.equal(taken.ok, true, taken.error);
+  return taken.data;
+}
+
+test('SC-893: "It is live" with a link to a comment on this post moves a hand-check row to posted, with the link and who said so', async () => {
+  const { store, restore } = withDb();
+  try {
+    const item = await postingItem(store);
+    assert.equal(item.mayConfirmLive, false, 'a row the Mini is still posting offers no hand check');
+    const early = await store.settleByHand(item.id, { outcome: 'live', link: LIVE_LINK }, SCOPE_A);
+    assert.equal(early.status, 409);
+    assert.match(early.error, /still posting/);
+
+    const flagged = await store.flagForHandCheck(item.id, { error: 'OpenClaw said it posted but its link could not be checked.' }, WORKER);
+    assert.equal(flagged.data.mayConfirmLive, true);
+    assert.equal(flagged.data.mayMarkNotPosted, true);
+    const live = await store.settleByHand(item.id, { outcome: 'live', link: `${LIVE_LINK}?utm_source=share` }, SCOPE_A);
+    assert.equal(live.ok, true, live.error);
+    const back = (await store.getItemById(item.id, SCOPE_A)).data;
+    assert.equal(back.status, 'posted');
+    assert.equal(back.postedUrl, 'https://www.reddit.com/r/Meditation/comments/1abc2de/_/kq1zz9x/');
+    assert.equal(back.error, '');
+    assert.equal(back.postedAt, item.postingStartedAt, 'counted for the pace at when it went out');
+    assert.match(back.postNote, /^Confirmed live by hand by user_1 at .*Before that: OpenClaw said it posted/);
+    assert.equal(back.mayConfirmLive, false);
+
+    const counted = await store.listPostedForLimits(200, WORKER);
+    assert.deepEqual(counted.data.map((r) => r.id), [item.id]);
+    assert.equal((await store.settleByHand(item.id, { outcome: 'not-posted' }, SCOPE_A)).status, 409, 'a posted row offers neither');
+  } finally {
+    restore();
+  }
+});
+
+test('BREAK TEST SC-893: a link to the post, another post, the parent comment, or not Reddit is refused by name and nothing moves', async () => {
+  const { store, restore } = withDb();
+  try {
+    const item = await postingItem(store);
+    await store.flagForHandCheck(item.id, { error: 'could not tell' }, WORKER);
+    const cases = [
+      [POST_URL, /^That link is to the post itself, not to one comment on it/],
+      ['https://www.reddit.com/r/Meditation/comments/9zzz9zz/other/kq1zz9x/', /different Reddit post \(9zzz9zz\), not the one this comment answers \(1abc2de\)/],
+      ['https://example.com/x', /is not a Reddit link/],
+      ['', /^Paste the link to the comment on Reddit first/],
+      ['https://www.reddit.com/r/Polymath/comments/1abc2de/comment/19suoxdhc0q3n/', /post itself/],
+    ];
+    for (const [link, why] of cases) {
+      const refused = await store.settleByHand(item.id, { outcome: 'live', link }, SCOPE_A);
+      assert.equal(refused.ok, false, link);
+      assert.match(refused.error, why, link);
+    }
+    assert.equal((await store.getItemById(item.id, SCOPE_A)).data.status, 'posting');
+    assert.match((await store.settleByHand(item.id, { outcome: 'maybe' }, SCOPE_A)).error, /outcome must be one of live, not-posted/);
+    assert.equal((await store.settleByHand(item.id, { outcome: 'live', link: LIVE_LINK }, SCOPE_B)).status, 404, 'another project cannot reach it');
+  } finally {
+    restore();
+  }
+});
+
+test('SC-893: a reply\'s hand check refuses the link to the comment it replies to', async () => {
+  const { store, restore } = withDb();
+  try {
+    const item = await postingItem(store);
+    const patched = await store.moveIfStatus(item, { parent_comment_id: 'kx9yz12' }, SCOPE_A);
+    assert.equal(patched.ok, true, patched.error);
+    await store.flagForHandCheck(item.id, { error: 'could not tell' }, WORKER);
+    const refused = await store.settleByHand(item.id, { outcome: 'live', link: COMMENT_URL }, SCOPE_A);
+    assert.match(refused.error, /the comment being replied to, not to the reply/);
+  } finally {
+    restore();
+  }
+});
+
+test('SC-893: "It did not post" moves a hand-check row to failed, which can still be put right with a link', async () => {
+  const { store, restore } = withDb();
+  try {
+    const item = await postingItem(store);
+    await store.flagForHandCheck(item.id, { error: 'could not tell', url: 'https://www.reddit.com/r/Meditation/comments/1abc2de/' }, WORKER);
+    const failed = await store.settleByHand(item.id, { outcome: 'not-posted' }, SCOPE_A);
+    assert.equal(failed.ok, true, failed.error);
+    assert.equal(failed.data.status, 'failed');
+    assert.equal(failed.data.error, 'Checked by hand: it did not post.');
+    assert.equal(failed.data.postedUrl, '');
+    assert.match(failed.data.postNote, /^Marked not posted by hand by user_1/);
+    assert.equal(failed.data.mayMarkNotPosted, false);
+    assert.equal(failed.data.mayConfirmLive, true);
+    assert.equal(STATUS_OK(store, 'failed', 'approved'), true, 'Try again is still a move from failed');
+    const live = await store.settleByHand(item.id, { outcome: 'live', link: LIVE_LINK }, SCOPE_A);
+    assert.equal(live.data.status, 'posted');
+  } finally {
+    restore();
+  }
+});
+
+function STATUS_OK(store, from, to) {
+  return store.STATUS_MOVES[from].includes(to);
+}
+
+test('SC-893: a row that failed after OpenClaw said it posted (the 287f4ecf case) can be marked live; one the browser said never went cannot', async () => {
+  const { store, restore } = withDb();
+  try {
+    const refuted = await postingItem(store);
+    await store.markFailed(refuted.id, {
+      error: 'The link OpenClaw returned is not a link to a Reddit comment: it is a link to the post, not to one comment on it.',
+      url: 'https://www.reddit.com/r/Polymath/comments/1abc2de/comment/19suoxdhc0q3n/',
+    }, WORKER);
+    const before = (await store.getItemById(refuted.id, SCOPE_A)).data;
+    assert.equal(before.mayConfirmLive, true);
+    assert.equal(before.mayMarkNotPosted, false);
+    assert.equal((await store.settleByHand(refuted.id, { outcome: 'not-posted' }, SCOPE_A)).status, 409);
+    const live = await store.settleByHand(refuted.id, { outcome: 'live', link: LIVE_LINK }, SCOPE_A);
+    assert.equal(live.ok, true, live.error);
+    assert.equal(live.data.status, 'posted');
+    assert.match(live.data.postNote, /Before that: The link OpenClaw returned is not a link/);
+
+    const never = await postingItem(store);
+    await store.markFailed(never.id, { error: 'Reddit said the thread is locked.' }, WORKER);
+    const refused = await store.settleByHand(never.id, { outcome: 'live', link: LIVE_LINK }, SCOPE_A);
+    assert.equal(refused.status, 409);
+    assert.match(refused.error, /browser said this one did not post/);
+    assert.equal((await store.getItemById(never.id, SCOPE_A)).data.status, 'failed');
+  } finally {
+    restore();
+  }
+});
