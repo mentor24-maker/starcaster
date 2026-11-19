@@ -21,9 +21,11 @@ const { execFileSync } = require('node:child_process');
  * ClickUp API call — exercising them for real needs a throwaway repo AND a
  * throwaway ClickUp task, so the git-plumbing and script-wiring properties
  * are source-level assertions here (same reasoning as shipThread.test.js's
- * force-push guard), while `isTaskOpen`'s exit-code contract — the one
+ * force-push guard), while `isTaskOpen`'s three-way reading — the one
  * property where getting it wrong means silently deleting someone's
- * unshipped work — is driven for real against a scripted fake `npm`.
+ * unshipped work — is driven for real against a scripted fake `npm` that,
+ * like the real ticket door, answers ONLY `get` (SC-875: the old check asked
+ * a door command that no longer exists, and every ticket read as closed).
  */
 
 const NEW_THREAD = path.join(__dirname, '..', 'new_thread.cjs');
@@ -48,24 +50,21 @@ test('a thread cannot be created without a task id', () => {
   assert.match(newThreadCode, /if \(!taskId/, 'a missing task id must be rejected');
 });
 
-test('the task is confirmed open BEFORE any worktree is created', () => {
-  const taskCheckIndex = newThreadCode.indexOf('task-open');
+test('the ticket is confirmed open BEFORE any worktree is created', () => {
+  const taskCheckIndex = newThreadCode.indexOf('readTicketOpenState(taskId)');
   const worktreeAddIndex = newThreadCode.indexOf("'worktree', 'add'");
-  assert.ok(taskCheckIndex > -1, 'must call the task-open command');
+  assert.ok(taskCheckIndex > -1, 'must read the ticket through the shared reading');
   assert.ok(worktreeAddIndex > -1, 'must create the worktree');
-  assert.ok(taskCheckIndex < worktreeAddIndex, 'the task check must run before git worktree add, not after');
+  assert.ok(taskCheckIndex < worktreeAddIndex, 'the ticket check must run before git worktree add, not after');
 });
 
-test('a closed/unopenable task refuses to create the thread', () => {
-  // The task-open check throws (non-zero exit) on anything but a confirmed
-  // "open" — that failure must exit the script, not fall through and build
-  // the worktree anyway.
+test('anything but a confirmed open ticket stops the script before the worktree', () => {
   const checkBlock = newThreadCode.slice(
-    newThreadCode.indexOf('task-open'),
+    newThreadCode.indexOf('readTicketOpenState(taskId)'),
     newThreadCode.indexOf("'worktree', 'add'")
   );
-  assert.match(checkBlock, /catch/, 'the task-open call must be guarded');
-  assert.match(checkBlock, /process\.exit\(1\)/, 'a failed check must stop the script');
+  assert.match(checkBlock, /state === 'closed'[\s\S]*process\.exit\(1\)/, 'a closed ticket must stop the script');
+  assert.match(checkBlock, /state !== 'open'[\s\S]*process\.exit\(2\)/, 'a could-not-tell must stop it too, with its own code');
 });
 
 test('the task id is stamped onto the branch AFTER the worktree exists, before anything else', () => {
@@ -179,13 +178,26 @@ test('isTaskOpen is exported and reads a real git config value end to end', () =
   }
 });
 
-/** A fake `npm` on PATH, so isTaskOpen's exit-code handling is driven for
- *  real without touching the network or a real ClickUp task. */
-function withFakeNpmExitCode(code, fn, stdout = '') {
+/** A fake `npm` on PATH that behaves like the real ticket door: it answers
+ *  `get --task <id>` with `stdout` and `code`, and refuses every other
+ *  command with usage text and exit 1. So a caller that asks a command the
+ *  door does not have reads as unknown here, exactly as it would for real. */
+function withFakeDoor({ code = 0, stdout = '', stderr = '' }, fn) {
   const dir = fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'fake-npm-'));
   const fakeNpm = path.join(dir, 'npm');
-  const emit = stdout ? `printf '%s' ${JSON.stringify(stdout)}\n` : '';
-  fs.writeFileSync(fakeNpm, `#!/bin/sh\n${emit}exit ${code}\n`, { mode: 0o755 });
+  fs.writeFileSync(path.join(dir, 'out'), stdout);
+  fs.writeFileSync(path.join(dir, 'err'), stderr);
+  fs.writeFileSync(fakeNpm, [
+    '#!/bin/sh',
+    'for a in "$@"; do if [ "$a" = "get" ]; then',
+    `  cat '${dir}/out'`,
+    `  cat '${dir}/err' >&2`,
+    `  exit ${code}`,
+    'fi; done',
+    "echo 'usage: clickup.mjs <command> ...' >&2",
+    'exit 1',
+    '',
+  ].join('\n'), { mode: 0o755 });
   const previousPath = process.env.PATH;
   process.env.PATH = `${dir}:${previousPath}`;
   try {
@@ -196,65 +208,99 @@ function withFakeNpmExitCode(code, fn, stdout = '') {
   }
 }
 
-test('isTaskOpen: exit 0 (confirmed open) reads as open', () => {
+const ticket = (id, status, ended) =>
+  `> starcaster@1.0.0 clickup\n\nid:       ${id}\nname:     A ticket\nstatus:   ${status}\nended:    ${ended}\nurl:      http://127.0.0.1:4180/tickets/${id}\n---\n`;
+
+function freshIsTaskOpen() {
   delete require.cache[REPO_STATE];
-  const { isTaskOpen } = require(REPO_STATE);
-  withFakeNpmExitCode(0, () => {
-    assert.equal(isTaskOpen('some-task'), 'open');
+  return require(REPO_STATE).isTaskOpen;
+}
+
+test('isTaskOpen: an open ticket reads as open', () => {
+  const isTaskOpen = freshIsTaskOpen();
+  withFakeDoor({ stdout: ticket('SC-1', 'building', '(still open)') }, () => {
+    assert.equal(isTaskOpen('SC-1'), 'open');
   });
 });
 
-test('isTaskOpen: exit 1 WITH the "open: false" marker reads as closed — the ONLY thing that authorizes a delete', () => {
-  delete require.cache[REPO_STATE];
-  const { isTaskOpen } = require(REPO_STATE);
-  withFakeNpmExitCode(1, () => {
-    assert.equal(isTaskOpen('some-task'), 'closed');
-  }, 'task:   x\nstatus: Live\ntype:   closed\nopen:   false\n');
-});
-
-test('BLOCKER: exit 1 WITHOUT the marker (npm/doppler own failure, offline) reads as UNKNOWN, never closed', () => {
-  // The hazard: `npm run`, `doppler`, or a rejected fetch all exit 1 on their
-  // OWN failure before the check confirms anything. Collapsing that into
-  // "closed" would let `npm run tidy` on an offline machine delete every
-  // stamped unshipped branch. Only the command's positive marker means closed.
-  delete require.cache[REPO_STATE];
-  const { isTaskOpen } = require(REPO_STATE);
-  withFakeNpmExitCode(1, () => {
-    assert.equal(isTaskOpen('some-task'), 'unknown');
-  }); // no stdout — a bare exit 1
-});
-
-test('isTaskOpen: exit 1 with UNRELATED stdout (no marker) is still unknown', () => {
-  delete require.cache[REPO_STATE];
-  const { isTaskOpen } = require(REPO_STATE);
-  withFakeNpmExitCode(1, () => {
-    assert.equal(isTaskOpen('some-task'), 'unknown');
-  }, 'npm ERR! something unrelated failed\n');
-});
-
-test('isTaskOpen: exit 3 (could not tell — network/auth/rate-limit) reads as unknown, NEVER closed', () => {
-  delete require.cache[REPO_STATE];
-  const { isTaskOpen } = require(REPO_STATE);
-  withFakeNpmExitCode(3, () => {
-    assert.equal(isTaskOpen('some-task'), 'unknown');
+test('isTaskOpen: a Live ticket reads as closed — the ONLY thing (with an ended ticket) that authorizes a delete', () => {
+  const isTaskOpen = freshIsTaskOpen();
+  withFakeDoor({ stdout: ticket('SC-1', 'live', '(none)') }, () => {
+    assert.equal(isTaskOpen('SC-1'), 'closed');
   });
 });
 
-test('isTaskOpen: an unexpected exit code (not 0, 1, or 3) fails toward unknown, never toward closed', () => {
-  delete require.cache[REPO_STATE];
-  const { isTaskOpen } = require(REPO_STATE);
-  withFakeNpmExitCode(17, () => {
-    assert.equal(isTaskOpen('some-task'), 'unknown');
+test('isTaskOpen: a ticket with an outcome on its ended: line reads as closed', () => {
+  const isTaskOpen = freshIsTaskOpen();
+  withFakeDoor({ stdout: ticket('SC-1', 'queued', 'wont-do') }, () => {
+    assert.equal(isTaskOpen('SC-1'), 'closed');
   });
 });
 
-test('isTaskOpen: no stamp at all is unknown, and never even asks the network', () => {
-  delete require.cache[REPO_STATE];
-  const { isTaskOpen } = require(REPO_STATE);
-  // No fake npm on PATH at all — if this called out, it would throw ENOENT
-  // (a real crash) rather than quietly returning 'unknown'.
+test('BLOCKER: a ticket the tracker does not know (404) is UNKNOWN, never closed', () => {
+  // A typo'd id, or an old ClickUp-era stamp: deleting unshipped work on that
+  // would be the worst possible reading of "I have never heard of it".
+  const isTaskOpen = freshIsTaskOpen();
+  withFakeDoor({ code: 1, stderr: 'read the task FAILED — HTTP 404\nno ticket SC-99999.\n' }, () => {
+    assert.equal(isTaskOpen('SC-99999'), 'unknown');
+  });
+});
+
+test('BLOCKER: a bare exit 1 (npm/doppler own failure, offline) reads as UNKNOWN, never closed', () => {
+  const isTaskOpen = freshIsTaskOpen();
+  withFakeDoor({ code: 1 }, () => {
+    assert.equal(isTaskOpen('SC-1'), 'unknown');
+  });
+});
+
+test('isTaskOpen: an unexpected exit code fails toward unknown, never toward closed', () => {
+  const isTaskOpen = freshIsTaskOpen();
+  withFakeDoor({ code: 17, stdout: ticket('SC-1', 'live', '(none)') }, () => {
+    assert.equal(isTaskOpen('SC-1'), 'unknown');
+  });
+});
+
+test('isTaskOpen: an answer about a DIFFERENT ticket is unknown, even when that one is Live', () => {
+  const isTaskOpen = freshIsTaskOpen();
+  withFakeDoor({ stdout: ticket('SC-33', 'live', '(none)') }, () => {
+    assert.equal(isTaskOpen('86bbggvud'), 'unknown');
+  });
+});
+
+test('isTaskOpen: no stamp at all is unknown, and never even asks the tracker', () => {
+  const isTaskOpen = freshIsTaskOpen();
+  // No fake npm on PATH at all — if this called out, it would reach the real
+  // door; an empty id must return before that.
   assert.equal(isTaskOpen(''), 'unknown');
   assert.equal(isTaskOpen(null), 'unknown');
+});
+
+// ── new_thread.cjs, run for real: it stops BEFORE git is touched, so a closed
+//    or unreadable ticket can be driven end to end without making anything ─
+
+function runNewThread(door) {
+  return withFakeDoor(door, () => {
+    const { spawnSync } = require('node:child_process');
+    return spawnSync(process.execPath, [NEW_THREAD, `tct-never-made-${process.pid}`, 'SC-1'], {
+      encoding: 'utf8',
+      env: process.env,
+    });
+  });
+}
+
+test('npm run thread on a Live ticket refuses with "not open" and exit 1', () => {
+  const res = runNewThread({ stdout: ticket('SC-1', 'live', '(none)') });
+  assert.equal(res.status, 1, res.stderr);
+  assert.match(res.stderr, /Ticket SC-1 is not open/);
+  assert.match(res.stderr, /nothing was created/);
+});
+
+test('npm run thread on a ticket it cannot read says COULD NOT READ, names the reason, exit 2 — never "not open"', () => {
+  const res = runNewThread({ code: 1, stderr: 'read the task FAILED — HTTP 404\nno ticket SC-1.\n' });
+  assert.equal(res.status, 2, res.stderr);
+  assert.match(res.stderr, /Could not read ticket SC-1 from the tracker/);
+  assert.match(res.stderr, /HTTP 404/, 'the reason is named');
+  assert.doesNotMatch(res.stderr, /is not open/);
 });
 
 // ── clickup_direct.mjs: the three-way exit-code contract itself ─────────────
