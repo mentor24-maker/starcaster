@@ -19,7 +19,7 @@ const path = require('node:path');
 
 const { openQueue } = require('../../workers/studio/queue.js');
 const {
-  runRecut, enqueueRecut, watchSentBack, capReason, STAGE_RECUT, STAGE_RECUT_WATCH, ALARM_JOB,
+  runRecut, enqueueRecut, watchSentBack, capReason, cardReason, CARD_REASON_MAX, STAGE_RECUT, STAGE_RECUT_WATCH, ALARM_JOB,
 } = require('../../workers/studio/recutPass.js');
 const {
   checkRecut, buildRecutPrompt, spokenStretches, parseRecutAnswer, recutFromNote, MAX_RECUTS, FEATURE,
@@ -34,6 +34,8 @@ const PROJECT = 'proj_studio';
 const OWNER = 'recut-test';
 const SRC = 'aaaaaaaa-0000-4000-8000-000000000001';
 const EDIT = 'e1000000-0000-4000-8000-000000000001';
+const OTHER = 'bbbbbbbb-0000-4000-8000-000000000002';
+const THIRD = 'cccccccc-0000-4000-8000-000000000003';
 const GB = 1024 ** 3;
 
 /** A 60-second recording: a word every half second, with a 4-second pause at 10-14 s. */
@@ -78,28 +80,37 @@ function tmp(t) {
   return dir;
 }
 
-function setup(t, { recutCount = 0, note = 'start two seconds later', reply = REPLY.startLater } = {}) {
+function setup(t, {
+  recutCount = 0, note = 'start two seconds later', reply = REPLY.startLater,
+  kind = 'full', momentIndex = null, audioSourceId = null, pairs = [], moments = [],
+} = {}) {
   const dir = tmp(t);
   const queue = openQueue(path.join(dir, 'queue.sqlite'), { clock: () => Date.parse('2026-11-19T17:00:00Z') });
   t.after(() => queue.close());
   const derivedDir = path.join(dir, 'derived');
   const proxy = path.join(dir, 'proxy.mp4');
   fs.writeFileSync(proxy, 'picture');
+  const otherProxy = path.join(dir, 'other.mp4');
+  fs.writeFileSync(otherProxy, 'sound');
+  const sources = {
+    [SRC]: { id: SRC, durationS: 60, fps: 30, proxyPath: proxy, localPath: '/cache/IMG_1962.MOV' },
+    [OTHER]: { id: OTHER, durationS: 60, fps: 30, proxyPath: otherProxy, localPath: '/cache/ZOOM0001.WAV' },
+  };
   const edit = {
-    id: EDIT, sourceId: SRC, kind: 'full', momentIndex: null, keepRanges: FIRST_CUT.map((r) => ({ ...r })),
-    audioSourceId: null, status: 'sent_back', roughCutDriveFileId: 'drive-old', daneNote: note,
+    id: EDIT, sourceId: SRC, kind, momentIndex, keepRanges: FIRST_CUT.map((r) => ({ ...r })),
+    audioSourceId, status: 'sent_back', roughCutDriveFileId: 'drive-old', daneNote: note,
     recutCount, error: '', updatedAt: '2026-11-19T16:59:00Z',
   };
   const edits = [edit];
   const catalog = {
     edits,
-    getSourceById: async (id) => (id === SRC
-      ? { ok: true, status: 200, data: { id: SRC, durationS: 60, fps: 30, proxyPath: proxy, localPath: '/cache/IMG_1962.MOV' } }
+    getSourceById: async (id) => (sources[id]
+      ? { ok: true, status: 200, data: { ...sources[id] } }
       : { ok: false, status: 404, error: 'Source not found' }),
     getTranscriptBySource: async () => ({ ok: true, status: 200, data: { state: 'done', words: REC.words } }),
     getCutMarksBySource: async () => ({ ok: true, status: 200, data: { state: 'done', marks: REC.marks, durationS: 60 } }),
-    getMomentsBySource: async () => ({ ok: true, status: 200, data: { status: 'done', moments: [] } }),
-    listAudioPairsForSource: async () => ({ ok: true, status: 200, data: [] }),
+    getMomentsBySource: async () => ({ ok: true, status: 200, data: { status: 'done', moments } }),
+    listAudioPairsForSource: async () => ({ ok: true, status: 200, data: pairs }),
     listEditsForSource: async () => ({ ok: true, status: 200, data: edits.map((e) => ({ ...e })) }),
     listEditsByStatus: async (limit, statuses) => ({ ok: true, status: 200, data: edits.filter((e) => statuses.includes(e.status)).map((e) => ({ ...e })) }),
     createEdit: async () => ({ ok: false, status: 409, error: 'duplicate key' }),
@@ -111,6 +122,10 @@ function setup(t, { recutCount = 0, note = 'start two seconds later', reply = RE
       if (refused) return refused;
       const handBack = e.status === 'sent_back' && to === 'review';
       if ((to === 'failed' || handBack) && !patch.error) return { ok: false, status: 400, error: 'error is required' };
+      // The store's length rule (reelSpinnerInput optionalText, 2000).
+      if (patch.error && String(patch.error).trim().length > 2000) {
+        return { ok: false, status: 400, error: `error must be 2000 characters or fewer (got ${String(patch.error).trim().length})` };
+      }
       if (e.status === 'sent_back' && to === 'rendering') e.recutCount += 1;
       e.status = to;
       e.error = to === 'failed' || handBack ? patch.error : '';
@@ -163,7 +178,7 @@ function setup(t, { recutCount = 0, note = 'start two seconds later', reply = RE
   };
   enqueueRecut(queue, { editId: EDIT });
   const run = () => runRecut(options);
-  return { queue, catalog, drive, ffmpeg, ffmpegCalls, asked, alarms, run, edit: () => edits[0] };
+  return { queue, catalog, drive, ffmpeg, ffmpegCalls, asked, alarms, run, options, edit: () => edits[0] };
 }
 
 const renders = (calls) => calls.filter((a) => !a.includes('-version'));
@@ -256,6 +271,84 @@ test('three re-cuts in a row, then the fourth send-back stops', async (t) => {
   assert.equal(fourth.handedBack[0].outcome, 'stopped', JSON.stringify(fourth));
   assert.equal(s.edit().error, capReason(3));
   assert.equal(n, 3, 'the AI was asked three times, never a fourth');
+});
+
+// ── Review round 1 (SC-836): reasons that cannot fit, line-ups, Drive names ──
+
+test('an AI reason too long for the card is shortened to fit, and the AI is paid once, not on every retry', async (t) => {
+  const long = `the note ${'cannot be done because '.repeat(110)}end`;
+  assert.ok(long.length > 2400);
+  const s = setup(t, { reply: { ...REPLY.cannot, json: { cannot: long } } });
+  const first = await s.run();
+  assert.equal(first.handedBack.length, 1, JSON.stringify(first));
+  const e = s.edit();
+  assert.equal(e.status, 'review');
+  assert.ok(e.error.length <= CARD_REASON_MAX, `the card's reason fits (${e.error.length})`);
+  assert.match(e.error, /^could not re-cut from your note: the AI says the note cannot be done/);
+  assert.match(e.error, /…$/, 'and says it was shortened');
+  const again = await s.run();
+  assert.equal(again.handedBack.length + again.released.length + again.failed.length, 0, 'nothing is left to retry');
+  assert.equal(s.asked.length, 1, 'one AI call, not several');
+});
+
+test('a hand-back the catalog refuses with a 400 blocks the job with the reason instead of retrying it', async (t) => {
+  const s = setup(t, { reply: REPLY.cannot });
+  const real = s.catalog.moveEdit;
+  s.catalog.moveEdit = async (id, to, patch) => (to === 'review'
+    ? { ok: false, status: 400, error: 'error must be text' }
+    : real(id, to, patch));
+  const report = await s.run();
+  assert.equal(report.blocked.length, 1, JSON.stringify(report));
+  assert.match(report.blocked[0].reason, /catalog refused it: error must be text/);
+  assert.match(report.blocked[0].reason, /the note asks for music/);
+  assert.equal(s.queue.listJobs({ stage: STAGE_RECUT })[0].state, 'blocked');
+  assert.equal(s.edit().status, 'sent_back');
+  // The watcher shows the block instead of queueing the edit again.
+  const watch = await watchSentBack({ queue: s.queue, env: { STUDIO_PROJECT_ID: PROJECT }, catalog: s.catalog });
+  assert.equal(watch.processed.length, 0);
+  assert.match(watch.skipped[0].why, /is blocked/);
+});
+
+test('cardReason leaves a short reason alone and cuts a long one at a word', () => {
+  assert.equal(cardReason('  fine  '), 'fine');
+  const cut = cardReason('word '.repeat(1000));
+  assert.ok(cut.length <= 2000);
+  assert.match(cut, /word…$/);
+});
+
+test('the line-up checked is the one the render uses: this recording with the sound\'s, not the sound with a third', async (t) => {
+  const pairs = [
+    // Listed first, so "any line-up the sound is part of" picks it.
+    { sourceAId: OTHER, sourceBId: THIRD, status: 'done', offsetS: 30, audioSourceId: OTHER },
+    { sourceAId: SRC, sourceBId: OTHER, status: 'done', offsetS: 0, audioSourceId: OTHER },
+  ];
+  const s = setup(t, { audioSourceId: OTHER, pairs });
+  const report = await s.run();
+  assert.equal(report.recut.length, 1, JSON.stringify(report));
+  assert.equal(s.edit().audioSourceId, OTHER, 'the re-cut keeps the other recording\'s sound');
+  const render = renders(s.ffmpegCalls)[0];
+  assert.ok(render.some((a) => String(a).endsWith('other.mp4')), 'and the render is given that sound');
+});
+
+test('a re-cut short is named on Drive with its moment, the same name the rough-cut retry would use', async (t) => {
+  const moments = [{ start_s: 0, end_s: 30, score: 7 }, { start_s: 2, end_s: 60, score: 9 }];
+  const s = setup(t, { kind: 'short', momentIndex: 1, moments });
+  const report = await s.run();
+  assert.equal(report.recut.length, 1, JSON.stringify(report));
+  const { driveFileName } = require('../../workers/studio/roughCutPass.js');
+  const expected = driveFileName({ id: SRC, localPath: '/cache/IMG_1962.MOV' }, { ...s.edit() }, moments[1]);
+  assert.equal(s.drive.files[0].name, expected);
+  assert.match(s.drive.files[0].name, /short from 0m02s, score 9/);
+});
+
+test('an error thrown after the AI was paid hands the edit back with the reason, and the AI is not paid again', async (t) => {
+  const s = setup(t);
+  const report = await runRecut({ ...s.options, freeBytes: () => { throw new Error('statfs exploded'); } });
+  assert.equal(report.handedBack.length, 1, JSON.stringify(report));
+  assert.match(s.edit().error, /getting the render ready failed \(statfs exploded\)/);
+  assert.equal(s.edit().status, 'review');
+  await s.run();
+  assert.equal(s.asked.length, 1);
 });
 
 // ── The machine's faults are not the edit's ─────────────────────────────────

@@ -15,3 +15,12 @@ says so, so it can never loop and keep spending on AI calls. If the problem
 is the machine (no AI credit, a full disk, ffmpeg missing), nothing changes
 on the card. The Mini waits and tries again, and it checks all of that
 before paying for an answer.
+
+Review round 1 closed three gaps. A reason too long for the card (over
+2,000 characters) used to be refused by the database and retried forever,
+paying for an AI answer every fifteen minutes; now it is shortened to fit,
+and a refusal that can never succeed stops the job with the reason instead.
+When a video uses the sound from a second recording, the check now uses the
+same pairing the render uses. And a re-cut short is named on Drive the same
+way the first cut names it, so a retry finds it instead of uploading a
+second copy.

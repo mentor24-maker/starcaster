@@ -88,6 +88,24 @@ function realCatalog() {
   };
 }
 
+/**
+ * The longest reason the card can carry. The store refuses an `error` over
+ * 2000 characters with a 400 (videoEditsStore moveEdit), and a refusal that
+ * can never succeed must not be retried: an over-long AI sentence used to be
+ * released, re-paid for and refused again every fifteen minutes (SC-836
+ * review). Every reason written on an edit goes through `cardReason`.
+ */
+const CARD_REASON_MAX = 2000;
+
+/** A reason that always fits on the card: cut at a word with an ellipsis when it would not. */
+function cardReason(why, max = CARD_REASON_MAX) {
+  const said = text(why);
+  if (said.length <= max) return said;
+  const room = said.slice(0, max - 1);
+  const atWord = room.lastIndexOf(' ');
+  return `${(atWord > max * 0.8 ? room.slice(0, atWord) : room).trimEnd()}…`;
+}
+
 /** The sentence on the card when the cap is reached. Kept here so the tests and the card agree. */
 function capReason(count) {
   return `re-cut ${count} times; tell an agent session what is still wrong`;
@@ -148,7 +166,7 @@ async function watchSentBack({ queue, env = process.env, options = {}, catalog =
   if (!scope) return { ok: true, processed: [], skipped: [], failed: [], notConfigured: 'STUDIO_PROJECT_ID is not set' };
   const sent = await catalog.listEditsByStatus(WATCH_LIMIT, ['sent_back'], scope);
   if (!sent.ok) return { ok: false, processed: [], skipped: [], failed: [], error: `sent-back edits could not be read: ${sent.error}` };
-  const jobs = queue.listJobs({ stage: STAGE_RECUT });
+  const jobs = queue.listJobs({ stage: STAGE_RECUT, state: 'blocked' });
   const processed = [];
   const skipped = [];
   for (const edit of sent.data) {
@@ -227,10 +245,17 @@ async function recutJob({
   base.beforeS = beforeS;
 
   /** Back to review, unchanged, with the reason on the card. */
-  const handBack = async (outcome, why) => {
+  const handBack = async (outcome, said) => {
+    const why = cardReason(said);
     const moved = await catalog.moveEdit(edit.id, 'review', { error: why }, scope);
     if (!moved.ok) {
       if (moved.status === 409) return completeIt('moved_on', `edit ${edit.id} moved while this ran: ${moved.error}`);
+      // A 400 is the store refusing what was sent; sending it again cannot
+      // succeed, so the job stops with the reason rather than looping.
+      if (moved.status === 400) {
+        return blockIt(`edit ${edit.id} could not be handed back to review, because the catalog refused it: ${moved.error}. `
+          + `The reason it was going back with: ${why}. Fix: report it; the edit is still sent back.`);
+      }
       return releaseIt(`edit ${edit.id} could not be handed back to review (${why}): ${moved.error}`);
     }
     const back = await catalog.getEditById(edit.id, scope);
@@ -262,6 +287,16 @@ async function recutJob({
   const pairsRes = await catalog.listAudioPairsForSource(sourceId, scope);
   if (!pairsRes.ok) return releaseIt(`the line-ups of source ${sourceId} could not be read: ${pairsRes.error}`);
   const pairs = pairsRes.data;
+  // A short's Drive name carries its moment, the same way the rough-cut pass
+  // names it, so a retry of a failed re-cut finds this upload instead of
+  // making a second copy. Read now, before the AI is paid.
+  let moment = null;
+  if (edit.kind === 'short') {
+    const moments = await catalog.getMomentsBySource(sourceId, scope);
+    if (!moments.ok) return releaseIt(`the moments of source ${sourceId} could not be read: ${moments.error}`);
+    const list = moments.data && Array.isArray(moments.data.moments) ? moments.data.moments : [];
+    moment = list[edit.momentIndex] || null;
+  }
   const ownSound = !text(edit.audioSourceId) || text(edit.audioSourceId).toLowerCase() === sourceId.toLowerCase();
   let pair = null;
   let otherDurationS;
@@ -275,8 +310,15 @@ async function recutJob({
       return blockIt(`edit ${edit.id} uses the sound of recording ${edit.audioSourceId}, whose working copy is not on this disk `
         + `(${soundPath || 'no proxy path'}). Fix: re-run that recording's proxy step, then delete this blocked job.`);
     }
+    // The same rule rough.soundShift uses for the render: the line-up of THIS
+    // recording with the sound's, never any line-up the sound is part of.
+    const own = sourceId.toLowerCase();
     const aud = text(edit.audioSourceId).toLowerCase();
-    pair = pairs.find((p) => [text(p.sourceAId).toLowerCase(), text(p.sourceBId).toLowerCase()].includes(aud)) || null;
+    pair = pairs.find((p) => {
+      const a = text(p.sourceAId).toLowerCase();
+      const b = text(p.sourceBId).toLowerCase();
+      return (a === own && b === aud) || (b === own && a === aud);
+    }) || null;
   }
 
   const ffmpegCheck = ffmpeg(['-hide_banner', '-version'], { timeoutMs: 30 * 1000 });
@@ -318,15 +360,29 @@ async function recutJob({
   if (answer.state === 'refused') return handBack('handed_back', `could not re-cut from your note: ${answer.reason}`);
 
   // A valid new edit. Room on the disk first: a full disk is the machine's.
+  // The AI is paid for now, so anything that THROWS from here to the move
+  // hands the edit back with the reason, rather than going to queue.fail,
+  // whose retries would pay the AI again and end on a card with no reason.
   const ranges = answer.ranges;
   const keptS = rough.keptSeconds(ranges);
   const newAudio = answer.audioSourceId;
   if (newAudio && newAudio.toLowerCase() !== text(edit.audioSourceId).toLowerCase()) soundPath = picturePath; // fell back to its own sound
-  const shift = rough.soundShift(sourceId, newAudio, pairs);
+  let shift;
+  let paths;
+  let kept;
+  let free = null;
+  try {
+    shift = rough.soundShift(sourceId, newAudio, pairs);
+    if (shift.ok) {
+      paths = rough.localPathsFor(derivedDir, edit.id);
+      kept = rough.keptRender(paths, rough.renderFingerprint({ ranges, shiftS: shift.shiftS, picturePath, soundPath }), io);
+      if (!kept) free = freeBytes(derivedDir);
+    }
+  } catch (err) {
+    return handBack('handed_back', `could not re-cut from your note: getting the render ready failed (${err.message}). Send it back again to try once more.`);
+  }
   if (!shift.ok) return handBack('handed_back', `could not re-cut from your note: ${shift.why}`);
-  const paths = rough.localPathsFor(derivedDir, edit.id);
-  if (!rough.keptRender(paths, rough.renderFingerprint({ ranges, shiftS: shift.shiftS, picturePath, soundPath }), io)) {
-    const free = freeBytes(derivedDir);
+  if (!kept) {
     if (!free || !free.ok) return releaseIt(`the free space where rough cuts are rendered (${derivedDir}) could not be read: ${free && free.error}`);
     const need = rough.estimateBytes(keptS) + rough.DISK_MARGIN_BYTES;
     if (free.value < need) {
@@ -350,7 +406,7 @@ async function recutJob({
   Object.assign(base, { afterS: round(keptS), recutCount: recut.recutCount, changed: answer.changed, notes: answer.notes });
 
   const failAndRetry = async (why) => {
-    const failed = await catalog.moveEdit(edit.id, 'failed', { error: why }, scope);
+    const failed = await catalog.moveEdit(edit.id, 'failed', { error: cardReason(why) }, scope);
     const queued = rough.enqueueRoughCut(queue, { sourceId, why: `re-render the re-cut of edit ${edit.id}` });
     const note = failed.ok ? '' : ` (and the failure could not be written on the edit: ${failed.error})`;
     return completeIt('failed', `${why}${note}. Its new ranges are saved; rough-cut job ${queued.job.id} renders it again.`);
@@ -361,7 +417,7 @@ async function recutJob({
     if (rendered.machine) return failAndRetry('ffmpeg went missing mid-run; it will be rendered again');
     return failAndRetry(`ffmpeg could not render the re-cut: ${rendered.why}`);
   }
-  const name = rough.driveFileName(source, recut, null);
+  const name = rough.driveFileName(source, recut, edit.kind === 'short' ? moment : null);
   const uploaded = await rough.uploadRender({ drive, queue, env, file: paths.video, bytes: rendered.bytes, name });
   if (!uploaded.ok) return failAndRetry(`re-cut rendered, but not uploaded: ${uploaded.error}. The render is kept at ${paths.video}`);
 
@@ -411,6 +467,8 @@ module.exports = {
   enqueueRecut,
   watchSentBack,
   capReason,
+  cardReason,
+  CARD_REASON_MAX,
   machineReason,
   STAGE_RECUT,
   STAGE_RECUT_WATCH,

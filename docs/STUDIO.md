@@ -658,6 +658,9 @@ and uploads exactly the way a first rough cut does, and goes back to
   such as adding music, or its answer broke a rule). The rough cut and the
   edit are exactly the ones he sent back. This does not count as a re-cut;
   send it back with a different note to try again.
+  A reason longer than the card holds (2,000 characters) is cut at a word and
+  ends in "…", so it always fits: a reason the catalog refused would otherwise
+  be retried, and the AI paid again, every fifteen minutes.
 - **Re-cut 3 times; tell an agent session what is still wrong**
   — after three re-cuts of one edit the Mini stops rather than looping, and
   every later send-back of that edit gets the same answer without paying for
@@ -673,6 +676,8 @@ and uploads exactly the way a first rough cut does, and goes back to
   machine problem never wastes an answer.
 - **No working copy on the Mini**: the job is blocked with the fix in its
   reason.
+- **The catalog refuses the hand-back itself** (a 400, which sending again
+  cannot fix): the job is blocked with the reason instead of retried.
 
 **A render or upload that fails after the new edit is chosen** marks the edit
 `failed` and queues an ordinary rough-cut job for the recording, which renders
