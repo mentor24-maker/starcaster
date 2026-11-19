@@ -49,6 +49,8 @@ const { busPostEnv, shellFailureDetail } = require('./clickup.cjs');
 const ROOT = path.join(__dirname, '..', '..');
 const WITH_DOPPLER = path.join(ROOT, 'loop', 'scripts', 'with_doppler.mjs');
 const TICKET_DOOR = path.join(ROOT, 'loop', 'scripts', 'clickup.mjs');
+/** The narrow read-only reader (SC-851): a ticket by name, one ticket's comments. */
+const TRACKER_READ = path.join(ROOT, 'scripts', 'tracker_read.mjs');
 const DOOR_TIMEOUT_MS = Number(process.env.TRACKER_DOOR_TIMEOUT_MS) || 3 * 60 * 1000;
 
 function readProjectConfig() {
@@ -58,8 +60,13 @@ const PROJECT_CONFIG = readProjectConfig();
 
 /** The tracker project the loop's tickets live in. */
 const PROJECT = PROJECT_CONFIG.projectSlug || 'starcaster';
-/** The tracker project the standing tickets (roll call, SQL, broken links) and the bus live in. */
-const BUS_PROJECT = PROJECT_CONFIG.busProject || 'starcaster-bus';
+/**
+ * The tracker project the standing tickets (roll call, SQL, broken links) and
+ * the bus live in. Since SC-818 it is StarCaster's own project, so it can be
+ * the same slug as PROJECT. Read only from spirality.project.json: a guessed
+ * name posted alarms to a project that no longer holds the bus.
+ */
+const BUS_PROJECT = PROJECT_CONFIG.busProject ? String(PROJECT_CONFIG.busProject) : '';
 /** Dane's seat ON THE TRACKER. Not the ClickUp id 48012725: that seat writes nothing here. */
 const OPERATOR_ID = Number(PROJECT_CONFIG.operatorUserId || 1);
 /** The page a person opens for a ticket (not the API address the door calls). */
@@ -93,11 +100,11 @@ function thisNodeName() {
  * injectable so the tests reach every branch without a tracker.
  */
 function runDoor(args, {
-  input, what = args[0], timeoutMs = DOOR_TIMEOUT_MS, run = execFileSync, env = process.env, node,
+  input, what = args[0], timeoutMs = DOOR_TIMEOUT_MS, run = execFileSync, env = process.env, node, script = TICKET_DOOR,
 } = {}) {
   doorRuns += 1;
   try {
-    return String(run('node', [WITH_DOPPLER, 'node', TICKET_DOOR, ...args], {
+    return String(run('node', [WITH_DOPPLER, 'node', script, ...args], {
       cwd: ROOT,
       encoding: 'utf8',
       input,
@@ -209,6 +216,39 @@ async function getTaskCommentRecords(taskId, { project = PROJECT, timeoutMs, run
   const all = commentsIn({ project, includeClosed: true, timeoutMs, run, env });
   if (all.has(id)) return all.get(id);
   throw new Error(`ticket ${taskId} is not in the ${project} project on the tracker`);
+}
+
+/**
+ * The tickets in `project` with exactly this NAME, Live included (SC-851).
+ *
+ * `listTasks({ includeClosed: true })` answers the same question by reading
+ * every ticket's status history too, one request per ticket: 851 requests on
+ * 2026-11-17, which from the MacBook ran past the deadline and left every
+ * pause check there reading PAUSED. This is one listing request, through
+ * scripts/tracker_read.mjs. Throws on any failed read, like listTasks: an
+ * empty answer only ever means the read worked and nothing has that name.
+ * `date_closed` is not known here (no status history is read).
+ */
+async function findTasksNamed({ project = BUS_PROJECT, name, timeoutMs, run, env } = {}) {
+  const what = `finding the ${project} ticket named "${name}"`;
+  const stdout = runDoor(['named', '--project', String(project), '--name', String(name)], {
+    what, timeoutMs, run, env, script: TRACKER_READ,
+  });
+  return parseTickets(stdout, what).map((t) => ({ ...asClickUpTask(t), date_closed: null, status_since: null }));
+}
+
+/**
+ * One ticket's top-level comments as ClickUp comment records, newest first —
+ * the same answer as `getTaskCommentRecords`, read from THAT ticket alone
+ * (SC-851). `getTaskCommentRecords` reads every comment on every ticket in
+ * the project, and for a Live ticket every Live one as well. Throws on a
+ * failed read, including a ticket that does not exist: no comments and an
+ * unknown ticket are different findings.
+ */
+async function readTaskComments(taskId, { timeoutMs, run, env } = {}) {
+  const what = `reading the comments on ticket ${taskId}`;
+  const stdout = runDoor(['comments', '--task', String(taskId)], { what, timeoutMs, run, env, script: TRACKER_READ });
+  return parseTickets(stdout, what).map(asCommentRecord).reverse();
 }
 
 /** The comments, or null when they could not be read (the stale-* checks' contract). */
@@ -424,6 +464,8 @@ module.exports = {
   asCommentRecord,
   listTasks,
   getTaskCommentRecords,
+  findTasksNamed,
+  readTaskComments,
   readComments,
   parseGet,
   getTask,

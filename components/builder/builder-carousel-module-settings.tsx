@@ -414,7 +414,7 @@ export function BuilderCarouselModuleSettings({
                 height. Naming it "Height" in both left the operator setting a
                 number that visibly did nothing (2026-08-16). */}
             <BuilderModuleField
-              label={isCards ? "Image height (0 = auto)" : "Height (0 = auto)"}
+              label={isCards ? "Image Height (0 = Auto)" : "Height (0 = Auto)"}
               width="num"
             >
               <BuilderNumberSelectControl
@@ -427,7 +427,7 @@ export function BuilderCarouselModuleSettings({
               />
             </BuilderModuleField>
             {supports.cardWidth ? (
-              <BuilderModuleField label="Card width" width="num">
+              <BuilderModuleField label="Card Width" width="num">
                 <BuilderNumberSelectControl
                   value={settings.cardWidth ?? "280"}
                   min={180}
@@ -456,7 +456,7 @@ export function BuilderCarouselModuleSettings({
               <BuilderModuleFieldStrip>
                 {/* Off unless explicitly on, so no slideshow that predates the
                     merge gains text it never had. */}
-                <BuilderModuleField label="Show captions" width="check">
+                <BuilderModuleField label="Show Captions" width="check">
                   <input
                     type="checkbox"
                     checked={settings.showCaptions === "true"}
@@ -584,7 +584,7 @@ export function BuilderCarouselModuleSettings({
                     with no visible text at all. */}
                 {showItemCopy ? (
                   <BuilderModuleField
-                    label={isCards ? "Title" : "Caption title"}
+                    label={isCards ? "Title" : "Caption Title"}
                     width="text-md"
                     className="builder-card-field--a"
                   >
@@ -602,6 +602,7 @@ export function BuilderCarouselModuleSettings({
                   <BuilderProjectDataPicker
                     source="pages"
                     valueKind="path"
+                    allowSections
                     value={item.linkUrl}
                     onChange={(linkUrl) => updateItem(item.id, { linkUrl })}
                     noneLabel="— No link —"
@@ -611,7 +612,7 @@ export function BuilderCarouselModuleSettings({
                 </BuilderModuleField>
                 {showItemCopy ? null : thumbFor("beside")}
                 {showItemCopy ? (
-                  <BuilderModuleField label="Link label" width="text-md" className="builder-card-field--a">
+                  <BuilderModuleField label="Link Label" width="text-md" className="builder-card-field--a">
                     <input
                       type="text"
                       value={item.linkLabel}
@@ -621,7 +622,7 @@ export function BuilderCarouselModuleSettings({
                     />
                   </BuilderModuleField>
                 ) : null}
-                <BuilderModuleField label="Alt text" width="text-md" className="builder-card-field--a">
+                <BuilderModuleField label="Alt Text" width="text-md" className="builder-card-field--a">
                   <input
                     type="text"
                     value={item.imageAlt}

@@ -77,7 +77,7 @@ export function BuilderTemplateNameDialog({ initialName, isSaving, onSave, onCan
           </div>
           <form className="builder-gallery-body builder-template-name-dialog-body" onSubmit={handleSubmit}>
             <label className="field">
-              <span>Template name</span>
+              <span>Template Name</span>
               <input
                 ref={inputRef}
                 onChange={(event) => {

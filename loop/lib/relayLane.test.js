@@ -25,9 +25,13 @@ const OPERATOR = 48012725;
 const AGENT = 99999999;
 
 let nextId = 1;
-function c(t, userId, text) {
-  return { id: String(nextId++), date: String(1000 + t), user: { id: userId }, comment_text: text };
+// Each comment says its author's kind, as the doors do (SP-26): the loop's
+// agent is a machine, the operator a person, unless `m` says a machine wrote
+// it under his id.
+function c(t, userId, text, kind = userId === AGENT ? 'machine' : 'human') {
+  return { id: String(nextId++), date: String(1000 + t), user: { id: userId, kind }, comment_text: text };
 }
+const m = (t, userId, text) => c(t, userId, text, 'machine');
 const PR_URL = 'https://github.com/mentor24-maker/spirality/pull/4';
 const prOpened = (t) => c(t, AGENT, `PR opened: ${PR_URL}`);
 const reviewPassed = (t) => c(t, AGENT, 'REVIEW: PASSED — verified independently.');
@@ -94,8 +98,8 @@ test('ACCEPTANCE 3: "merge PR #4" is not a merge phrase — nothing happens, not
   }
 });
 
-test('a machine-posted "merge" never authorizes: the stamp makes it more than the phrase', () => {
-  const d = decide([prOpened(1), reviewPassed(2), c(3, OPERATOR, stampMachineComment('merge'))]);
+test('a machine-posted "merge" never authorizes: its author makes it more than the phrase', () => {
+  const d = decide([prOpened(1), reviewPassed(2), m(3, OPERATOR, 'merge')]);
   assert.equal(d.act, 'ignore');
 });
 
@@ -213,15 +217,46 @@ test('relayLine is one tab-separated line a log reader can grep', () => {
 const { BANNER_LABEL } = require('./operatorCard.js');
 const { handHeldText, handbackDoneText, handbackFailureText } = require('./busRelayPlan.js');
 const { handbackAnswer, handbackPlan } = require('./relayLane.js');
-const { isMachineComment } = require('./machineComment.js');
+const { isMachineAuthored } = require('./machineComment.js');
 
-const card = (t) => c(t, OPERATOR, stampMachineComment(`@@CONTEXT ...\n${BANNER_LABEL}Pick (a) or (b).`));
+const card = (t) => m(t, OPERATOR, `@@CONTEXT ...\n${BANNER_LABEL}Pick (a) or (b).`);
 const NYI = 'Needs your input';
 
-function handBack(comments, { replies = [], pr = null, status = NYI, description } = {}) {
-  const verdict = handbackAnswer({ comments, operatorId: OPERATOR, isMachine: isMachineComment });
-  return { verdict, plan: handbackPlan({ status, verdict, answerReplies: replies, pr, description }) };
+function handBack(comments, { replies = [], pr = null, status = NYI, description, noticeboard } = {}) {
+  const verdict = handbackAnswer({ comments, operatorId: OPERATOR, isMachine: isMachineAuthored });
+  return { verdict, plan: handbackPlan({ status, verdict, answerReplies: replies, pr, description, noticeboard }) };
 }
+
+// SP-356: with the bus in the project's own queue, the steward's question is
+// a noticeboard ticket beside the work. Queued or Rework there is claimable,
+// so an answer must send it back to Live, never into the build queue.
+const { isNoticeboard } = require('./loopNoticeboards.js');
+const { isClaimableByBuild } = require('./loopStatuses.js');
+
+test('HAND-BACK: an answered noticeboard question in the own queue → Live, never a claimable status', () => {
+  const steward = { name: 'Which key should the steward rotate?', tags: [{ name: 'noticeboard' }] };
+  assert.equal(isNoticeboard(steward), true);
+  const answers = ['yes, go ahead', 'close it', 'done', '(b)'];
+  const prs = [null, { number: 4, state: 'OPEN' }, { number: 4, state: 'MERGED' }, { number: 4, state: 'CLOSED' }];
+  for (const answer of answers) {
+    for (const pr of prs) {
+      const { plan } = handBack([card(1), c(2, OPERATOR, answer)], { pr, noticeboard: isNoticeboard(steward) });
+      assert.deepEqual([plan.act, plan.target], ['move', 'Live'], `${answer} / ${pr?.state}`);
+      assert.equal(isClaimableByBuild(plan.target), false);
+      assert.match(plan.why, /noticeboard, not work/);
+    }
+  }
+});
+
+test('HAND-BACK: a noticeboard still waits, and a hand-held one still stays', () => {
+  assert.equal(handBack([card(1)], { noticeboard: true }).plan.act, 'waiting');
+  const replies = [m(3, OPERATOR, handbackDoneText({ target: 'Live', at: '2026-11-16T00:00:00Z' }))];
+  assert.equal(handBack([card(1), c(2, OPERATOR, 'yes')], { replies, noticeboard: true }).plan.act, 'handled');
+});
+
+test('HAND-BACK: the same answer on a work ticket still goes by its PR (Queued with none)', () => {
+  assert.equal(handBack([card(1), c(2, OPERATOR, 'yes, go ahead')], { noticeboard: false }).plan.target, 'Queued');
+});
 
 test('HAND-BACK: his reply to the card, nothing built yet → Queued', () => {
   const { verdict, plan } = handBack([card(1), c(2, OPERATOR, 'a')]);
@@ -311,7 +346,7 @@ test('HAND-BACK: no machine-written card on the ticket → reported, never moved
 });
 
 test('HAND-BACK: a held-by-hand note newer than the card withholds the move', () => {
-  const held = c(2, OPERATOR, stampMachineComment(handHeldText({ at: 'now' })));
+  const held = m(2, OPERATOR, handHeldText({ at: 'now' }));
   const { plan } = handBack([card(1), held, c(3, OPERATOR, 'a')]);
   assert.deepEqual([plan.act, plan.target], ['held', null]);
 });
@@ -624,6 +659,76 @@ test('PR_VIEW_FIELDS asks for the branch name the catch-up ticket carries', () =
     }
     const spent = [{ comment_text: handbackDoneText({ target: 'Live' }) }];
     assert.equal(closePlan({ verdict: answered(), answerReplies: spent, ownPr: merged }).act, 'not-close');
+  });
+}
+
+// ── SP-375: a no-PR ticket parked with a Close card closes on his word ─────
+
+{
+  const { closePlan, postedCardMove, questionCardMove } = require('./relayLane.js');
+  const { closeRefusedText } = require('./busRelayPlan.js');
+  const { renderCard } = require('./operatorCard.js');
+  const answered = (text = 'close') => ({ state: 'answered', answer: { id: 'a1', comment_text: text } });
+  const card = (needed) => renderCard({ asked: 'go', context: 'The move is done and read back.', needed });
+  // The tracker stores a posted card with each banner line bold, as SP-370's did.
+  const boldBanner = (text) => text.split('\n').map((l) => (/^NEEDED FROM|^#{29}$|^Your move/.test(l) ? `**${l}**` : l)).join('\n');
+  const closeCard = card('Look it over, then close it.\nYour move: Close — the move is done and read back, and no pull request goes with it.');
+  const replyCard = card('Say which way.\nYour move: Reply — "go", or what to change.');
+
+  test('postedCardMove reads the move off a posted card, plain or with its banner lines bold', () => {
+    assert.equal(postedCardMove(closeCard), 'Close');
+    assert.equal(postedCardMove(boldBanner(closeCard)), 'Close');
+    assert.equal(postedCardMove(replyCard), 'Reply');
+    assert.equal(postedCardMove(boldBanner(card('Your move: Merge — PR #7 is green'))), 'Merge');
+    assert.equal(postedCardMove(card('Please look at it.')), null);
+    assert.equal(postedCardMove('Your move: Close — not a card at all'), null);
+  });
+
+  test('questionCardMove reads the newest machine-written card, never a person\'s comment', () => {
+    const at = (n) => String(Date.UTC(2026, 10, 16, 21, n));
+    const comments = [
+      { id: 1, comment_text: replyCard, date: at(1), machine: true },
+      { id: 2, comment_text: boldBanner(closeCard), date: at(2), machine: true },
+      { id: 3, comment_text: replyCard, date: at(3), machine: false },
+    ];
+    const isMachine = (c) => c.machine;
+    assert.equal(questionCardMove({ comments, isMachine }), 'Close');
+    assert.equal(questionCardMove({ comments: comments.slice(0, 1), isMachine }), 'Reply');
+    assert.equal(questionCardMove({ comments, isMachine: () => false }), null);
+    assert.equal(questionCardMove({ comments: [], isMachine }), null);
+  });
+
+  test('no PR anywhere and a Close card: his close word moves it to Live', () => {
+    const plan = closePlan({ verdict: answered(), answerReplies: [], ownPr: null, unstuckPr: null, questionMove: 'Close' });
+    assert.deepEqual([plan.act, plan.target], ['move', 'Live']);
+    assert.match(plan.why, /no pull request goes with it/);
+    // A refusal an earlier pass said (as on SP-370) does not stop it now.
+    const said = closeRefusedText({ why: 'this ticket has no pull request of its own and names none it was filed to unstick, so nothing shows its work is merged', at: 'now' });
+    assert.equal(closePlan({ verdict: answered(), answerReplies: [{ comment_text: said }], ownPr: null, unstuckPr: null, questionMove: 'Close' }).act, 'move');
+  });
+
+  test('no PR anywhere and a Reply, Merge or no-move card: still refused with today\'s reason', () => {
+    for (const questionMove of ['Reply', 'Merge', null, undefined]) {
+      const plan = closePlan({ verdict: answered(), answerReplies: [], ownPr: null, unstuckPr: null, questionMove });
+      assert.equal(plan.act, 'refuse', String(questionMove));
+      assert.match(plan.why, /no pull request of its own and names none it was filed to unstick/);
+      assert.equal(plan.pending, false);
+    }
+  });
+
+  test('a Close card changes nothing when there is a PR: SP-68\'s rule holds', () => {
+    const q = { questionMove: 'Close', answerReplies: [] };
+    const open = closePlan({ verdict: answered(), ...q, ownPr: { number: 7, state: 'OPEN' }, unstuckPr: null });
+    assert.deepEqual([open.act, open.pending], ['refuse', true]);
+    const unstuckOpen = closePlan({ verdict: answered(), ...q, ownPr: null, unstuckPr: { number: 7, state: 'OPEN' } });
+    assert.deepEqual([unstuckOpen.act, unstuckOpen.pending], ['refuse', true]);
+    assert.equal(closePlan({ verdict: answered(), ...q, ownPr: { number: 7, state: 'CLOSED' }, unstuckPr: null }).act, 'refuse');
+    assert.equal(closePlan({ verdict: answered(), ...q, ownPr: { number: 7, state: '', why: 'gh failed' }, unstuckPr: null }).act, 'cannot-tell');
+    for (const verdict of [{ state: 'hand-held', answer: { comment_text: 'close' } }, { state: 'none' }, answered('merge')]) {
+      assert.equal(closePlan({ verdict, ...q, ownPr: null, unstuckPr: null }).act, 'not-close', JSON.stringify(verdict));
+    }
+    const { handbackDoneText } = require('./busRelayPlan.js');
+    assert.equal(closePlan({ verdict: answered(), questionMove: 'Close', answerReplies: [{ comment_text: handbackDoneText({ target: 'Live' }) }], ownPr: null, unstuckPr: null }).act, 'not-close');
   });
 }
 
@@ -1004,3 +1109,113 @@ test('PR_VIEW_FIELDS asks for the branch name the catch-up ticket carries', () =
     assert.equal(w.said[0].outcome, 'would-post-bus');
   });
 }
+
+// SP-302 (Dane's choice A, 2026-11-14): Rich answered PP-8's card with "UPI
+// ok" and the relay ignored it, because only Dane's reply counted.
+const TEAMMATE = 24;
+function teamHandBack(comments, { teammates = true, status = NYI } = {}) {
+  const verdict = handbackAnswer({ comments, operatorId: OPERATOR, isMachine: isMachineAuthored, teammates });
+  return { verdict, plan: handbackPlan({ status, verdict, answerReplies: [], pr: null }) };
+}
+
+test('HAND-BACK (SP-302): a teammate\'s reply to the card is the answer → Queued', () => {
+  const { verdict, plan } = teamHandBack([card(1), c(2, TEAMMATE, 'UPI ok')]);
+  assert.equal(verdict.state, 'answered');
+  assert.equal(verdict.answer.comment_text, 'UPI ok');
+  assert.deepEqual([plan.act, plan.target], ['move', 'Queued']);
+});
+
+test('HAND-BACK (SP-302): without `teammates` a teammate\'s reply still answers nothing (the old rule)', () => {
+  assert.equal(teamHandBack([card(1), c(2, TEAMMATE, 'UPI ok')], { teammates: false }).verdict.state, 'none');
+});
+
+test('HAND-BACK (SP-302): a machine, or a comment whose author kind is unknown, is never a teammate\'s answer', () => {
+  assert.equal(teamHandBack([card(1), m(2, AGENT, 'noted')]).verdict.state, 'none');
+  assert.equal(teamHandBack([card(1), c(2, TEAMMATE, 'UPI ok', null)]).verdict.state, 'none');
+  // His own answer still counts with the kind unknown, as before.
+  assert.equal(teamHandBack([card(1), c(2, OPERATOR, 'a', null)]).verdict.state, 'answered');
+});
+
+test('HAND-BACK (SP-302): a teammate\'s reply BEFORE the newest card answers an older round, not this one', () => {
+  assert.equal(teamHandBack([card(1), c(2, TEAMMATE, 'UPI ok'), card(3)]).verdict.state, 'none');
+});
+
+test('HAND-BACK (SP-302): his newer word wins over a teammate\'s older one', () => {
+  const { verdict } = teamHandBack([card(1), c(2, TEAMMATE, 'UPI ok'), c(3, OPERATOR, 'no, use Reuters')]);
+  assert.equal(verdict.answer.comment_text, 'no, use Reuters');
+});
+
+// SP-302 round 2: a hand-back already completed and the ticket parked again
+// by hand: a teammate's later comment never releases it.
+const { earlierAnswerIds } = require('./relayLane.js');
+
+test('HAND-BACK (SP-302): a teammate\'s comment after a spent answer of his does not move it', () => {
+  const his = c(2, OPERATOR, 'B');
+  const comments = [card(1), his, c(3, TEAMMATE, 'any update?')];
+  const first = handbackAnswer({ comments, operatorId: OPERATOR, isMachine: isMachineAuthored, teammates: true });
+  assert.equal(first.answer.comment_text, 'any update?');
+  assert.deepEqual(earlierAnswerIds({ comments, verdict: first, operatorId: OPERATOR, isMachine: isMachineAuthored }), [his.id]);
+  const verdict = handbackAnswer({ comments, operatorId: OPERATOR, isMachine: isMachineAuthored, teammates: true, spent: [his.id] });
+  assert.equal(verdict.state, 'handled');
+  assert.equal(verdict.answer.id, his.id);
+  const plan = handbackPlan({ status: NYI, verdict, answerReplies: [], pr: null });
+  assert.equal(plan.act, 'handled');
+  assert.equal(plan.target, null);
+});
+
+test('HAND-BACK (SP-302): a teammate\'s comment after a spent teammate answer waits on him', () => {
+  const rich = c(2, TEAMMATE, 'UPI ok');
+  const comments = [card(1), rich, c(3, TEAMMATE, 'any update?')];
+  const verdict = handbackAnswer({ comments, operatorId: OPERATOR, isMachine: isMachineAuthored, teammates: true, spent: [rich.id] });
+  assert.equal(verdict.state, 'handled');
+  assert.equal(verdict.answer.id, rich.id);
+  const plan = handbackPlan({ status: NYI, verdict, answerReplies: [], pr: null });
+  assert.equal(plan.act, 'handled');
+  assert.equal(plan.target, null);
+});
+
+// SP-302 round 3: once an answer is spent, a word of his OLDER than it was
+// overtaken by the answer the relay acted on, and never moves the ticket.
+test('HAND-BACK (SP-302): after a spent teammate answer, his OLDER comment does not move it', () => {
+  const opts = { operatorId: OPERATOR, isMachine: isMachineAuthored };
+  const think = c(150, OPERATOR, 'let me think');
+  const rich = c(200, TEAMMATE, 'A');
+  const comments = [card(100), think, rich, c(300, TEAMMATE, 'any update?')];
+  const first = handbackAnswer({ comments, ...opts, teammates: true });
+  assert.deepEqual(earlierAnswerIds({ comments, verdict: first, ...opts }), [rich.id, think.id]);
+  const verdict = handbackAnswer({ comments, ...opts, teammates: true, spent: [rich.id] });
+  assert.equal(verdict.state, 'handled');
+  assert.equal(verdict.answer.id, rich.id);
+  const plan = handbackPlan({ status: NYI, verdict, answerReplies: [], pr: null });
+  assert.equal(plan.act, 'handled');
+  assert.equal(plan.target, null);
+});
+
+test('HAND-BACK (SP-302): after a spent teammate answer, his NEWER comment still moves it', () => {
+  const opts = { operatorId: OPERATOR, isMachine: isMachineAuthored };
+  const rich = c(200, TEAMMATE, 'A');
+  const go = c(250, OPERATOR, 'go again');
+  const comments = [card(100), rich, go, c(300, TEAMMATE, 'any update?')];
+  const verdict = handbackAnswer({ comments, ...opts, teammates: true, spent: [rich.id] });
+  assert.equal(verdict.state, 'answered');
+  assert.equal(verdict.answer.id, go.id);
+});
+
+test('HAND-BACK (SP-302): earlier answers none spent: the teammate\'s newest still moves it', () => {
+  const comments = [card(1), c(2, TEAMMATE, 'UPI ok'), c(3, TEAMMATE, 'and Reuters as backup')];
+  const verdict = handbackAnswer({ comments, operatorId: OPERATOR, isMachine: isMachineAuthored, teammates: true, spent: [] });
+  assert.equal(verdict.state, 'answered');
+  assert.equal(verdict.answer.comment_text, 'and Reuters as backup');
+});
+
+test('HAND-BACK (SP-302): earlierAnswerIds is empty for his own answer, before the card, and with nothing answered', () => {
+  const opts = { operatorId: OPERATOR, isMachine: isMachineAuthored };
+  const own = [card(2), c(3, TEAMMATE, 'UPI ok'), c(4, OPERATOR, 'yes')];
+  const v1 = handbackAnswer({ comments: own, ...opts, teammates: true });
+  assert.deepEqual(earlierAnswerIds({ comments: own, verdict: v1, ...opts }), []);
+  const before = [c(1, OPERATOR, 'old round'), card(2), c(3, TEAMMATE, 'UPI ok')];
+  const v2 = handbackAnswer({ comments: before, ...opts, teammates: true });
+  assert.deepEqual(earlierAnswerIds({ comments: before, verdict: v2, ...opts }), []);
+  const none = [card(1)];
+  assert.deepEqual(earlierAnswerIds({ comments: none, verdict: handbackAnswer({ comments: none, ...opts, teammates: true }), ...opts }), []);
+});

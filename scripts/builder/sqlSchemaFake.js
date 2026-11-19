@@ -186,6 +186,15 @@ const TYPE_CHECKS = new Map([
  * The order is the whole point: matched shortest-first, `int` would swallow the
  * head of `interval` and `timestamp` the head of `timestamptz`.
  */
+/** Types an `lt`/`lte`/`gt`/`gte` filter can order, and how. */
+const ORDERED_TYPES = new Map([
+  ['timestamptz', (v) => Date.parse(String(v))],
+  ['numeric', Number],
+  ['integer', Number],
+  ['int', Number],
+  ['bigint', Number],
+]);
+
 const TYPE_NAMES_LONGEST_FIRST = [...TYPE_CHECKS.keys()].sort((a, b) => b.length - a.length);
 
 /**
@@ -407,6 +416,8 @@ function parseSchemaText(sqlText) {
   const tables = new Map();
   const indexes = [];
   const rlsEnabled = new Set();
+  /** tables the read-only login (starcaster_readonly) is given a read rule on. */
+  const readonlyReadable = new Set();
   /** function name → the column its before-update trigger stamps. */
   const triggerFunctions = new Map();
   /** table → (trigger name → column stamped on every update). */
@@ -556,6 +567,25 @@ function parseSchemaText(sqlText) {
     }
 
     /*
+     * The read rule for the read-only login, IMPLEMENTED as a record rather
+     * than skipped: `readonlyReadable` names each table it covers, so a test
+     * can assert the rule is there (SC-810: without it, production reads of a
+     * table under row-level security return zero rows and no error). Only
+     * this exact guarded shape, the one canon_documents_setup.sql carries, is
+     * recognised; any other `do` block still refuses loudly below.
+     */
+    match = /^do \$\$ begin if exists \(select 1 from pg_roles where rolname = 'starcaster_readonly'\) and not exists \( select 1 from pg_policies where schemaname = 'public' and tablename = '([a-z_][a-z0-9_]*)' and policyname = 'starcaster_readonly_select' \) then execute 'grant select on public\.([a-z_][a-z0-9_]*) to starcaster_readonly'; execute 'create policy starcaster_readonly_select on public\.([a-z_][a-z0-9_]*) ' \|\| 'for select to starcaster_readonly using \(true\)'; end if; end \$\$$/i.exec(normalized);
+    if (match) {
+      const [, probed, granted, policied] = match;
+      if (probed !== granted || granted !== policied) {
+        throw new Error(`sqlSchemaFake: read rule names three different tables (${probed}, ${granted}, ${policied})`);
+      }
+      if (!tables.has(granted)) throw new Error(`sqlSchemaFake: read rule on ${granted} before it is created`);
+      readonlyReadable.add(granted);
+      continue;
+    }
+
+    /*
      * The `updated_at` trigger idiom, IMPLEMENTED rather than skipped.
      *
      * Every table here maintains updated_at with a before-update trigger, so
@@ -602,7 +632,7 @@ function parseSchemaText(sqlText) {
     throw new Error(`sqlSchemaFake: unsupported statement — ${normalized.slice(0, 120)}`);
   }
 
-  return { tables, indexes, rlsEnabled, triggers, statements: statements.map((s) => s.trim()).filter(Boolean) };
+  return { tables, indexes, rlsEnabled, readonlyReadable, triggers, statements: statements.map((s) => s.trim()).filter(Boolean) };
 }
 
 function parseSchemaFile(filePath) {
@@ -752,6 +782,14 @@ function createFakeDb(schema, { idPrefix = 'row' } = {}) {
         // a defaulted column would otherwise be tested against a value
         // Postgres never returns.
         row[name] = JSON.parse(column.default.replace(/::jsonb?$/i, '').replace(/^'|'$/g, ''));
+      } else if (column.default !== null && column.type.endsWith('[]')) {
+        // `'{}'` on an array column is an EMPTY ARRAY, which is what Postgres
+        // returns. Only the empty literal is understood; anything else is
+        // refused rather than stored as the text the generic branch would make.
+        if (!/^'\{\}'(::[a-z]+\[\])?$/i.test(column.default)) {
+          throw new Error(`sqlSchemaFake: array default ${column.default} on ${name} is not one this fake understands (only '{}')`);
+        }
+        row[name] = [];
       } else if (column.default !== null) {
         row[name] = column.default.replace(/^'|'(::[a-z]+)?$/g, '').replace(/::jsonb$/, '');
         if (row[name] === 'true') row[name] = true;
@@ -1086,6 +1124,33 @@ function createFakeDb(schema, { idPrefix = 'row' } = {}) {
         rows = rows.filter((row) => {
           const lexemes = new Set(row[key] || []);
           return words.length > 0 && words.every((word) => lexemes.has(word));
+        });
+        continue;
+      }
+
+      // `col=lt|lte|gt|gte.value` — an ordered comparison, the way Postgres
+      // compares the column's type. Only types whose order this fake knows
+      // (timestamps and numbers); text order is collation-dependent, so a
+      // comparison on it throws rather than guessing. NULL matches none.
+      const ordered = /^(lt|lte|gt|gte)\.(.*)$/s.exec(value);
+      if (ordered) {
+        const [, op, wanted] = ordered;
+        const toOrder = ORDERED_TYPES.get(column.type);
+        if (!toOrder) {
+          throw new Error(`sqlSchemaFake: ${op} on "${key}" (${column.type}), whose order this fake does not implement`);
+        }
+        if (!filterValueFits(column.type, wanted)) {
+          return { error: `invalid input syntax for type ${column.type}: "${wanted}"` };
+        }
+        const bound = toOrder(wanted);
+        rows = rows.filter((row) => {
+          const cell = row[key];
+          if (cell === null || cell === undefined) return false;
+          const at = toOrder(cell);
+          if (op === 'lt') return at < bound;
+          if (op === 'lte') return at <= bound;
+          if (op === 'gt') return at > bound;
+          return at >= bound;
         });
         continue;
       }

@@ -1,0 +1,156 @@
+/* Assets › Context — the React island at #assetsContextReactRoot
+   (components/context/context-manager.tsx), ticket SC-808.
+
+   Same conventions as _fonts-manager.css: every flex/grid box sets
+   min-width: 0 (UI_RULES T8), no pixel min-widths (T9), text controls stop at
+   --builder-field-long-max (W9), and the page body never scrolls sideways (T0). */
+
+.context-manager {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* The app's buttons carry a top margin meant for stacked forms. */
+.context-manager .btn {
+  margin: 0;
+}
+
+.context-manager p {
+  margin: 0;
+}
+
+.context-manager-toolbar,
+.context-manager-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.context-manager-empty,
+.context-manager-notice {
+  font-size: var(--text-base);
+}
+
+.context-manager-empty {
+  opacity: 0.75;
+}
+
+.context-manager-error {
+  color: var(--btn-danger-flat);
+}
+
+.context-manager-editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+  max-width: 100%;
+  padding: var(--space-4);
+  border: 1px solid var(--border, rgba(0, 0, 0, 0.12));
+  border-radius: 8px;
+}
+
+.context-manager-editor .field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.context-manager-editor .field input {
+  width: 100%;
+  max-width: var(--builder-field-long-max);
+}
+
+.context-manager-body {
+  min-width: 0;
+}
+
+/* The Title column is what a row is for: it takes the room and wraps
+   between words, never truncates (UI_RULES T-1, L4). */
+.context-manager-table-wrap {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.context-manager-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.context-manager-table th,
+.context-manager-table td {
+  vertical-align: middle;
+}
+
+.context-manager-title {
+  width: 100%;
+  overflow-wrap: break-word;
+}
+
+.context-manager-row-actions {
+  white-space: nowrap;
+}
+
+.context-manager-row-actions .btn + .btn,
+.context-manager-row-actions span + .btn {
+  margin-left: var(--space-2);
+}
+
+/* The second click of a delete: the one control on the row that destroys
+   something, so it carries the app's danger colour. */
+.context-manager .btn.context-manager-confirm-delete {
+  border-color: var(--btn-danger-flat);
+  color: var(--btn-danger-flat);
+}
+
+.context-manager .btn.context-manager-confirm-delete:hover:not(:disabled) {
+  border-color: var(--btn-danger-flat-hover);
+  color: var(--btn-danger-flat-hover);
+}
+
+/* SC-809: files dropped anywhere on the page upload; the outline says so. */
+.context-manager-toolbar {
+  align-items: center;
+}
+
+.context-manager-hint,
+.context-manager-file-note {
+  font-size: var(--text-sm);
+  opacity: 0.75;
+}
+
+.context-manager--dragging {
+  outline: 2px dashed currentColor;
+  outline-offset: var(--space-2);
+}
+
+.context-manager-title a {
+  overflow-wrap: anywhere;
+}
+
+/* SC-826: one switch per tool that may read the entry ("Reel Spinner reads
+   this"). The label stays on one line; the warning under it may wrap. */
+.context-manager-use {
+  min-width: 12rem;
+}
+
+.context-manager-use-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.context-manager-use-warning {
+  display: block;
+  margin-top: var(--space-1);
+  font-size: var(--text-sm);
+  color: var(--btn-danger-flat);
+}

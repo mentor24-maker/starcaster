@@ -74,7 +74,7 @@ function render(draftId: string, draftName: string) {
   const toggle = container.querySelector<HTMLButtonElement>('button[aria-label="Expand Template Details"]');
   act(() => toggle!.click());
   const input = [...container.querySelectorAll<HTMLLabelElement>("label.field")]
-    .find((label) => label.textContent?.includes("Template name"))!
+    .find((label) => label.textContent?.includes("Template Name"))!
     .querySelector("input")!;
   return { input, onSetDraftName, onSaveTemplate };
 }

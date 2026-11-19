@@ -137,6 +137,17 @@ accounted as `humanModified` in the report** — visible and reconciled,
 never silently overwritten. (`--force-section <id>` exists for the rare
 deliberate overwrite, one section at a time.)
 
+The same hash decides what a rebuild **removes** (SC-850, 2026-11-17). An
+`imps_` section on the page that the new build no longer produces — an
+import fix stopped making it, like SC-849's doubled header — is removed when
+its content still matches its stored hash, and kept, and named in the build
+report, when it was edited since. A section with no stored hash is left
+alone. Each removal is read back. And a **page** the import made that has
+since been deleted is left out of the rebuild rather than made again; the
+report names it ("deleted since the last build, left out"), its id stays in
+`checkpoints.map.pageIds` so the next rebuild knows too, and
+`--recreate-deleted` makes such pages again.
+
 ### Mapping report — the coverage accounting
 
 `SiteImport/<jobId>/map-report.json`, persisted before `--apply` writes

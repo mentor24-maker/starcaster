@@ -161,7 +161,7 @@ export function SubstackDecisionDialog({ decision, writerName, initialNote, offe
               <p className="substack-decision-empty">No reasons yet for {words.past} a writer. Add one below and it will be offered next time.</p>
             )}
             <div className="substack-decision-add">
-              <label htmlFor="sm-decision-new-reason">Add a reason</label>
+              <label htmlFor="sm-decision-new-reason">Add a Reason</label>
               <input
                 id="sm-decision-new-reason"
                 type="text"

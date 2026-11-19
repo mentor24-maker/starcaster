@@ -1,4 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import MomentsView from './moments-view';
+import PairLines, { type PairView } from './pair-lines';
 
 /**
  * Assets › Footage — every video file the Studio pipeline has catalogued,
@@ -52,6 +54,8 @@ type SourceRow = {
   transcript: TranscriptState;
   /** lib/studioFootage.js cutMarksStateFor (Reel Spinner 1d). */
   cutMarks?: { state: 'done' | 'failed' | 'not_yet' | 'unknown'; reason: string; cutS: number | null };
+  /** lib/studioFootage.js pairsViewFor (Reel Spinner 3b). */
+  pairs?: PairView[];
 };
 
 type TranscriptState = {
@@ -108,6 +112,8 @@ type Footage = {
   transcriptsError?: string;
   /** Why the cut-marks states could not be read; '' when they were. */
   cutMarksError?: string;
+  /** Why the iPhone/Zoom pairs could not be read; '' when they were. */
+  pairsError?: string;
 };
 
 type AppShape = {
@@ -522,7 +528,7 @@ function MarkedTranscript({ cuts, fileDurationS }: { cuts: Cuts; fileDurationS: 
 function TranscriptView({ source, onClose }: { source: SourceRow; onClose: () => void }): React.ReactElement {
   const [transcript, setTranscript] = useState<Transcript | null>(null);
   const [error, setError] = useState('');
-  const [mode, setMode] = useState<'clean' | 'cuts'>('clean');
+  const [mode, setMode] = useState<'clean' | 'cuts' | 'moments'>('clean');
   const [cuts, setCuts] = useState<Cuts | null>(null);
   const [cutsError, setCutsError] = useState('');
 
@@ -587,7 +593,7 @@ function TranscriptView({ source, onClose }: { source: SourceRow; onClose: () =>
         <button type="button" className="btn" onClick={onClose}>Close</button>
       </div>
       <div className="studio-footage-cuts-switch" role="group" aria-label="How to show the transcript">
-        {([['clean', 'Clean'], ['cuts', 'With cuts marked']] as const).map(([value, label]) => (
+        {([['clean', 'Clean'], ['cuts', 'With cuts marked'], ['moments', 'Moments']] as const).map(([value, label]) => (
           <button
             key={value}
             type="button"
@@ -607,6 +613,7 @@ function TranscriptView({ source, onClose }: { source: SourceRow; onClose: () =>
           {cuts ? <MarkedTranscript cuts={cuts} fileDurationS={source.durationS} /> : null}
         </>
       ) : null}
+      {mode === 'moments' ? <MomentsView sourceId={source.id} /> : null}
       {mode === 'clean' && error ? <p className="studio-footage-error" role="alert">{`Transcript not shown: ${error}`}</p> : null}
       {mode === 'clean' && !error && !transcript ? <p className="studio-footage-empty">Loading the transcript…</p> : null}
       {mode === 'clean' && transcript && !transcript.segments.length ? (
@@ -941,7 +948,7 @@ export default function FootagePanel(): React.ReactElement {
         onSubmit={(e) => { e.preventDefault(); void runSearch(said); }}
       >
         <label className="studio-footage-filter studio-footage-search-field">
-          <span>Search what you said</span>
+          <span>Search What You Said</span>
           <input
             type="search"
             value={said}
@@ -1030,6 +1037,7 @@ export default function FootagePanel(): React.ReactElement {
           {data.truncated ? ` Only the newest ${data.readLimit} rows were read, so these counts are a minimum.` : ''}
           {anyStandInDate ? ' A date marked * is not the file\'s own recording date yet — hover it to see which date it is.' : ''}
           {data.transcriptsError ? ` Transcript status could not be read: ${data.transcriptsError}` : ''}
+          {data.pairsError ? ` Which recordings were made together could not be read: ${data.pairsError}` : ''}
         </p>
       ) : null}
 
@@ -1075,7 +1083,15 @@ export default function FootagePanel(): React.ReactElement {
                           <Thumbnail source={source} attempt={attempt} />
                         </DriveLink>
                       </td>
-                      <td className="studio-footage-file-cell"><FileCell source={source} /></td>
+                      <td className="studio-footage-file-cell">
+                        <FileCell source={source} />
+                        <PairLines
+                          pairs={source.pairs}
+                          sourceId={source.id}
+                          thisName={source.fileName}
+                          onChanged={() => void load()}
+                        />
+                      </td>
                       <td>{laneLabel(source.lane)}</td>
                       <td>{source.layerRole}</td>
                       <td>{duration(source.durationS)}</td>

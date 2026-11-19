@@ -37,16 +37,46 @@ export function getMediaBlobClient(): Promise<BlobClient> {
   return mediaBlobClientPromise;
 }
 
-/** Put one file in Blob and return its public url. */
-export async function uploadFileToBlob(file: File, assetType: "Video" | "Image"): Promise<string> {
+export type BlobUploadOptions = {
+  /** Where in the store the file goes (the token endpoint may refuse it). */
+  pathname?: string;
+  /** The endpoint that hands out the one-file token. */
+  handleUploadUrl?: string;
+  clientPayload?: Record<string, unknown>;
+  /** Sent with the token request, e.g. the active project. */
+  headers?: Record<string, string>;
+  /** Sent as the stored file's type; otherwise guessed from the name. */
+  contentType?: string;
+  onProgress?: (percentage: number) => void;
+};
+
+/**
+ * Put one file in Blob and return its public url. Any file type the token
+ * endpoint accepts: video for the Media Manager and Builder, and since SC-809
+ * the Assets › Context files too (their own endpoint, /api/context/blob-upload).
+ */
+export async function uploadToBlob(file: File, options: BlobUploadOptions = {}): Promise<string> {
   const { upload } = await getMediaBlobClient();
-  const blob = await upload(file.name, file, {
+  const blob = await upload(options.pathname || file.name, file, {
     access: "public",
-    handleUploadUrl: "/api/assets/blob-upload",
+    handleUploadUrl: options.handleUploadUrl || "/api/assets/blob-upload",
     multipart: true,
-    clientPayload: JSON.stringify({ fileName: file.name, assetType, assetName: file.name })
+    clientPayload: JSON.stringify(options.clientPayload || {}),
+    ...(options.headers ? { headers: options.headers } : {}),
+    ...(options.contentType ? { contentType: options.contentType } : {}),
+    ...(options.onProgress
+      ? { onUploadProgress: (event: { percentage?: number }) => options.onProgress!(Number(event?.percentage) || 0) }
+      : {})
   });
   const url = String(blob?.url || "");
   if (!url) throw new Error(`Storage accepted ${file.name} but returned no address for it.`);
   return url;
+}
+
+/** Put one media file in Blob through the Assets endpoint and return its public url. */
+export async function uploadFileToBlob(file: File, assetType: "Video" | "Image"): Promise<string> {
+  return uploadToBlob(file, {
+    handleUploadUrl: "/api/assets/blob-upload",
+    clientPayload: { fileName: file.name, assetType, assetName: file.name }
+  });
 }

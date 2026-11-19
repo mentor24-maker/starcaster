@@ -460,6 +460,7 @@ export function BuilderGalaxyModuleSettings({ module, onUpdateModule, themeColor
                   control: "picker",
                   source: "pages",
                   valueKind: "path",
+                  allowSections: true,
                   noneLabel: "— No link —",
                   placeholder: "https://",
                   visibleWhen: (settings) => proximityIsInline(settings.placement),
@@ -469,7 +470,7 @@ export function BuilderGalaxyModuleSettings({ module, onUpdateModule, themeColor
               [
                 {
                   key: "linkLabel",
-                  label: "Link label",
+                  label: "Link Label",
                   width: "text-md",
                   control: "text",
                   placeholder: "Read aloud instead of the address",
@@ -478,7 +479,7 @@ export function BuilderGalaxyModuleSettings({ module, onUpdateModule, themeColor
                 },
                 {
                   key: "linkNewTab",
-                  label: "Open in new tab",
+                  label: "Open in New Tab",
                   width: "check",
                   control: "checkbox",
                   trueValue: "true",
@@ -491,7 +492,7 @@ export function BuilderGalaxyModuleSettings({ module, onUpdateModule, themeColor
               [
                 {
                   key: "linkPicker",
-                  label: "Click point",
+                  label: "Click Point",
                   width: "full",
                   control: "custom",
                   visibleWhen: linkOn,

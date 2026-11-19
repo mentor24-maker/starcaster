@@ -1,0 +1,29 @@
+/* AI provider switch (React island, AI switch 2 / SC-844) —
+   components/settings/ai-provider-panel.tsx, on Settings › APIs.
+   The global `input { width: 100% }` in _forms.css would stretch the on/off
+   checkbox across the cell and squeeze each provider name into broken
+   fragments ("Anthro / pic"), so the checkbox sizes to itself here. */
+
+.ai-provider-panel .ai-provider-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2, 8px);
+  white-space: nowrap;
+}
+
+.ai-provider-panel .ai-provider-switch input[type="checkbox"] {
+  width: auto;
+  margin: 0;
+  padding: 0;
+}
+
+.ai-provider-panel .ai-provider-model {
+  padding: 0.35rem 0.5rem;
+  font-size: var(--text-base);
+}
+
+.ai-provider-panel .ai-provider-order {
+  display: inline-flex;
+  gap: 0.25rem;
+  white-space: nowrap;
+}

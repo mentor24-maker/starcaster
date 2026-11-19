@@ -731,18 +731,18 @@ function TargetEditor({ target, busy, error, onSave, onCancel }: {
         {`Edit: ${target.videoTitle || target.videoUrl}`}
       </h3>
       <div className="yt-outreach-form">
-        <Field label="What it is for" htmlFor="yto-objective">
+        <Field label="What It Is for" htmlFor="yto-objective">
           <Select id="yto-objective" value={form.objective} options={OBJECTIVE_OPTIONS} onChange={(v) => set('objective', v)} />
         </Field>
-        <Field label="Where to comment" htmlFor="yto-placement">
+        <Field label="Where to Comment" htmlFor="yto-placement">
           <Select id="yto-placement" value={form.commentPlacement} options={PLACEMENT_OPTIONS} onChange={(v) => set('commentPlacement', v)} />
         </Field>
         {form.commentPlacement === 'reply_specific' ? (
-          <Field label="Comment to reply to" htmlFor="yto-reply-to" help="The comment's id, from the end of its link (…&lc=THIS_PART).">
+          <Field label="Comment to Reply to" htmlFor="yto-reply-to" help="The comment's id, from the end of its link (…&lc=THIS_PART).">
             <input id="yto-reply-to" type="text" value={form.replyToCommentId} onChange={(e) => set('replyToCommentId', e.target.value)} />
           </Field>
         ) : null}
-        <Field label="Kind of message" htmlFor="yto-type-insight" help="Pick at least one.">
+        <Field label="Kind of Message" htmlFor="yto-type-insight" help="Pick at least one.">
           <div className="yt-outreach-checks" role="group" aria-label="Kind of message">
             {MESSAGE_TYPE_OPTIONS.map((o) => (
               <label key={o.value} className="yt-outreach-check">
@@ -760,29 +760,29 @@ function TargetEditor({ target, busy, error, onSave, onCancel }: {
         <Field label="Length" htmlFor="yto-length">
           <Select id="yto-length" value={form.commentLength} options={LENGTH_OPTIONS} onChange={(v) => set('commentLength', v)} />
         </Field>
-        <Field label="Include a link" htmlFor="yto-link-policy">
+        <Field label="Include a Link" htmlFor="yto-link-policy">
           <Select id="yto-link-policy" value={form.linkPolicy} options={LINK_OPTIONS} onChange={(v) => set('linkPolicy', v)} />
         </Field>
         {form.linkPolicy !== 'never' ? (
-          <Field label="Link to use" htmlFor="yto-link-url">
+          <Field label="Link to Use" htmlFor="yto-link-url">
             <input id="yto-link-url" type="url" placeholder="https://" value={form.linkUrl} onChange={(e) => set('linkUrl', e.target.value)} />
           </Field>
         ) : null}
         <Field label="Mention Dane of Earth" htmlFor="yto-mention">
           <Select id="yto-mention" value={form.mentionPolicy} options={MENTION_OPTIONS} onChange={(v) => set('mentionPolicy', v)} />
         </Field>
-        <Field label="How often" htmlFor="yto-repeat">
+        <Field label="How Often" htmlFor="yto-repeat">
           <Select id="yto-repeat" value={form.repeatMode} options={REPEAT_OPTIONS} onChange={(v) => set('repeatMode', v)} />
         </Field>
         {form.repeatMode === 'repeat' ? (
           <>
-            <Field label="Every how many days" htmlFor="yto-every">
+            <Field label="Every How Many Days" htmlFor="yto-every">
               <input id="yto-every" type="number" min={1} max={365} value={form.repeatEveryDays} onChange={(e) => set('repeatEveryDays', e.target.value)} />
             </Field>
-            <Field label="At most how many times" htmlFor="yto-max-times">
+            <Field label="At Most How Many Times" htmlFor="yto-max-times">
               <input id="yto-max-times" type="number" min={1} max={100} value={form.repeatMaxTimes} onChange={(e) => set('repeatMaxTimes', e.target.value)} />
             </Field>
-            <Field label="Stop after" htmlFor="yto-until" help="Optional. Leave blank to stop only when the count is reached.">
+            <Field label="Stop After" htmlFor="yto-until" help="Optional. Leave blank to stop only when the count is reached.">
               <input id="yto-until" type="date" value={form.repeatUntil} onChange={(e) => set('repeatUntil', e.target.value)} />
             </Field>
           </>
@@ -790,7 +790,7 @@ function TargetEditor({ target, busy, error, onSave, onCancel }: {
         <Field label="Priority" htmlFor="yto-priority">
           <Select id="yto-priority" value={form.priority} options={PRIORITY_OPTIONS} onChange={(v) => set('priority', v)} />
         </Field>
-        <Field label="Notes for the agent" htmlFor="yto-notes">
+        <Field label="Notes for the Agent" htmlFor="yto-notes">
           <textarea id="yto-notes" rows={3} value={form.notes} onChange={(e) => set('notes', e.target.value)} />
         </Field>
       </div>
@@ -828,37 +828,37 @@ function SettingsEditor({ settings, busy, error, onSave, onCancel }: {
           : 'Nothing has been saved for this account yet — these are the starting limits. Save to keep them.'}
       </p>
       <div className="yt-outreach-form">
-        <Field label="Most comments per day" htmlFor="yto-max-per-day">
+        <Field label="Most Comments per Day" htmlFor="yto-max-per-day">
           <input id="yto-max-per-day" type="number" min={0} max={100} value={form.maxCommentsPerDay} onChange={(e) => set('maxCommentsPerDay', e.target.value)} />
         </Field>
-        <Field label="Shortest gap (minutes)" htmlFor="yto-min-gap" help="The least time between two comments.">
+        <Field label="Shortest Gap (Minutes)" htmlFor="yto-min-gap" help="The least time between two comments.">
           <input id="yto-min-gap" type="number" min={0} max={1440} value={form.minMinutesBetween} onChange={(e) => set('minMinutesBetween', e.target.value)} />
         </Field>
-        <Field label="Random extra (minutes)" htmlFor="yto-jitter" help="Up to this much is added to each gap, so comments do not arrive like clockwork.">
+        <Field label="Random Extra (Minutes)" htmlFor="yto-jitter" help="Up to this much is added to each gap, so comments do not arrive like clockwork.">
           <input id="yto-jitter" type="number" min={0} max={1440} value={form.jitterMinutes} onChange={(e) => set('jitterMinutes', e.target.value)} />
         </Field>
-        <Field label="Active from (hour)" htmlFor="yto-start-hour" help="0–23, on a 24-hour clock.">
+        <Field label="Active from (Hour)" htmlFor="yto-start-hour" help="0–23, on a 24-hour clock.">
           <input id="yto-start-hour" type="number" min={0} max={23} value={form.activeStartHour} onChange={(e) => set('activeStartHour', e.target.value)} />
         </Field>
-        <Field label="Active until (hour)" htmlFor="yto-end-hour" help="1–24. Must be later than the start.">
+        <Field label="Active Until (Hour)" htmlFor="yto-end-hour" help="1–24. Must be later than the start.">
           <input id="yto-end-hour" type="number" min={1} max={24} value={form.activeEndHour} onChange={(e) => set('activeEndHour', e.target.value)} />
         </Field>
-        <Field label="Time zone" htmlFor="yto-time-zone" help="For example America/Denver. Blank uses this project's own time zone.">
+        <Field label="Time Zone" htmlFor="yto-time-zone" help="For example America/Denver. Blank uses this project's own time zone.">
           <input id="yto-time-zone" type="text" value={form.timeZone} onChange={(e) => set('timeZone', e.target.value)} />
         </Field>
-        <Field label="One comment per video" htmlFor="yto-one-per-video">
+        <Field label="One Comment per Video" htmlFor="yto-one-per-video" help="A video set to repeat is the one exception.">
           <label className="yt-outreach-check">
             <input id="yto-one-per-video" type="checkbox" checked={form.oneCommentPerVideo} onChange={(e) => set('oneCommentPerVideo', e.target.checked)} />
-            <span>Never comment on a video more than once, unless that video is set to repeat</span>
+            <span>Never Comment Twice on a Video</span>
           </label>
         </Field>
-        <Field label="Channels to avoid" htmlFor="yto-avoid-channels" help="One per line.">
+        <Field label="Channels to Avoid" htmlFor="yto-avoid-channels" help="One per line.">
           <textarea id="yto-avoid-channels" rows={3} value={form.avoidChannels} onChange={(e) => set('avoidChannels', e.target.value)} />
         </Field>
-        <Field label="Words to avoid" htmlFor="yto-avoid-words" help="One per line.">
+        <Field label="Words to Avoid" htmlFor="yto-avoid-words" help="One per line.">
           <textarea id="yto-avoid-words" rows={3} value={form.avoidWords} onChange={(e) => set('avoidWords', e.target.value)} />
         </Field>
-        <Field label="Extra notes for this channel" htmlFor="yto-voice" help="Comments are written from your canon, the same as Reddit comments. Anything here is added after it, for YouTube only.">
+        <Field label="Extra Notes for This Channel" htmlFor="yto-voice" help="Comments are written from your canon, the same as Reddit comments. Anything here is added after it, for YouTube only.">
           <textarea id="yto-voice" rows={4} value={form.voice} onChange={(e) => set('voice', e.target.value)} />
         </Field>
       </div>
@@ -1214,7 +1214,7 @@ export default function YoutubeOutreachPanel(): React.ReactElement {
     <div ref={hostRef} className="yt-outreach-panel">
       <div className="yt-outreach-toolbar">
         <form className="yt-outreach-add" onSubmit={addTarget}>
-          <label className="yt-outreach-add-label" htmlFor="yto-add-url">YouTube link</label>
+          <label className="yt-outreach-add-label" htmlFor="yto-add-url">YouTube Link</label>
           <input
             id="yto-add-url"
             type="text"

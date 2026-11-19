@@ -16,15 +16,17 @@
  * WHAT IT REFUSES TO DO
  *  - Fix anything. It measures.
  *  - Score. Each loss is named under its category; a "73% similar" would hide
- *    exactly which of the seven things went missing.
+ *    exactly which of the eight things went missing.
  *  - Say "no differences" about something it could not see. A capture made
  *    before task 86bctde48 recorded no ::before/::after layers, so on those
  *    decorative layers are reported as not measurable (`notMeasured`) rather
  *    than as none; a section with no imported row is CANNOT TELL, never clean.
  */
 
-import type { CapturedStyles, DecorationIR, SectionIR, AssetRef } from "./ir";
+import type { CapturedStyles, DecorationIR, SectionIR, AssetRef, PageIR } from "./ir";
+import * as cheerio from "cheerio";
 import { LAYOUT_RATIOS } from "./columns";
+import { jumpLands, jumpOf, parsePageLink } from "../builder-client/page-link";
 
 export type FidelityCategory =
   | "background"
@@ -33,6 +35,7 @@ export type FidelityCategory =
   | "shape"
   | "columns"
   | "text"
+  | "links"
   | "asset";
 
 /** In report order, with the words the report uses. */
@@ -43,6 +46,7 @@ export const FIDELITY_CATEGORIES: { key: FidelityCategory; label: string }[] = [
   { key: "shape", label: "Shapes and masks" },
   { key: "columns", label: "Column layout" },
   { key: "text", label: "Text styling" },
+  { key: "links", label: "Links (missing, or jumping to nothing)" },
   { key: "asset", label: "Downloaded but never placed" },
 ];
 
@@ -57,6 +61,9 @@ export type FidelityFinding = {
 /** The parts of a Builder section this reads — the stored page JSON's row. */
 export type BuilderRow = {
   id: string;
+  title?: string;
+  /** The section's anchor name — what a "#name" link lands on (task SC-852). */
+  anchorName?: string;
   layout?: string;
   background?: { mode?: string; color?: string; color2?: string; imageUrl?: string };
   cellBackgrounds?: Record<string, { mode?: string; color?: string; color2?: string; imageUrl?: string }>;
@@ -513,6 +520,45 @@ function checkColumns(
   return { findings, notMeasured: "" };
 }
 
+/**
+ * The part of a module's html that is THIS element: the top-level block whose
+ * words are the element's. One text module often holds several captured
+ * elements (Bayside's Contact module is a heading, three labels and three
+ * paragraphs), and reading the whole module's html gave every heading in it
+ * the paragraphs' inline weight and the email link's colour (SC-861). The
+ * words alone when they are a bare stretch of text between blocks; the whole
+ * html when nothing matches, so nothing is read less than it was.
+ */
+export function ownBlockHtml(moduleHtml: string, words: string): string {
+  const want = collapse(words);
+  if (!want) return moduleHtml;
+  try {
+    const $ = cheerio.load(String(moduleHtml || ""), null, false);
+    const blocks = $.root().children().toArray();
+    if (blocks.length < 2) return moduleHtml;
+    const hits = blocks.filter((b) => collapse($(b).text()) === want);
+    if (hits.length === 1) return $.html(hits[0]);
+    // Words that are a bare stretch of text between blocks ("on" between two
+    // links) carry no styling of their own, so none of the blocks' applies.
+    const bare = $.root().contents().toArray().some((n) => n.type === "text" && collapse($(n).text()) === want);
+    return bare ? want : moduleHtml;
+  } catch {
+    return moduleHtml;
+  }
+}
+
+/** The inline values of `prop` on the html's OWN opening tag only. */
+function rootInlineValues(html: string, prop: string): string[] {
+  const open = (String(html || "").trim().match(/^<[^>]*>/) || [""])[0];
+  return inlineValues(open, prop);
+}
+
+/** True when a block is nothing but one link, so the link colour paints it. */
+function isSingleLink(html: string): boolean {
+  const h = String(html || "").trim();
+  return /^<(p|div|span)\b[^>]*>\s*<a\b[^>]*>[\s\S]*?<\/a>\s*<\/\1>$/i.test(h) && (h.match(/<a\b/gi) || []).length === 1;
+}
+
 function checkText(section: SectionIR, rows: BuilderRow[], theme: ThemeText | null): FidelityFinding[] {
   const out: FidelityFinding[] = [];
   const modules = rows.flatMap((r) => r.modules || []);
@@ -531,7 +577,7 @@ function checkText(section: SectionIR, rows: BuilderRow[], theme: ThemeText | nu
     const st = el.computedStyles || {};
     const mod = moduleFor(el.sourceId);
     if (!mod) continue; // a nav link the menu took, or a deduped repeat — the map report owns those
-    const html = String(mod.text || "");
+    const html = ownBlockHtml(String(mod.text || ""), el.textContent || "");
     const name = quote(el.textContent);
     const tag = tagOf(el.html);
     const isHeading = /^h[1-6]$/.test(tag);
@@ -539,10 +585,11 @@ function checkText(section: SectionIR, rows: BuilderRow[], theme: ThemeText | nu
     // Weight: inline in the imported HTML, else the theme's for that heading level.
     const wanted = weightOf(st["font-weight"]);
     const inline = inlineValues(html, "font-weight").map(weightOf);
+    const ownWeight = rootInlineValues(html, "font-weight").map(weightOf);
     const themeWeight = isHeading ? theme?.headingWeights?.[tag] : undefined;
-    const got = inline.length ? inline[0] : themeWeight ?? (isHeading ? 700 : 400);
+    const got = ownWeight.length ? ownWeight[0] : themeWeight ?? (isHeading ? 700 : 400);
     if (!inline.includes(wanted) && got !== wanted) {
-      add(`font weight ${wanted}`, `weight ${got}${inline.length ? " (inline)" : themeWeight !== undefined ? ` (the theme's ${tag})` : " (the browser default)"}`, name);
+      add(`font weight ${wanted}`, `weight ${got}${ownWeight.length ? " (inline)" : themeWeight !== undefined ? ` (the theme's ${tag})` : " (the browser default)"}`, name);
     }
 
     const spacing = st["letter-spacing"];
@@ -557,14 +604,18 @@ function checkText(section: SectionIR, rows: BuilderRow[], theme: ThemeText | nu
       add(`text-transform ${st["text-transform"]}`, "as typed", name);
     }
 
-    const colour = hexOf(st.color || "");
+    // A block that is one link shows the LINK's colour: the run recorded on
+    // its <a> when it differed from the block, else the block's own.
+    const linkRun = isSingleLink(html) ? (el.inlineStyles || []).find((r) => r.tag === "a" && r.styles?.color) : undefined;
+    const colour = hexOf(linkRun?.styles?.color || st.color || "");
     if (colour) {
       const inlineColours = inlineValues(html, "(?<![-a-z])color").map(hexOf).filter(Boolean);
       const settingColours = settingValues(mod.settings, /color/i).map((v) => (v.startsWith("#") ? v : hexOf(v)));
-      const themeColour = !theme ? "" : el.class === "link" ? theme.linkColor : isHeading ? theme.headingColor : theme.textColor;
-      const effective = inlineColours[0] || settingColours[0] || themeColour || "";
+      const ownColours = rootInlineValues(html, "(?<![-a-z])color").map(hexOf).filter(Boolean);
+      const themeColour = !theme ? "" : el.class === "link" || isSingleLink(html) ? theme.linkColor : isHeading ? theme.headingColor : theme.textColor;
+      const effective = (isSingleLink(html) ? inlineColours[inlineColours.length - 1] : ownColours[0]) || settingColours[0] || themeColour || "";
       if (![...inlineColours, ...settingColours].includes(colour) && effective.toLowerCase() !== colour) {
-        add(`text colour ${colour}`, effective ? `${effective}${inlineColours.length || settingColours.length ? "" : " (the theme's)"}` : "the theme's default", name);
+        add(`text colour ${colour}`, effective ? `${effective}${effective !== themeColour || !themeColour ? "" : " (the theme's)"}` : "the theme's default", name);
       }
     }
   }
@@ -710,6 +761,21 @@ export function sideBusyness(img: { data: Uint8Array | Buffer; width: number; he
   };
 }
 
+/**
+ * The theme whose TYPE a page renders with — the public site's rule
+ * (`pickPageRenderTheme`, components/BuilderPublicSitePage.tsx): the theme the
+ * page names, or the project's first when that one is gone; and NONE when the
+ * page names no theme, however many the project has. This report used to take
+ * the default theme for an unthemed page, and so measured Bayside's headings
+ * as the theme's grey while the live site painted them the app's blue
+ * (SC-861). Pass the themes in listThemes' order (default first).
+ */
+export function themeForPageType<T extends { id?: unknown }>(page: { themeId?: unknown } | null | undefined, themes: T[]): T | null {
+  const named = String(page?.themeId || "").trim();
+  if (!named) return null;
+  return themes.find((t) => String(t.id || "").trim() === named) || themes[0] || null;
+}
+
 /** The theme's text defaults, from a builder_themes record (rowToTheme). */
 export function themeTextOf(theme: { typography?: unknown } | null | undefined): ThemeText | null {
   const t = (theme && (theme.typography as Record<string, any>)) || null;
@@ -727,6 +793,197 @@ export function themeTextOf(theme: { typography?: unknown } | null | undefined):
     textColor: String(colors.text || "").toLowerCase(),
     linkColor: String(colors.link || t.elements?.a?.color || "").toLowerCase(),
   };
+}
+
+/* ---------------------------------------------------------------------------
+ * Links (task SC-855)
+ *
+ * Bayside's import went live on 2026-11-17 with a top menu of `#services`,
+ * `#about` and `#contact` that did nothing — no section carried those names —
+ * and this report, run that evening, had no category to say so in. It now
+ * asks two things of every imported page:
+ *   1. is each link the ORIGINAL page had still there? (by its words, or by
+ *      where it goes — the import renames addresses, so neither alone is fair)
+ *   2. does each link on the IMPORT that jumps to part of a page land? The
+ *      answer is lib/builder-client/page-link.js `jumpLands`, the same one the
+ *      weekly broken-links scan uses, so the two cannot disagree.
+ * A jump to a page this run did not read is CANNOT TELL, never "lands".
+ * ------------------------------------------------------------------------ */
+
+export type PageLink = { where: string; label: string; href: string };
+
+const stripTags = (html: string) => collapse(String(html || "").replace(/<[^>]*>/g, " ").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&"));
+
+/** The settings that hold one link a visitor follows, by key. */
+const LINK_KEYS = ["href", "linkUrl", "url", "linkHref"];
+
+function parseJsonList(value: unknown): Record<string, unknown>[] | null {
+  if (typeof value !== "string" || !value.trim().startsWith("[")) return null;
+  try {
+    const list = JSON.parse(value);
+    return Array.isArray(list) ? list.filter((x) => x && typeof x === "object") : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Every link on some imported rows: menu items, buttons, linked pictures, card
+ * and slide links, and the <a href> inside text. `where` names the row.
+ */
+export function importedLinks(rows: BuilderRow[]): PageLink[] {
+  const out: PageLink[] = [];
+  for (const row of rows || []) {
+    const where = collapse(String(row.title || "")) || row.id;
+    for (const m of row.modules || []) {
+      const settings = (m.settings || {}) as Record<string, unknown>;
+      const own = stripTags(String(m.text || ""));
+      for (const [key, value] of Object.entries(settings)) {
+        const list = parseJsonList(value);
+        if (list) {
+          for (const item of list) {
+            const href = LINK_KEYS.map((k) => item[k]).find((v) => typeof v === "string" && v.trim());
+            if (typeof href !== "string") continue;
+            const label = collapse(String(item.label || item.title || item.heading || item.text || ""));
+            out.push({ where, label, href: href.trim() });
+          }
+          continue;
+        }
+        if (LINK_KEYS.includes(key) && typeof value === "string" && value.trim()) {
+          out.push({ where, label: m.type === "image" ? collapse(String(settings.alt || "")) || "a picture" : own, href: value.trim() });
+        }
+      }
+      if (m.type === "text" && /href=/i.test(String(m.text || ""))) {
+        for (const a of String(m.text).matchAll(/<a\b[^>]*?\bhref\s*=\s*"([^"]*)"[^>]*>([\s\S]*?)<\/a>/gi)) {
+          out.push({ where, label: stripTags(a[2]), href: a[1].trim() });
+        }
+      }
+    }
+  }
+  return out;
+}
+
+/** Every link the original page had: its link and button elements, de-duplicated. */
+export function originalLinks(page: Pick<PageIR, "sections">): PageLink[] {
+  const out: PageLink[] = [];
+  const seen = new Set<string>();
+  for (const section of page.sections || []) {
+    for (const el of section.elements || []) {
+      if (el.class !== "link" && el.class !== "button") continue;
+      const href = (String(el.html || "").match(/\bhref\s*=\s*"([^"]*)"/i) || ["", ""])[1].trim();
+      const label = collapse(el.textContent);
+      if (!href || href === "#" || /^javascript:/i.test(href)) continue;
+      const key = `${label.toLowerCase()}|${href}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({ where: `section ${section.sourceId}`, label, href });
+    }
+  }
+  return out;
+}
+
+/**
+ * Where a link goes, in a form both sides share: "#name" for a jump within the
+ * page, the LAST path segment (flattened the way the import flattens a page's
+ * address) for the site's own pages, the whole address otherwise.
+ */
+function destinationKey(href: string, pageUrl: string): string {
+  const ref = parsePageLink(href);
+  const raw = ref ? ref.fallback : String(href || "").trim();
+  if (raw.startsWith("#")) return raw.toLowerCase();
+  let url: URL;
+  try {
+    url = new URL(raw, pageUrl || "https://imported.invalid/");
+  } catch {
+    return raw.toLowerCase();
+  }
+  if (/^(mailto|tel):/i.test(url.protocol)) return raw.toLowerCase();
+  const local = !pageUrl || url.host === new URL(pageUrl).host || url.host === "imported.invalid";
+  if (!local) return `${url.host}${url.pathname}`.toLowerCase().replace(/\/+$/, "");
+  const segment = url.pathname.toLowerCase().replace(/\.(html?|php|aspx?)$/, "").replace(/\/+$/, "").replace(/^.*\//, "").replace(/^index$|^home$/, "");
+  return `/${segment}${url.hash ? url.hash.toLowerCase() : ""}`;
+}
+
+export type LinkPage = { id: string | number; slug?: string; layoutSections?: unknown };
+
+export type LinkCheck = {
+  findings: FidelityFinding[];
+  notMeasured: { category: FidelityCategory; why: string }[];
+};
+
+/**
+ * The Links category for one page.
+ *   original — the captured page (its link elements)
+ *   rows     — every row of the imported page
+ *   pageUrl  — the original page's address, to tell own pages from other sites
+ *   pages    — the imported pages this run read, so "/about#team" and a
+ *              section reference can be checked on the page they name
+ */
+export function linkFindings(
+  original: Pick<PageIR, "sections">,
+  rows: BuilderRow[],
+  opts: { pageUrl?: string; pages?: LinkPage[] } = {}
+): LinkCheck {
+  const findings: FidelityFinding[] = [];
+  const notMeasured: LinkCheck["notMeasured"] = [];
+  const imported = importedLinks(rows);
+  const pageUrl = opts.pageUrl || "";
+
+  // 1. A link the original had that the import does not.
+  const labels = new Set(imported.map((l) => l.label.toLowerCase()).filter(Boolean));
+  const destinations = new Set(imported.map((l) => destinationKey(l.href, "")));
+  const missing = originalLinks(original).filter(
+    (l) => !(l.label && labels.has(l.label.toLowerCase())) && !destinations.has(destinationKey(l.href, pageUrl))
+  );
+  if (missing.length) {
+    findings.push({
+      category: "links",
+      what: `${missing.length} link(s) the original page had: ${listOf(missing.map((l) => `${quote(l.label || l.href, 30)} → ${l.href}`))}`,
+      imported: "no link with those words or that destination",
+    });
+  }
+
+  // 2. A jump on the import that lands on nothing.
+  const pages = opts.pages || [];
+  const bySlug = (address: string) =>
+    pages.filter((p) => {
+      const slug = String(p.slug ?? "").trim().toLowerCase().replace(/^\/+|\/+$/g, "");
+      return (slug === "home" ? "" : slug) === address;
+    });
+  const groups = new Map<string, string[]>();
+  const blind: string[] = [];
+  for (const link of imported) {
+    const jump = jumpOf(link.href);
+    if (!jump) continue;
+    let layout: unknown;
+    if (jump.kind === "same-page") layout = rows;
+    else {
+      const found = jump.kind === "reference" ? pages.filter((p) => String(p.id) === jump.pageId) : bySlug(jump.address);
+      if (!found.length || found[0].layoutSections === undefined) {
+        blind.push(`${quote(link.label || link.href, 30)} → ${link.href}`);
+        continue;
+      }
+      layout = found[0].layoutSections;
+    }
+    const verdict = jumpLands(jump, layout);
+    if (verdict.lands) continue;
+    const key = verdict.why;
+    groups.set(key, [...(groups.get(key) || []), `${quote(link.label || link.href, 30)} (${link.where})`]);
+  }
+  for (const [why, names] of groups) {
+    findings.push({
+      category: "links",
+      what: `${names.length} link(s) that jump to part of a page: ${listOf(names)}`,
+      imported: why,
+    });
+  }
+  if (blind.length) {
+    notMeasured.push({
+      category: "links",
+      why: `${blind.length} link(s) jump to part of a page this report did not read, so whether they land is unknown: ${listOf(blind)}`,
+    });
+  }
+  return { findings, notMeasured };
 }
 
 /** Findings counted per category, every category present (zeros included). */

@@ -5,12 +5,14 @@ import {
   mapReportUrl,
   pluralize,
   summarizeBuildReport,
+  summarizeJumpLinks,
   summarizeMenus,
   type BuiltMenus,
   type MapReportData,
 } from "./site-import-build-report";
 import { SiteImportThemePanel, importThemeRecordOf } from "./site-import-theme-panel";
 import { SiteImportBuildControls } from "./site-import-build-controls";
+import { SiteImportFidelityPanel } from "./site-import-fidelity-panel";
 import { buildIsActive, buildRequestOf } from "./site-import-build-controls-model";
 
 /**
@@ -632,6 +634,8 @@ export default function SiteImportPage() {
                 </div>
               ) : null}
 
+              <SiteImportFidelityPanel checkpoints={job.checkpoints as Record<string, unknown>} />
+
               {job.status === "complete" && checkpointOf(job, "normalize")?.blobPath ? (
                 <SiteImportThemePanel
                   jobId={job.id}
@@ -798,6 +802,7 @@ function BuildReportPanel({
           : "The theme the build makes is shown with the preview, above."}
       </p>
       <MenusBlock report={report} builtMenus={built ? builtMenus : null} />
+      <JumpLinksBlock report={report} />
       <table className="site-import-build-pages">
         <thead>
           <tr>
@@ -820,6 +825,36 @@ function BuildReportPanel({
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+/**
+ * Where the original's jump links ("#contact-us") land (task SC-854), and
+ * every one that could not be pointed at a section, with the reason — so a
+ * menu item that will not scroll is named here, not found by a visitor.
+ */
+function JumpLinksBlock({ report }: { report: MapReportData }) {
+  const jump = summarizeJumpLinks(report);
+  return (
+    <div className="site-import-menus">
+      <h5>Jump Links</h5>
+      {jump.predates ? (
+        <p className="meta">{jump.message}</p>
+      ) : (
+        <>
+          <p className="meta">{jump.line}</p>
+          {jump.leftovers.length ? (
+            <ul className="site-import-menus-reasons">
+              {jump.leftovers.map((u) => (
+                <li key={`${u.page}|${u.href}`}>
+                  {u.page}: &ldquo;{u.label || u.href}&rdquo; ({u.href}) — {u.why}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </>
+      )}
     </div>
   );
 }

@@ -43,7 +43,7 @@ const SCHEMA: BuilderSettingsSchema = {
         [
           {
             key: "showTitle",
-            label: "Show title",
+            label: "Show Title",
             width: "check",
             control: "checkbox",
             fallback: "true",
@@ -51,7 +51,7 @@ const SCHEMA: BuilderSettingsSchema = {
           },
           {
             key: "panelTitle",
-            label: "Title text",
+            label: "Title Text",
             width: "text-md",
             control: "text",
             placeholder: "Related Articles",
@@ -63,7 +63,7 @@ const SCHEMA: BuilderSettingsSchema = {
         [
           {
             key: "relateButtonLabel",
-            label: "Button text",
+            label: "Button Text",
             width: "text-md",
             control: "text",
             placeholder: "Relate Checked",
@@ -92,7 +92,7 @@ const SCHEMA: BuilderSettingsSchema = {
         [
           {
             key: "showCategories",
-            label: "Categories in picker",
+            label: "Categories in Picker",
             width: "check",
             control: "checkbox",
             fallback: "true",

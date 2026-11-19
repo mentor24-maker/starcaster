@@ -65,6 +65,18 @@ test('countStages in a window: shipped counts the LAST move into Live, only when
   assert.equal(out.total, 5);
 });
 
+test('countStages: a ticket that went Live ending Won\'t do, Duplicate or Test is not shipped; it is counted apart (SP-347)', () => {
+  const window = parseWindow('2026-11-03', '2026-11-09');
+  const live = (id, outcome) => ({ ...ticket(id, 'live', '2026-10-20'), outcome });
+  const tickets = [live('SP-1', 'done'), live('SP-2', null), live('SP-3', 'wont-do'), live('SP-4', 'duplicate'), live('SP-5', 'test')];
+  const histories = new Map(tickets.map((t) => [t.id, [{ at: at('2026-11-05T12:00:00Z'), to: 'live' }]]));
+  const out = countStages(tickets, { since: '2026-11-03', until: '2026-11-09', window, histories });
+  assert.equal(out.closedInWindow, 2, 'SP-1 (done) and SP-2 (no ending recorded)');
+  assert.equal(out.notFinishedInWindow, 3, 'the dropped, duplicate and test tickets');
+  assert.equal(out.enteredInWindow.live, 5, 'every one still entered Live');
+  assert.equal(out.byStatus.live, 5, 'byStatus is where they sit now, untouched');
+});
+
 test('countStages: a ticket that entered one status twice inside the window counts once', () => {
   const window = parseWindow('2026-11-03', '2026-11-09');
   const histories = new Map([['SP-1', [
@@ -78,6 +90,28 @@ test('countStages: a ticket that entered one status twice inside the window coun
 test('countStages: a ticket with no history given is a caller\'s bug, never a quiet zero', () => {
   const window = parseWindow('2026-11-03', null);
   assert.throws(() => countStages([ticket('SP-1', 'queued', '2026-11-04')], { window }), /no status history was given for SP-1/);
+});
+
+test('countStages: a Team chat and a ticket tagged noticeboard, both in Live, are in no figure and need no history (SP-357)', () => {
+  const tickets = [
+    { ...ticket('SP-1', 'live', '2026-11-04'), name: 'Team chat', tags: [] },
+    { ...ticket('SP-2', 'live', '2026-11-04'), name: 'Pipeline pulse', tags: [{ name: 'noticeboard' }] },
+    { ...ticket('SP-3', 'live', '2026-11-04'), name: 'Ship the thing', tags: ['feature'] },
+  ];
+  assert.equal(countStages(tickets).byStatus.live, 1);
+  assert.equal(countStages(tickets).total, 1);
+  const window = parseWindow('2026-11-03', '2026-11-09');
+  const histories = new Map([['SP-3', [{ at: at('2026-11-04'), to: 'queued' }, { at: at('2026-11-06'), to: 'live' }]]]);
+  const out = countStages(tickets, { since: '2026-11-03', until: '2026-11-09', window, histories });
+  assert.equal(out.closedInWindow, 1);
+  assert.equal(out.startedInWindow, 1);
+  assert.equal(out.enteredInWindow.live, 1);
+});
+
+test('stage-counts: what a noticeboard is comes only from lib/loopNoticeboards.js', () => {
+  const src = require('node:fs').readFileSync(require.resolve('./stageCounts.js'), 'utf8');
+  assert.match(src, /require\('\.\/loopNoticeboards\.js'\)/);
+  assert.doesNotMatch(src.replace(/\/\*[\s\S]*?\*\//g, ''), /'Team chat'|'noticeboard'/i);
 });
 
 test('failedHistoryLine names each ticket and why; null when nothing failed', () => {

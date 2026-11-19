@@ -200,7 +200,7 @@ test('an unreadable, missing, foreign or looping earlier job refuses rather than
   await assert.rejects(resolveRefreshSource(job, async () => loop), /loops back to simp_b/);
 });
 
-test('the dry run opens with the "Refreshing N pages…" line, naming deleted pages it will make again', async () => {
+test('the dry run opens with the "Refreshing N pages…" line, naming deleted pages it leaves out', async () => {
   const world = firstImportWorld();
   const { refresh } = await resolveRefreshSource(world.secondJob, async () => world.firstJob);
   const pages = [...world.secondMap, mapped('/contact', 'contact', [section('imps_pC1', 'Contact')])];
@@ -209,8 +209,9 @@ test('the dry run opens with the "Refreshing N pages…" line, naming deleted pa
   assert.equal(
     refreshSummaryLine(refresh, plan, 1),
     'Refreshing 1 page built by the import of https://www.wavecenter.com/ on Nov 4, 2026; 1 section you edited will be kept; 1 new page. '
-      + '1 page that import built was deleted since and will be made again: /sign-in.'
+      + '1 page that import built was deleted since and will be left out: /sign-in.'
   );
+  assert.match(refreshSummaryLine(refresh, plan, 1, { recreateDeleted: true }), /deleted since and will be made again \(--recreate-deleted\): \/sign-in\.$/);
   const full = planRefresh(world.secondMap, refresh.job.checkpoints.map.pageIds, world.pages);
   assert.match(refreshSummaryLine(refresh, full, 2), /^Refreshing 2 pages built by .*; 2 sections you edited will be kept; 0 new pages\.$/);
 });

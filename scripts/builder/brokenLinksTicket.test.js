@@ -13,7 +13,7 @@ const NOW = Date.parse('2026-11-03T19:00:00-07:00');
 const brokenLink = {
   where: 'Saved section "Header" › Header',
   module: 'Menu',
-  item: 'Menu item "About"',
+  item: 'Menu Item "About"',
   setting: 'Link',
   source: { kind: 'saved-section', id: 's', name: 'Header' },
   shownOn: 4,
@@ -33,7 +33,7 @@ test('broken links are listed by project and Dane is assigned', () => {
   assert.equal(out.count, 1);
   assert.match(out.body, /^# 1 broken link on 1 site/);
   assert.match(out.body, /## Delray \(delraytennis\.com\) — 1 broken link/);
-  assert.match(out.body, /- Saved section "Header" › Header › Menu › Menu item "About" \(shown on 4 pages\) — goes to \/about/);
+  assert.match(out.body, /- Saved section "Header" › Header › Menu › Menu Item "About" \(shown on 4 pages\) — goes to \/about/);
   assert.doesNotMatch(out.body, /Clean/);
   assert.match(out.body, /Last checked .* from mac-mini: 2 projects read\./);
 });
@@ -82,4 +82,17 @@ test('weekly: due with no stamp, not due inside a week, due after it', () => {
 test('assignee change: Dane only while something is listed, nobody once clean', () => {
   assert.deepEqual(ticket.assigneeChange({ current: [{ id: 5 }], assign: true, operatorId: 9 }), { add: [9], rem: [5] });
   assert.deepEqual(ticket.assigneeChange({ current: [{ id: 9 }], assign: false, operatorId: 9 }), { add: [], rem: [9] });
+});
+
+// Task SC-855: a link to part of a page the check could not judge is named, never clean.
+test('links it could not check keep the ticket from reading as clean', () => {
+  const unchecked = { ...brokenLink, reason: 'jumps to #services on whichever page shows it, and no page shows this shared section — CANNOT TELL whether it lands' };
+  const out = ticket.renderBrokenLinksTicket({
+    projects: [{ id: 'a', name: 'Bayside', domain: '', broken: [], unchecked: [unchecked] }],
+    now: NOW,
+  });
+  assert.match(out.body, /^# No broken links found — but 1 link could not be checked/);
+  assert.doesNotMatch(out.body, /No broken links found on any site/);
+  assert.match(out.body, /## Links it could not check\n\n- \*\*CANNOT TELL\*\* Bayside: Saved section "Header" › Header › Menu › Menu Item "About" \(shown on 4 pages\) — jumps to #services/);
+  assert.equal(out.assign, false);
 });

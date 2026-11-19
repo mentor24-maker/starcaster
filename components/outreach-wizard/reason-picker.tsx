@@ -173,7 +173,7 @@ export default function ReasonPicker({ title, api, busy, error, onCancel, onConf
           {readError ? (
             <p className="reason-picker-help" role="status">{`Your own saved reasons could not be read (${readError}), so only the five standard ones are shown.`}</p>
           ) : null}
-          <label className="reason-picker-label" htmlFor="reason-picker-own">Or your own reason</label>
+          <label className="reason-picker-label" htmlFor="reason-picker-own">Or Your Own Reason</label>
           <div className="reason-picker-own">
             <input
               id="reason-picker-own"
@@ -187,7 +187,7 @@ export default function ReasonPicker({ title, api, busy, error, onCancel, onConf
             <button type="button" className="btn" disabled={busy || !own.trim()} onClick={sendOwn}>Reject</button>
           </div>
           {ownError ? <p className="reason-picker-error" role="alert">{ownError}</p> : null}
-          <label className="reason-picker-label" htmlFor="reason-picker-note">A sentence, if you like (sent with the reason you click)</label>
+          <label className="reason-picker-label" htmlFor="reason-picker-note">A Sentence, If You Like (Sent with the Reason You Click)</label>
           <textarea id="reason-picker-note" rows={2} value={note} maxLength={1000} disabled={busy} onChange={(e) => setNote(e.target.value)} />
           {error ? <p className="reason-picker-error" role="alert">{error}</p> : null}
         </div>

@@ -63,7 +63,7 @@ test('switched off, no topics, or a limit of 0: nothing is drafted and the reaso
 
   const zero = schedule.planTopicDrafts({ settings: settings({ maxActionsPerDay: 0 }), items: [], now: NOON, timeZone: ZONE });
   assert.equal(zero.count, 0);
-  assert.match(zero.text, /Most actions per day is 0/);
+  assert.match(zero.text, /Most Actions per Day is 0/);
 });
 
 test('two topics, nothing waiting: drafts up to the daily limit, one on each topic', () => {

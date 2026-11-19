@@ -25,8 +25,9 @@
  *                                        → handbackAnswer, handbackPlan
  *   5. A PR his word cannot merge because it conflicts: file a catch-up
  *      ticket, or is one already on file? → conflictFilingPlan
- *   6. His close word on a `Ready to launch` ticket: is its work merged,
- *      so it goes to Live, or does the relay say why not? → closePlan
+ *   6. His close word on a `Ready to launch` ticket: is its work merged
+ *      (or, with no PR at all, did a Close card ask for it), so it goes to
+ *      Live, or does the relay say why not? → closePlan, questionCardMove
  *   7. The project's own pre-merge step: run it, then merge pinned to the
  *      commit it saw, or merge nothing?  → mergeWithPreMergeStep
  *   8. What the project's bus hears about a merge or a first refusal, and
@@ -44,9 +45,10 @@
 const { latestMergeMarker, countMergeRefusals } = require('./mergeOnComment');
 const { REFUSAL_CODES } = require('./refusalClass.js');
 const {
-  answerAwaitingHandback, handbackDestination, isCloseCommand, latestCloseRefusal,
-  repliesShowHandbackDone, repliesShowHandbackFailure,
+  answerAwaitingHandback, operatorComments, commentAt, handbackDestination, isCloseCommand, latestCloseRefusal,
+  repliesShowHandbackDone, repliesShowHandbackFailure, isEscalationCard,
 } = require('./busRelayPlan.js');
+const { readYourMove, bannerLabel, BANNER_RULE } = require('./operatorCard.js');
 const { NEXT_SLICE_RE, mergeDestination } = require('./nextSlice.js');
 const {
   findConflictTicket, shouldFileConflictTicket, handOffStalled, stalledHandOffLine, stalledHandOffHeadline, conflictVerdictKind,
@@ -148,11 +150,41 @@ function emptyBooks() {
  * narrow mistake (a session moves it by hand) instead of the generous one
  * (a loop takes a ticket out of his status on something he said last week).
  * Spirality's `ask` always writes a card, so this is the hand-parked case.
+ *
+ * `teammates` (SP-302, Dane's choice A, 2026-11-14): on `Needs your input`
+ * the relay passes true, so another person's reply to the card is the answer
+ * and hands the ticket back, the same as his. The close word on `Ready to
+ * launch` (closePlan) is read with it false: that status waits on him.
  */
 const HANDBACK_WATCH = { label: 'Loop Queue', handback: { 'needs your input': 'Queued' } };
 
-function handbackAnswer({ comments, operatorId, isMachine }) {
-  return answerAwaitingHandback({ comments, operatorId, isMachine, delivered: () => true });
+function handbackAnswer({ comments, operatorId, isMachine, teammates = false, spent = [] }) {
+  const spentIds = new Set((spent || []).map(String));
+  const handled = spentIds.size ? (c) => spentIds.has(String(c && c.id)) : undefined;
+  return answerAwaitingHandback({ comments, operatorId, isMachine, teammates, handled, delivered: () => true });
+}
+
+/**
+ * Which earlier answers must the relay read before it acts on a TEAMMATE's
+ * (SP-302 round 2)? The ids of every other person's comment after the newest
+ * card, older than the answer, newest first. If one of them carries the
+ * `[bus-relay-handback-done]` reply, the hand-back already happened and the
+ * ticket was parked here again by hand: pass those ids back to
+ * handbackAnswer as `spent` and only his own word moves it.
+ *
+ * Empty when the answer is his own (his word moves a re-parked ticket as it
+ * always has, and handbackPlan reads its own replies), or when nothing is
+ * answered.
+ */
+function earlierAnswerIds({ comments, verdict, operatorId, isMachine }) {
+  if (!verdict || verdict.state !== 'answered' || !verdict.answer) return [];
+  if (Number(verdict.answer?.user?.id) === Number(operatorId)) return [];
+  const all = Array.isArray(comments) ? comments : [];
+  return operatorComments(all, { operatorId, isMachine, teammates: true })
+    .filter((c) => commentAt(c) > verdict.questionAt && commentAt(c) <= verdict.answerAt
+      && String(c.id) !== String(verdict.answer.id))
+    .sort((a, b) => commentAt(b) - commentAt(a))
+    .map((c) => c.id);
 }
 
 /**
@@ -164,10 +196,15 @@ function handbackAnswer({ comments, operatorId, isMachine }) {
  *                      with state '' and a `why` when it could not be read
  * @param description   the ticket's description; its "Next slice:" line
  *                      decides Live or Queued when the PR is already merged
+ * @param noticeboard   true when the ticket is a noticeboard
+ *                      (lib/loopNoticeboards.js isNoticeboard): a steward's
+ *                      question in the project's own queue (SP-356). It is
+ *                      not work, so an answer sends it back to Live, where no
+ *                      loop claims, never to Queued or Rework
  * @returns { act, target, why, failureNoted }
  *          act: 'move' | 'waiting' | 'held' | 'no-card' | 'handled' | 'skip' | 'cannot-tell'
  */
-function handbackPlan({ status, verdict, answerReplies, pr, description }) {
+function handbackPlan({ status, verdict, answerReplies, pr, description, noticeboard = false }) {
   const quiet = (act, why) => ({ act, target: null, why, failureNoted: false });
   const state = verdict && verdict.state;
   if (state === 'hand-held') return quiet('held', 'a "HELD BY HAND" note is newer than the question card — the session driving it moves it');
@@ -175,9 +212,22 @@ function handbackPlan({ status, verdict, answerReplies, pr, description }) {
     return quiet('no-card', 'there is no machine-written question card on this ticket, so no reply can be told apart from an older one — a session must move it');
   }
   if (state === 'none') return quiet('waiting', 'no reply of his is newer than the question card');
+  if (state === 'handled') {
+    return quiet('handled', 'an answer to the card was already acted on and the ticket was parked here again by hand, so it waits on his own word');
+  }
   if (state !== 'answered') return quiet('cannot-tell', `the answer could not be read (${state || 'no verdict'})`);
   if (repliesShowHandbackDone(answerReplies)) {
     return quiet('handled', 'his newest answer was already acted on — the ticket was parked here again by hand, so it stays');
+  }
+  if (noticeboard) {
+    // Before the bus moved into the project's own queue (SP-356) the
+    // steward's questions sat in a project no lane read; now Queued there is
+    // claimable, so a noticeboard goes back to Live, readable as the bus.
+    if (!handbackDestination(HANDBACK_WATCH, status, true, null, '', '').target) return quiet('skip', '');
+    return {
+      act: 'move', target: 'Live', failureNoted: repliesShowHandbackFailure(answerReplies),
+      why: 'it is a noticeboard, not work, so it goes back to Live, where no loop claims it; the answer stays on it for the bus to read',
+    };
   }
   const plan = handbackDestination(
     HANDBACK_WATCH, status, true, pr || null, verdict.answer && verdict.answer.comment_text, description,
@@ -202,19 +252,32 @@ function handbackPlan({ status, verdict, answerReplies, pr, description }) {
  * of a catch-up ticket's description). Anything else is said once, as a
  * reply under his word, and the word stays good for the pass after the merge.
  *
+ * NO PULL REQUEST ANYWHERE, AND A CLOSE CARD (2026-11-17, SP-375). SP-370
+ * was an operational step with no pull request. loop-review passed it and
+ * parked it here with "Your move: Close"; Dane wrote close three times and
+ * the relay refused each one, because nothing showed its work merged. With
+ * no PR there is nothing to merge: the review card asking for Close is the
+ * loop's word that the work is done and read back. So with no PR of its own,
+ * none it was filed to unstick, and a question card whose move is Close, his
+ * close word moves it to Live. A Reply or Merge card (or one naming no move)
+ * still refuses, and every case with a PR keeps the rule above.
+ *
  * @param verdict       handbackAnswer()'s result for the ticket
  * @param answerReplies the reply thread under verdict.answer
  * @param ownPr         null for no `PR opened:` line, else { number, state }
  *                      (state '' with a `why` when it could not be read)
  * @param unstuckPr     the same shape for the PR it was filed to unstick, or
  *                      null; read only when there is no PR of its own
+ * @param questionMove  the move the question card he answered ends with
+ *                      ('Merge' | 'Close' | 'Reply' | null), from
+ *                      questionCardMove. Read only when there is no PR at all.
  * @returns { act, target, why, pending }
  *          act: 'not-close' (no close word to act on: the merge step decides)
  *             | 'move' | 'refuse' | 'refused-quiet' | 'cannot-tell'
  *          pending (on a refusal): true only while the PR is still open, the
  *          one case where a later merge can still close it
  */
-function closePlan({ verdict, answerReplies, ownPr, unstuckPr }) {
+function closePlan({ verdict, answerReplies, ownPr, unstuckPr, questionMove = null }) {
   const pass = (why) => ({ act: 'not-close', target: null, why });
   const state = verdict && verdict.state;
   if (state === 'hand-held') return pass('a "HELD BY HAND" note is newer than the question card');
@@ -227,6 +290,12 @@ function closePlan({ verdict, answerReplies, ownPr, unstuckPr }) {
   const whose = ownPr ? `its own ${which}` : `${which}, the pull request this ticket was filed to unstick,`;
   let refusal;
   let pending = false;
+  if (!pr && questionMove === 'Close') {
+    return {
+      act: 'move', target: 'Live',
+      why: 'your answer says to close it, the review card that asked for Close passed it, and no pull request goes with it',
+    };
+  }
   if (!pr) {
     refusal = 'this ticket has no pull request of its own and names none it was filed to unstick, so nothing shows its work is merged';
   } else {
@@ -248,6 +317,44 @@ function closePlan({ verdict, answerReplies, ownPr, unstuckPr }) {
   const said = latestCloseRefusal(answerReplies);
   if (said === refusal) return { act: 'refused-quiet', target: null, why: `${refusal} (already said)`, pending };
   return { act: 'refuse', target: null, why: refusal, pending };
+}
+
+/**
+ * The move a POSTED card's ask ends with ('Merge' | 'Close' | 'Reply'), or
+ * null (SP-375). `readYourMove` reads the @@NEEDED text `ask` was given; a
+ * posted card carries that text inside its banner, between the `NEEDED FROM
+ * …:` label and the closing rule, each line possibly wrapped in `**`. So the
+ * ask is lifted out of the banner first, the way the ticket page's
+ * `cardMove` reads it, then read by the same rule.
+ */
+function postedCardMove(text) {
+  const unbold = (l) => String(l).trim().replace(/^\*\*\s*/, '').replace(/\s*\*\*$/, '').trim();
+  const lines = String(text ?? '').replace(/\r\n?/g, '\n').split('\n');
+  const label = bannerLabel().trim();
+  const at = lines.findIndex((l) => unbold(l).startsWith(label));
+  if (at === -1) return null;
+  const ask = [unbold(lines[at]).slice(label.length).trim()];
+  for (const line of lines.slice(at + 1)) {
+    if (unbold(line) === BANNER_RULE) break;
+    ask.push(unbold(line));
+  }
+  return readYourMove(ask.join('\n'));
+}
+
+/**
+ * The move the newest machine-written question card on a ticket ends with,
+ * or null when there is no card or it names no move. The card is found the
+ * way handbackAnswer finds the question (a machine comment carrying the
+ * banner, newest by time), so the card read here is the one his answer
+ * answers.
+ */
+function questionCardMove({ comments, isMachine }) {
+  const machine = typeof isMachine === 'function' ? isMachine : () => false;
+  const cards = (Array.isArray(comments) ? comments : [])
+    .filter((c) => isEscalationCard(c && c.comment_text) && machine(c));
+  if (!cards.length) return null;
+  const newest = cards.reduce((a, c) => (commentAt(c) > commentAt(a) ? c : a));
+  return postedCardMove(newest.comment_text);
 }
 
 /**
@@ -589,8 +696,11 @@ module.exports = {
   emptyBooks,
   mergeDestination,
   handbackAnswer,
+  earlierAnswerIds,
   handbackPlan,
   closePlan,
+  postedCardMove,
+  questionCardMove,
   CATCH_UP_WORKED_STATUSES,
   conflictFilingPlan,
   relayLine,

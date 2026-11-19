@@ -132,6 +132,15 @@ App.crm = (function () {
     return String(Math.min(100, Math.max(0, num)));
   }
 
+  /**
+   * The first opacity actually given. `a || b` read a saved 0 (fully
+   * see-through) as "not given" and fell back to 100 — the one value where
+   * that matters most (SC-866).
+   */
+  function firstSetOpacity(...values) {
+    return values.find((value) => value !== undefined && value !== null && String(value).trim() !== '');
+  }
+
   function normalizeFormColor(value, fallback) {
     const text = safeText(value).toLowerCase();
     if (text === 'none') return 'none';
@@ -332,16 +341,16 @@ App.crm = (function () {
     };
     return {
       headingColor: normalizeFormColor(source.headingColor || source.heading_color, DEFAULT_FORM_STYLES.headingColor),
-      headingColorOpacity: clampOpacity(source.headingColorOpacity || source.heading_color_opacity),
+      headingColorOpacity: clampOpacity(firstSetOpacity(source.headingColorOpacity, source.heading_color_opacity)),
       buttonBackgroundColor: normalizeFormColor(
         source.buttonBackgroundColor || source.button_background_color || legacyButtonBg,
         legacyButtonBg || DEFAULT_FORM_STYLES.buttonBackgroundColor
       ),
       buttonBackgroundColorOpacity: clampOpacity(
-        source.buttonBackgroundColorOpacity || source.button_background_color_opacity
+        firstSetOpacity(source.buttonBackgroundColorOpacity, source.button_background_color_opacity)
       ),
       buttonTextColor: normalizeFormColor(source.buttonTextColor || source.button_text_color, DEFAULT_FORM_STYLES.buttonTextColor),
-      buttonTextColorOpacity: clampOpacity(source.buttonTextColorOpacity || source.button_text_color_opacity),
+      buttonTextColorOpacity: clampOpacity(firstSetOpacity(source.buttonTextColorOpacity, source.button_text_color_opacity)),
       buttonTextSize: cssSize(source.buttonTextSize || source.button_text_size, DEFAULT_FORM_STYLES.buttonTextSize),
       buttonTextWeight: weight(source.buttonTextWeight || source.button_text_weight),
       buttonAlign: align(source.buttonAlign || source.button_align, DEFAULT_FORM_STYLES.buttonAlign),
@@ -350,10 +359,10 @@ App.crm = (function () {
       fieldAlign: align(source.fieldAlign || source.field_align, DEFAULT_FORM_STYLES.fieldAlign),
       fieldWidth: cssSize(source.fieldWidth || source.field_width, DEFAULT_FORM_STYLES.fieldWidth),
       backgroundColor: normalizeFormColor(source.backgroundColor || source.background_color, DEFAULT_FORM_STYLES.backgroundColor),
-      backgroundColorOpacity: clampOpacity(source.backgroundColorOpacity || source.background_color_opacity),
+      backgroundColorOpacity: clampOpacity(firstSetOpacity(source.backgroundColorOpacity, source.background_color_opacity)),
       borderSize: cssSize(source.borderSize || source.border_size, DEFAULT_FORM_STYLES.borderSize),
       borderColor: normalizeFormColor(source.borderColor || source.border_color, DEFAULT_FORM_STYLES.borderColor),
-      borderColorOpacity: clampOpacity(source.borderColorOpacity || source.border_color_opacity),
+      borderColorOpacity: clampOpacity(firstSetOpacity(source.borderColorOpacity, source.border_color_opacity)),
       borderRadius: cssSize(source.borderRadius || source.border_radius, DEFAULT_FORM_STYLES.borderRadius),
       padding: cssSize(source.padding, DEFAULT_FORM_STYLES.padding),
       margin: cssSize(source.margin, DEFAULT_FORM_STYLES.margin),
@@ -568,6 +577,22 @@ App.crm = (function () {
     return match ? match.token : chosen;
   }
 
+  /**
+   * What the swatch button should SHOW for a saved colour and opacity
+   * (SC-866). The shared picker paints its button with the bare hex, so a
+   * white background, a cleared one and a half-see-through one all looked like
+   * the same white square — on a white page, with a faint outline, which is
+   * why Background Color read as having no control at all. The CRM editor
+   * paints this fill over a checkerboard instead, so see-through shows.
+   */
+  function swatchFillForSaved(saved, opacity, swatches) {
+    const hex = pickerColorForSaved(saved, swatches);
+    if (!/^#[0-9a-f]{3}([0-9a-f]{3})?$/i.test(hex)) return 'transparent';
+    const alpha = Number.parseInt(clampOpacity(opacity), 10);
+    const { r, g, b } = hexToRgb(hex);
+    return `rgba(${r}, ${g}, ${b}, ${alpha / 100})`;
+  }
+
   function renderStandardColorField(inputId) {
     const bridge = window.ThemeColorFieldReact;
     const control = document.querySelector(`[data-crm-color-input="${inputId}"]`);
@@ -591,6 +616,10 @@ App.crm = (function () {
     const opacityInputId = control.dataset.crmColorOpacityInput;
     const opacityInput = opacityInputId ? el(opacityInputId) : null;
     const label = control.querySelector('.crm-form-color-options')?.getAttribute('aria-label') || 'Choose color';
+    host.style.setProperty(
+      '--crm-swatch-fill',
+      swatchFillForSaved(input.value, opacityInput ? opacityInput.value : '100', swatches)
+    );
 
     bridge.mount(host, {
       value: pickerColorForSaved(input.value, swatches),
@@ -1496,7 +1525,7 @@ App.crm = (function () {
     const alertParts = (el('crmFormEditorAlertEmails')?.value || '').split(/[\s,;]+/).map((part) => part.trim()).filter(Boolean);
     const badAlert = alertParts.filter((part) => !/^[^\s@<>,;]+@[^\s@<>,;]+\.[^\s@<>,;]+$/.test(part));
     if (badAlert.length) {
-      return `"${badAlert[0]}" is not an email address — fix it in Alert these addresses, or clear the field to use the Contact Alert Email from Settings.`;
+      return `"${badAlert[0]}" is not an email address — fix it in Alert These Addresses, or clear the field to use the Contact Alert Email from Settings.`;
     }
     const confirmationEnabled = Boolean(el('crmFormEditorConfirmEnabled')?.checked);
     const hasEmail = (fields || []).some((field) => String(field.key || '').toLowerCase() === 'email');

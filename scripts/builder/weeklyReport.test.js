@@ -726,8 +726,19 @@ test('the report reaches the tracker, never ClickUp', () => {
   assert.ok(!/901418546619|2kydhxeu-474|CLICKUP_LOOP_QUEUE_LIST|CLICKUP_BUS_CHANNEL/.test(code),
     'no ClickUp list or channel id: the tracker reads its projects from spirality.project.json');
   assert.match(code, /'stage-counts', '--project', TRACKER_PROJECT/, 'stages are counted over the tracker project');
-  assert.match(code, /'--list', BUS_PROJECT, '--name'/, 'the narrative ticket is filed in the bus project');
-  assert.match(code, /PROJECT_CONFIG\.busProject/, 'the bus project name comes from the project config');
+  assert.match(code, /PROJECT_CONFIG\.projectSlug/, 'the project name comes from the project config');
+});
+
+// SC-817. SC-792 filed the narrative ticket in the bus project, and the bus is
+// never built from: SCBUS-6 sat Queued there with no loop to take it. The
+// ticket goes to the project's own queue, where a build pass writes it.
+test('the narrative ticket is filed in the project queue, never the bus', () => {
+  const src = fs.readFileSync(path.resolve(__dirname, '..', 'weekly_report.mjs'), 'utf8');
+  const code = src.split('\n').filter((l) => !/^\s*(\*|\/\/|\/\*)/.test(l)).join('\n');
+  assert.match(code, /'--list', TRACKER_PROJECT, '--name', `Weekly report: [^`]*write the narrative`/,
+    'the narrative ticket is filed in TRACKER_PROJECT (projectSlug), where a build pass picks it up');
+  assert.ok(!/'--list', BUS_PROJECT/.test(code), 'not in the bus project: no loop ever builds from the bus');
+  assert.ok(!/busProject/.test(code), 'the report has no reason to know the bus project name at all');
 });
 
 // ── The three smaller round-3 items ────────────────────────────────────────

@@ -35,8 +35,10 @@ import { looksLikeHtmlUrl, sameSite } from "./crawl";
 import type { AssetRef, ElementIR, NavItem, NavTree, PageIR, SectionIR, SiteIR } from "./ir";
 import { readSourceForm, type DataCaptureForm, type FormField } from "./forms";
 import { chooseLayout, columnKeys, planSectionGrid, type Cell, type GridKind, type Lockup } from "./columns";
-import { deriveImportTheme, importSurfaceColor, pageTextColors, toHex } from "./theme";
+import { contrastRatio, deriveImportTheme, importSurfaceColor, pageTextColors, toHex } from "./theme";
 import { isCreditLink } from "./normalize";
+import { makePageLink, normalizeAnchorName } from "../builder-client/page-link";
+import { matchSectionShape, type SectionShapeLayer } from "../builder-client/section-shape-layer";
 import {
   buttonGlowSettings,
   hasPaint,
@@ -48,7 +50,7 @@ import {
   type MappedBackground,
   type SurfaceLook,
 } from "./surfaces";
-export { mergeMappedSections } from "./columns";
+export { mergeMappedSections, dropStaleImportSections } from "./columns";
 export { deriveImportTheme, nextThemeName, siteNameFromUrl, guardPaletteReadability, uncoveredPaletteRoles, PALETTE_PAIRS } from "./theme";
 
 /** Keep merged text modules comfortably under the hard 10k normalizer cap. */
@@ -96,6 +98,14 @@ export type MappedSection = {
   rowBorderColor?: string;
   rowBorderStyle?: string;
   rowBorderRadius?: string;
+  /**
+   * A band that stood much taller than its content (a hero photo with one
+   * line of text near its foot): its measured height, in px, and where the
+   * content sat in it (task SC-849). Without these the row shrinks to fit the
+   * text and the picture behind it becomes a strip.
+   */
+  minHeight?: string;
+  cellVAlign?: Record<string, string>;
   cellBackgrounds?: Record<string, MappedBackground>;
   cellBorderWidth?: Record<string, string>;
   cellBorderColor?: Record<string, string>;
@@ -106,6 +116,17 @@ export type MappedSection = {
   cellPaddingRight?: Record<string, string>;
   cellPaddingBottom?: Record<string, string>;
   cellPaddingLeft?: Record<string, string>;
+  /**
+   * The section's anchor name (SC-852): rendered as its `id`, so a jump link
+   * lands on it. Set only on a section some imported link points at, from
+   * the original's own id (task SC-854).
+   */
+  anchorName?: string;
+  /**
+   * A curve, wave or slant painted over the band (task SC-859): the
+   * original's background mask, matched to the nearest built-in shape.
+   */
+  shapeLayer?: SectionShapeLayer;
   /** Engine bookkeeping for the runner (stripped before write): */
   sourceElementIds: string[];
   /** How this section's elements were disposed — the runner moves these
@@ -238,6 +259,12 @@ export type MapReport = {
     skipped: number;
   };
   skipped: { sourceId: string; class: string; reason: string }[];
+  /**
+   * Background masks and dividers matched onto a section's shape layer
+   * (task SC-859). Present only when a page had one, so a site without any
+   * reports exactly as before. Unmatched ones are in `skipped`, with why.
+   */
+  shapes?: { pagePath: string; sourceId: string; shape: string; what: string }[];
   pages: {
     path: string;
     /** MappedPage.key — unique per page, unlike path. */
@@ -287,6 +314,25 @@ export type MapReport = {
       formId?: string;
     }[];
     pictures: { pagePath: string; sourceId: string; reason: string }[];
+  };
+  /**
+   * The original's jump links (`#contact-us`) and what became of them (task
+   * SC-854): `linked` now point at an imported section, `skipLinks` were
+   * "skip to content" links left out on purpose, and `unresolved` lists the
+   * rest with the reason, one entry per page and address.
+   */
+  jumpLinks: {
+    linked: number;
+    skipLinks: number;
+    unresolved: UnresolvedJumpLink[];
+    /**
+     * Set when the IR predates jump-link capture (SiteIR.anchorsRecorded
+     * absent and no element carrying anchors): the ids were never looked for,
+     * so `links` same-site jump links could not be matched, and `why` says so
+     * and how to refresh it. Those links are NOT in `unresolved` — a per-id
+     * "missing" reason there would be false (review of SC-854).
+     */
+    notRecorded?: { links: number; why: string };
   };
   /**
    * The menus --apply will build, in counts and plain words, so the dry run
@@ -375,7 +421,7 @@ export type ImportFormPlan = {
   dropped: DataCaptureForm["dropped"];
   notes: DataCaptureForm["notes"];
   /** Button looks read off the source, only where it said: CRM form style keys. */
-  styles: { buttonBackgroundColor?: string; buttonTextColor?: string; buttonTextSize?: string };
+  styles: { buttonBackgroundColor?: string; buttonTextColor?: string; buttonTextSize?: string; labelPosition?: "above" | "beside" };
   uses: { pageKey: string; pagePath: string; moduleId: string; sourceId: string }[];
 };
 
@@ -393,6 +439,13 @@ export type MapOutput = {
   /** The Top Menu and Footer Menu saved sections --apply builds (task
    *  86bchydp6). */
   menus: MenuPlan;
+  /**
+   * Every jump link the mapper turned into a link to one imported section
+   * (task SC-854), by the address it wrote ("/#contact-us"). Page ids do not
+   * exist until --apply writes the pages, so the runner swaps each such
+   * address for a stored reference afterwards (referenceSectionLinks).
+   */
+  sectionLinks: SectionLinkTarget[];
   copyPlan: {
     crops: CropCopy[];
     assets: AssetPromotion[];
@@ -402,6 +455,22 @@ export type MapOutput = {
   };
   report: MapReport;
 };
+
+/** One imported section a jump link points at. `fallback` is the address the
+ *  mapper wrote for it, the page's path plus the section's anchor name. */
+export type SectionLinkTarget = {
+  fallback: string;
+  pageKey: string;
+  sectionId: string;
+  /** Each link the mapper pointed here, as the original wrote it — so the
+   *  runner can list them as leftovers if the section turns out to be one a
+   *  person edited (demoteEditedSectionLinks). */
+  uses: { page: string; href: string; label: string }[];
+};
+
+/** A jump link the import could not point at a section, and why — the
+ *  build's leftovers list, so it is never dropped quietly. */
+export type UnresolvedJumpLink = { page: string; href: string; label: string; why: string };
 
 export type MapOptions = {
   /** Slugs already taken by pages the import does NOT own. */
@@ -580,12 +649,21 @@ export function dropRepeatCaptures(pages: PageIR[]): {
 }
 
 export type PageWrite = { key: string; slug: string; pageId: string; action: "created" | "updated" };
+/** A page an earlier build of this import made that has since been deleted. */
+export type LeftOutPage = { key: string; slug: string; pageId: string };
 
 /**
  * The --apply page write loop, with the store passed in so it can be tested
  * without a database. Each mapped page is looked up, and recorded, under its
  * OWN key: a page whose key has a prior id is merged into that page, any
  * other page is created.
+ *
+ * A page the import built that is gone now (`getPage` returns null — only a
+ * clean "not found", never a failed read) was deleted by somebody, so it is
+ * LEFT OUT, not made again (SC-850: Bayside's author page came back on every
+ * rebuild and was deleted by hand each time). Its id stays in `pageIds`, so
+ * the next rebuild still knows it was deleted rather than never built.
+ * `recreateDeleted` makes them again, on request.
  */
 export async function writeMappedPages<S>(
   pages: MappedPage[],
@@ -595,22 +673,28 @@ export async function writeMappedPages<S>(
     getPage: (id: string) => Promise<{ id: string | number; layoutSections?: S[] } | null>;
     createPage: (page: MappedPage, sections: S[]) => Promise<{ id: string | number }>;
     updatePage: (page: MappedPage, current: { id: string | number; layoutSections?: S[] }, merged: S[]) => Promise<{ id: string | number }>;
-    mergeSections: (existing: S[], incoming: S[]) => S[];
+    mergeSections: (existing: S[], incoming: S[], page: MappedPage) => S[];
     onWrite?: (page: MappedPage, pageId: string, sections: S[], action: PageWrite["action"]) => void;
+    recreateDeleted?: boolean;
   }
-): Promise<{ pageIds: Record<string, string>; writes: PageWrite[] }> {
+): Promise<{ pageIds: Record<string, string>; writes: PageWrite[]; leftOut: LeftOutPage[] }> {
   const pageIds: Record<string, string> = { ...io.priorPageIds };
   const writes: PageWrite[] = [];
+  const leftOut: LeftOutPage[] = [];
   for (const page of pages) {
     const sections = io.prepareSections(page);
     const existingId = pageIds[page.key];
     // Read the page's CURRENT state at write time — a listing taken at
     // startup is stale by now, and merging against it reverts edits.
-    const current = existingId ? await io.getPage(existingId) : null; // vanished page → recreate
+    const current = existingId ? await io.getPage(existingId) : null;
+    if (existingId && !current && !io.recreateDeleted) {
+      leftOut.push({ key: page.key, slug: page.slug, pageId: String(existingId) });
+      continue;
+    }
     let saved: { id: string | number };
     let action: PageWrite["action"];
     if (current) {
-      saved = await io.updatePage(page, current, io.mergeSections(current.layoutSections || [], sections));
+      saved = await io.updatePage(page, current, io.mergeSections(current.layoutSections || [], sections, page));
       action = "updated";
     } else {
       saved = await io.createPage(page, sections);
@@ -621,7 +705,7 @@ export async function writeMappedPages<S>(
     writes.push({ key: page.key, slug: page.slug, pageId, action });
     io.onWrite?.(page, pageId, sections, action);
   }
-  return { pageIds, writes };
+  return { pageIds, writes, leftOut };
 }
 
 /**
@@ -760,6 +844,30 @@ function decodeEntities(value: string): string {
       };
       return Object.prototype.hasOwnProperty.call(named, code) ? named[code] : whole;
     });
+}
+
+/**
+ * True when a repeated run's blocks sit one above another rather than side by
+ * side (SC-858): no block starts before the one above it ends. A row of cards
+ * always has two blocks sharing a line — six cards are 3 + 3, never 1 x 6.
+ * A block with no recorded position means the answer is unknown, and the run
+ * stays a card grid as it always did.
+ */
+export function blocksStack(groups: { box?: { y: number; h: number } | null }[][]): boolean {
+  if (groups.length < 2) return false;
+  const spans: { top: number; bottom: number }[] = [];
+  for (const group of groups) {
+    const boxes = group
+      .map((e) => e.box)
+      .filter((b): b is { y: number; h: number } => !!b && Number.isFinite(b.y) && Number.isFinite(b.h) && b.h > 0);
+    if (!boxes.length) return false;
+    spans.push({
+      top: Math.min(...boxes.map((b) => b.y)),
+      bottom: Math.max(...boxes.map((b) => b.y + b.h)),
+    });
+  }
+  const TOLERANCE_PX = 2;
+  return spans.every((span, i) => i === 0 || span.top >= spans[i - 1].bottom - TOLERANCE_PX);
 }
 
 /** Column count for an imported card grid: the largest of 4/3/2 that divides
@@ -1050,17 +1158,71 @@ export type ProseThemeLook = {
   headingWeights: Record<number, number>;
   /** The theme's link colour (hex), or "" when it sets none. */
   linkColor: string;
+  /** The theme's heading and body text colours (hex), or "" for none. */
+  headingColor?: string;
+  textColor?: string;
+  /** The page surface the theme paints (hex), or "" when it names none. Text
+   *  with no band of its own sits on this, so its own colour is checked
+   *  against it (SC-861). */
+  surface?: string;
 };
+
+/** Below this an element's own colour on a painted band is not trusted to be
+ *  readable there (WCAG's large-text floor; headings are what this is for). */
+const BAND_TEXT_CONTRAST = 3;
+/** Body text on the plain page surface is held to WCAG's normal-text floor,
+ *  the same one the theme holds its own text colour to. */
+const SURFACE_TEXT_CONTRAST = 4.5;
 
 /** A heading level the theme names no weight for paints at the browser's
  *  own heading weight. */
 const DEFAULT_HEADING_WEIGHT = 700;
 
-export function proseThemeLook(theme: { typography?: { scale?: Record<string, number>; colors?: Record<string, string> } }): ProseThemeLook {
+export function proseThemeLook(theme: { typography?: { scale?: Record<string, number>; colors?: Record<string, string> }; palette?: Record<string, string> }): ProseThemeLook {
   const scale = theme.typography?.scale || {};
   const headingWeights: Record<number, number> = {};
   for (let level = 1; level <= 6; level++) headingWeights[level] = Number(scale[`h${level}Fw`]) || DEFAULT_HEADING_WEIGHT;
-  return { headingWeights, linkColor: toHex(theme.typography?.colors?.link) };
+  return {
+    headingWeights,
+    linkColor: toHex(theme.typography?.colors?.link),
+    headingColor: toHex(theme.typography?.colors?.heading),
+    textColor: toHex(theme.typography?.colors?.text),
+    surface: toHex(theme.palette?.surface),
+  };
+}
+
+/**
+ * The element's own colour, when the band it sits on came along and the
+ * colour reads on it (task SC-849) — or, with no band, when it reads on the
+ * theme's page surface (SC-861; held to 3:1 for a heading, 4.5:1 for text). Bayside Partners' hero heading is white
+ * over a photo; the import reproduced the photo, then dropped the white, and
+ * the theme painted the heading dark on the dark picture. A picture is
+ * trusted as the source showed it; a fill or gradient must clear
+ * BAND_TEXT_CONTRAST against every colour it paints. "" otherwise — and
+ * always when the colour is the theme's own for that element.
+ */
+export function ownColorOnBand(el: ElementIR, look: ProseThemeLook, band: MappedBackground | null | undefined): string {
+  const own = toHex(el.computedStyles?.color);
+  if (!own) return "";
+  const isHeading = /^\s*<h[1-6]\b/i.test(String(el.html || "")) || el.class === "heading";
+  const isLink = el.class === "link" || /^\s*<a\b/i.test(String(el.html || ""));
+  const themeColor = (isHeading ? look.headingColor || look.textColor : isLink ? look.linkColor || look.textColor : look.textColor) || "";
+  if (themeColor && own === themeColor) return "";
+  if (!band || band.mode === "none") {
+    // No band came along: the text sits on the theme's page surface. Its own
+    // colour is kept where it reads there (SC-861) — Bayside's black section
+    // headings and its blue LinkedIn line had come out in the theme's grey.
+    const surface = look.surface || "";
+    if (!surface) return "";
+    return contrastRatio(own, surface) >= (isHeading ? BAND_TEXT_CONTRAST : SURFACE_TEXT_CONTRAST) ? own : "";
+  }
+  if (band.mode === "image") return own;
+  const fills = [band.color, band.mode === "gradient" ? band.color2 : ""]
+    .concat((band.gradientLayers || []).flatMap((layer) => (layer.stops || []).map((s) => s.color)))
+    .map((c) => toHex(c))
+    .filter(Boolean);
+  if (!fills.length) return "";
+  return fills.every((fill) => contrastRatio(own, fill) >= BAND_TEXT_CONTRAST) ? own : "";
 }
 
 function weightOf(value: string | undefined): number {
@@ -1090,19 +1252,23 @@ function withStyle(existing: string | undefined, decls: string[]): string {
  * carries what is typical; this carries what differs from it.
  *
  * - The element's OWN weight and letter spacing, where they differ from what
- *   the theme paints for that element. Its own colour is deliberately left to
- *   the theme: the theme rejects colours that cannot be read on the page's
- *   surface, and a white heading from a dark band the import did not
- *   reproduce would otherwise arrive invisible.
+ *   the theme paints for that element. Its own colour is kept where it reads
+ *   on what it will sit on (ownColorOnBand): the band that came along, else
+ *   the theme's page surface (SC-861). The theme rejects colours that cannot
+ *   be read on the page's surface, and a white heading from a dark band the
+ *   import did not reproduce would otherwise arrive invisible. Links inside
+ *   that matched the block take the same colour.
  * - Each word's recorded difference from its parent (`inlineStyles`), except
  *   a link's colour where it is the theme's own link colour.
  *
  * Returns the html unchanged, byte for byte, when nothing differs.
  */
-export function styleProseHtml(el: ElementIR, look: ProseThemeLook): string {
+export function styleProseHtml(el: ElementIR, look: ProseThemeLook, band?: MappedBackground | null): string {
   const own = el.computedStyles || {};
   const level = Number((String(el.html || "").match(/^\s*<h([1-6])\b/i) || [])[1]) || 0;
   const rootDecls: string[] = [];
+  const bandColor = ownColorOnBand(el, look, band);
+  if (bandColor) rootDecls.push(`color:${bandColor}`);
   const weight = weightOf(own["font-weight"]);
   const themeWeight = level ? look.headingWeights[level] || DEFAULT_HEADING_WEIGHT : 400;
   if (weight !== themeWeight) rootDecls.push(`font-weight:${weight}`);
@@ -1111,7 +1277,15 @@ export function styleProseHtml(el: ElementIR, look: ProseThemeLook): string {
   const runs = el.inlineStyles || [];
   if (!rootDecls.length && !runs.length) return el.html;
 
-  const $ = cheerio.load(el.html, null, false); // fragment mode
+  // Words captured with no tag of their own (a blog excerpt, "on" between two
+  // links) have nowhere to carry a weight or colour, so they get an inline
+  // <span> — inline, so nothing moves (SC-861: Bayside's excerpts lost their
+  // 500 weight). Recorded runs index the element's descendants, which the
+  // span wraps unchanged.
+  // Wrapped whenever it starts with words, so a run's index counts from the
+  // element itself rather than from its first tag.
+  const bare = !/^\s*</.test(String(el.html || ""));
+  const $ = cheerio.load(bare ? `<span>${el.html}</span>` : el.html, null, false); // fragment mode
   const root = $.root().children().first();
   if (!root.length) return el.html;
   let changed = false;
@@ -1134,6 +1308,20 @@ export function styleProseHtml(el: ElementIR, look: ProseThemeLook): string {
     if (!decls.length) continue;
     $(node).attr("style", withStyle($(node).attr("style"), decls));
     changed = true;
+  }
+  // A link recorded no colour of its own because it matched its block. When
+  // the block's own colour is written inline, the link needs it too: the
+  // stylesheet paints every link with the theme's link colour, not the
+  // block's (SC-861 — Bayside's blue "Joshua Barrow – LinkedIn" line came out
+  // a link in the theme's black, or plain grey where no theme was named).
+  if (bandColor) {
+    const coloured = new Set(runs.filter((r) => r.tag === "a" && toHex(r.styles.color)).map((r) => r.index));
+    descendants.forEach((node, index) => {
+      if (((node as { name?: string }).name || "").toLowerCase() !== "a" || coloured.has(index)) return;
+      if (/(?:^|;)\s*color\s*:/i.test(String($(node).attr("style") || ""))) return;
+      $(node).attr("style", withStyle($(node).attr("style"), [`color:${bandColor}`]));
+      changed = true;
+    });
   }
   return changed ? $.html() : el.html;
 }
@@ -1229,12 +1417,17 @@ type Dispositions = { mapped: number; placeholder: number; deduped: number; form
 function applyBand(
   row: MappedSection,
   look: SurfaceLook | null,
-  at: { first: boolean; last: boolean; rows: number }
+  at: { first: boolean; last: boolean; rows: number; joinPlain?: boolean }
 ): void {
   if (!look) return;
   if (look.background) {
     row.background = { ...look.background };
     if (!at.first) row.joinWithPrevious = true;
+  } else if (at.joinPlain && !at.first) {
+    // One source band split over several rows stays one band even with no
+    // paint of its own (SC-849): unjoined, the theme's alternating bands gave
+    // Bayside Partners' Services heading row grey and its cards row white.
+    row.joinWithPrevious = true;
   }
   if (at.first && look.padding.top) row.paddingTop = look.padding.top;
   if (at.last && look.padding.bottom) row.paddingBottom = look.padding.bottom;
@@ -1244,6 +1437,37 @@ function applyBand(
     row.rowBorderStyle = look.border.style;
     if (look.radius) row.rowBorderRadius = look.radius;
   }
+}
+
+/** Builder's ceiling for a row's minimum height (builder-template.ts). */
+const MAX_ROW_MIN_HEIGHT = 1200;
+
+/**
+ * A band's measured height, when it stood clearly taller than its content
+ * plus padding, and where in it the content sat (task SC-849). Bayside
+ * Partners' hero photo is 750px tall with one line of text near its foot;
+ * keeping only the band's 54px padding shrank it to a 200px strip. Null when
+ * the band was content-sized, or when nothing was measured.
+ */
+export function bandHeightFor(
+  bandBox: { y: number; h: number } | undefined,
+  contentBoxes: Array<{ y: number; h: number } | undefined>,
+  padTop: number,
+  padBottom: number
+): { minHeight: string; vAlign: "top" | "center" | "bottom" } | null {
+  if (!bandBox || !(bandBox.h > 0)) return null;
+  const boxes = contentBoxes.filter((b): b is { y: number; h: number } => Boolean(b && b.h > 0));
+  if (!boxes.length) return null;
+  const top = Math.min(...boxes.map((b) => b.y));
+  const bottom = Math.max(...boxes.map((b) => b.y + b.h));
+  const natural = bottom - top + padTop + padBottom;
+  // Room for measuring noise and ordinary spacing between modules: only a
+  // band with real empty space in it keeps its height.
+  if (bandBox.h < natural + 80 || bandBox.h < natural * 1.3) return null;
+  const gapTop = top - (bandBox.y + padTop);
+  const gapBottom = bandBox.y + bandBox.h - padBottom - bottom;
+  const vAlign = gapTop > 2 * gapBottom ? "bottom" : gapBottom > 2 * gapTop ? "top" : "center";
+  return { minHeight: String(Math.min(Math.round(bandBox.h), MAX_ROW_MIN_HEIGHT)), vAlign };
 }
 
 function setCell<K extends keyof MappedSection>(
@@ -1366,7 +1590,27 @@ function splitIntoRows(args: {
         while (start > 0 && rowBand[start - 1] === key) start--;
         let end = i;
         while (end < bands.length - 1 && rowBand[end + 1] === key) end++;
-        applyBand(row, args.bandLookOf(key), { first: i === start, last: i === end, rows: end - start + 1 });
+        const look = args.bandLookOf(key);
+        applyBand(row, look, { first: i === start, last: i === end, rows: end - start + 1, joinPlain: true });
+        // A band that is this one row keeps its height (SC-849). A band split
+        // over several rows is left content-sized: which row would take the
+        // empty space is a guess.
+        if (start === end) {
+          const byId = new Map((section.elements || []).map((el) => [el.sourceId, el]));
+          const tall = bandHeightFor(
+            section.containerBoxes?.[key],
+            row.sourceElementIds.map((id) => byId.get(id)?.box),
+            Number(look?.padding.top) || 0,
+            Number(look?.padding.bottom) || 0
+          );
+          if (tall) {
+            row.minHeight = tall.minHeight;
+            if (tall.vAlign !== "top") {
+              const keys = layout === "single" ? ["main"] : columnKeys(cols.length);
+              row.cellVAlign = Object.fromEntries(keys.map((k) => [k, tall.vAlign]));
+            }
+          }
+        }
       }
     } else {
       applyBand(row, args.rootLook, { first: i === 0, last: i === bands.length - 1, rows: bands.length });
@@ -1438,6 +1682,147 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
   };
   for (const nav of menuNavs(ir)) collectNav(nav.items);
   const menusOn = opts.menus !== false;
+  // The header menu's own pairs, to recognise the section the Top Menu is
+  // built from (setAside below).
+  const headerNavPairs = new Set<string>();
+  for (const nav of menuNavs(ir).filter((n) => n.location === "header")) {
+    const walk = (items: NavItem[]) => {
+      for (const item of items || []) {
+        headerNavPairs.add(`${collapse(item.label).toLowerCase()}|${normalizeHref(item.href)}`);
+        walk(item.children || []);
+      }
+    };
+    walk(nav.items);
+  }
+  const linkPair = (el: ElementIR) =>
+    `${collapse(el.textContent).toLowerCase()}|${normalizeHref(attrFromHtml(el.html, "href"))}`;
+  const logoTaxonomy = ir.taxonomy?.logo;
+
+  /**
+   * A CSS-painted box that is a site builder's background mask (task SC-859):
+   * Divi's `et_pb_background_mask` and anything like it — an SVG drawing as
+   * the box's background, covering the whole band. Matched onto the band's
+   * shape layer when it can be; when it cannot, still set aside, with a
+   * reason naming the mask so the report says what was lost.
+   *
+   * A box much smaller than its band is a divider along one edge, not a
+   * full-band shape, and a full-band shape would paint it far too big, so it
+   * is named rather than guessed.
+   *
+   * Null when the box is not an SVG background at all — the caller then
+   * skips it as "nothing to show", exactly as before.
+   */
+  const readShapeMask = (section: SectionIR, el: ElementIR): Aside | null => {
+    const styles = (el.computedStyles || {}) as Record<string, string>;
+    const bg = String(styles["background-image"] || "");
+    if (!/data:image\/svg\+xml/i.test(bg)) return null;
+    const containers = el.containers || [];
+    const container = containers[containers.length - 1] || "";
+    const band = container ? section.containerBoxes?.[container] : undefined;
+    const lost = (why: string): Aside => ({
+      navConsumed: false,
+      reason: `a background shape (a mask drawn by CSS) that was not carried over — ${why}`,
+    });
+    // Without both boxes there is no telling a full-band mask from a thin
+    // divider along one edge, and guessing "full band" paints a divider over
+    // the whole row — so refuse, and say why.
+    if (!el.box || !(el.box.w > 0) || !(el.box.h > 0) || !band || !(band.w > 0) || !(band.h > 0)) {
+      return lost("its size or its band's size was not measured, so it cannot be told apart from a divider along one edge");
+    }
+    const cover = (el.box.w * el.box.h) / (band.w * band.h);
+    if (cover < 0.9) {
+      return lost(`it covers ${Math.round(cover * 100)}% of its band, so it is a divider along an edge, and only full-band shapes are matched`);
+    }
+    const match = matchSectionShape(bg, String(styles.transform || ""));
+    if (!match.ok) return lost(match.reason);
+    return { navConsumed: false, reason: "", shape: { layer: match.layer, container, note: match.note } };
+  };
+
+  /**
+   * Elements that must not reach the page and must not shape its layout,
+   * decided before columns are read (task SC-849, Bayside Partners):
+   *
+   * - The header the Top Menu is built from. Its links were already consumed;
+   *   its logo picture and its hidden phone-menu leftovers were poured as
+   *   content too, so the page showed the logo twice and Divi's "Select Page"
+   *   label. With menus on, a section holding header-menu links gives up the
+   *   site logo (the Top Menu shows it) and any short text the capture saw no
+   *   position for — hidden on a desktop screen, which in a header is the
+   *   phone menu. Visible header text that is not the menu stays.
+   * - An "image" with nothing to show: a box painted only by CSS (Divi's
+   *   `et_pb_background_mask`, an SVG drawn as a background). It became an
+   *   image module with an empty address, and because it spanned the whole
+   *   band it stopped the contact text and form being read as two columns.
+   * - Prose that is nothing but markup (`<p><!-- /divi:paragraph --></p>`),
+   *   which was merged into the heading before it. Not `<p>&nbsp;</p>`: that
+   *   blank line is spacing the author typed (the Delray fixture has 46).
+   *
+   * Each is accounted: the logo as navConsumed, the rest skipped with a reason.
+   */
+  type Aside = { navConsumed: boolean; reason: string; shape?: { layer: SectionShapeLayer; container: string; note: string } };
+  const setAside = (section: SectionIR): Map<string, Aside> => {
+    const out = new Map<string, Aside>();
+    const els = section.elements || [];
+    const measured = els.some((el) => el.box && el.box.w > 0);
+    const isHeader =
+      menusOn && headerNavPairs.size > 0 && els.some((el) => el.class === "link" && headerNavPairs.has(linkPair(el)));
+    for (const el of els) {
+      if (isHeader && el.class === "image" && logoTaxonomy?.src) {
+        const assetId = shownAssetId(el, assetsById);
+        const src = attrFromHtml(el.html, "src");
+        if ((logoTaxonomy.assetId && assetId === logoTaxonomy.assetId) || (src && src === logoTaxonomy.src)) {
+          out.set(el.sourceId, { navConsumed: true, reason: "" });
+          continue;
+        }
+      }
+      if (isHeader && measured && !el.box && PROSE_CLASSES.has(el.class) && el.class !== "link") {
+        const words = collapse(el.textContent);
+        if (words.length <= 40) {
+          out.set(el.sourceId, {
+            navConsumed: false,
+            reason: `hidden in the header on a desktop screen ("${words}") — the site's phone-menu chrome; the Top Menu replaces that menu`,
+          });
+          continue;
+        }
+      }
+      // Elementor's shape divider (`<div class="elementor-shape …"><svg>`):
+      // its colour lives in the site's stylesheet, which the capture does
+      // not record, so a match would guess the colour. Named, not guessed
+      // (SC-859); poured as content it was a stray picture over the band.
+      if (/^\s*<div\b[^>]*\bclass\s*=\s*"[^"]*\belementor-shape\b/i.test(String(el.html || ""))) {
+        out.set(el.sourceId, {
+          navConsumed: false,
+          reason:
+            "a background shape (an Elementor shape divider) that was not carried over — its colour is set by the site's stylesheet, which the capture does not record",
+        });
+        continue;
+      }
+      if (
+        el.class === "image" &&
+        !shownAssetId(el, assetsById) &&
+        !attrFromHtml(el.html, "src") &&
+        !/<(img|svg|picture|video|canvas)\b/i.test(el.html)
+      ) {
+        const shape = readShapeMask(section, el);
+        if (shape) {
+          out.set(el.sourceId, shape);
+          continue;
+        }
+        out.set(el.sourceId, {
+          navConsumed: false,
+          reason: "an image box with no picture in it — painted only by CSS (a background layer or mask), nothing to show",
+        });
+        continue;
+      }
+      // Nothing at all between the tags once comments are gone. A deliberate
+      // blank line (`<p>&nbsp;</p>`) is spacing its author typed, and stays.
+      const bare = String(el.html || "").replace(/<!--[\s\S]*?-->/g, "").replace(/<[^>]*>/g, "");
+      if (PROSE_CLASSES.has(el.class) && /^[ \t\r\n]*$/.test(bare) && !/<(img|svg|picture|video|iframe|br)\b/i.test(el.html)) {
+        out.set(el.sourceId, { navConsumed: false, reason: "nothing but markup — empty markup the site builder left behind" });
+      }
+    }
+    return out;
+  };
   // The footer's own links stay on the page even with a Footer Menu: on a
   // site whose footer band is nothing but links, consuming them deletes the
   // band and its background (the Dane of Earth fixture's #222 footer).
@@ -1482,6 +1867,7 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
     repeatCaptures,
     placeholderPatterns: [],
     forms: { rebuilt: [], pictures: [] },
+    jumpLinks: { linked: 0, skipLinks: 0, unresolved: [] },
     menus: { top: null, footer: null, notes: [] },
   };
   for (const repeat of repeatCaptures) {
@@ -1493,6 +1879,8 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
   const promotions = new Map<string, AssetPromotion>();
   const sourceOverflows: SourceOverflow[] = [];
   const pages: MappedPage[] = [];
+  /** MappedPage.key → the IR page it was mapped from (jump links, SC-854). */
+  const irPageOfKey = new Map<string, PageIR>();
 
   let moduleSeq = 0;
   const nextModuleId = (sourceId: string) =>
@@ -1516,7 +1904,9 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
       kept: reading.kept,
       dropped: reading.dropped,
       notes: reading.notes,
-      styles: { ...siteButton, ...submitButtonLook(el.html) },
+      // Where the labels sit is read off the form itself (SC-860); a form
+      // read before it existed has no answer and keeps the form's default.
+      styles: { ...siteButton, ...submitButtonLook(el.html), ...(reading.labelPosition ? { labelPosition: reading.labelPosition } : {}) },
       uses: [],
     };
     formPlans.set(key, plan);
@@ -1708,6 +2098,9 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
   };
 
   const cardGridRuns: CardGridRun[] = [];
+  /** Elements of a run declined because its blocks stack (SC-858) → which
+   *  block they belong to, so the column planner keeps one row per block. */
+  const stackedRowOf = new Map<string, string>();
   (ir.pages || []).forEach((irPage, pageIdx) => {
     if (cardsVetoed(pageIdx)) return; // vetoed: blocks stay as separate modules
     for (const section of irPage.sections || []) {
@@ -1719,6 +2112,15 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
       const groups: ElementIR[][] = [];
       for (let g = 0; g < found.reps; g++) {
         groups.push(els.slice(found.start + g * found.size, found.start + (g + 1) * found.size));
+      }
+      // A row of cards sits side by side. Blocks that sit one above another
+      // are a list — Bayside's Services, four icon-beside-text rows, came out
+      // as four squeezed tall cards (SC-858). Each block keeps its own row.
+      if (blocksStack(groups)) {
+        groups.forEach((group, gi) => {
+          for (const el of group) stackedRowOf.set(el.sourceId, `${groups[0][0].sourceId}#${gi}`);
+        });
+        continue;
       }
       cardGridRuns.push({
         pageIdx,
@@ -1836,7 +2238,10 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
       // by band says which boxes hold one cell's worth of content (cards);
       // the real plan then refuses to pour two different cards into one cell
       // (columns.ts, GridItem.group).
-      const sectionEls = section.elements || [];
+      // Set-aside elements (setAside) are accounted in the loop below but
+      // play no part in bands, cards or columns.
+      const asideOf = setAside(section);
+      const sectionEls = (section.elements || []).filter((el) => !asideOf.has(el.sourceId));
       const containerStyles = section.containers || {};
       const rowCtx = { surface: pageSurface, resolveImage: resolveBackgroundImage, maxPadding: 160 };
       const sectionGround = toHex(section.ground);
@@ -1864,6 +2269,13 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
           return Boolean(look && (look.padding.top || look.padding.bottom));
         }
       );
+      /** What paints behind an element once imported: its band's background,
+       *  else the section's ground — for keeping its own colour (SC-849). */
+      const backdropOf = (sourceId: string): MappedBackground | null => {
+        const key = bandOf.get(sourceId);
+        const look = key ? bandLookOf(key) : null;
+        return look?.background || ground;
+      };
       const draft = planSectionGrid(
         sectionEls.map((el) => ({ id: el.sourceId, box: el.box, group: bandOf.get(el.sourceId), kind: gridKind(el) }))
       );
@@ -1876,6 +2288,7 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
           id: el.sourceId,
           box: el.box,
           group: `${bandOf.get(el.sourceId) || ""}\u0001${cardOf.get(el.sourceId) || ""}`,
+          row: stackedRowOf.get(el.sourceId),
           kind: gridKind(el),
         }))
       );
@@ -1918,7 +2331,7 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
       // a stacked one is the section's whole span, or the site's measured
       // content width when that is wider (a section holding only a logo
       // spans only the logo). 0 = unmeasured.
-      const boxes = (section.elements || []).map((el) => el.box).filter((b) => b && b.w >= 2);
+      const boxes = sectionEls.map((el) => el.box).filter((b) => b && b.w >= 2);
       const sectionSpanPx = boxes.length
         ? Math.max(...boxes.map((b) => b!.x + b!.w)) - Math.min(...boxes.map((b) => b!.x))
         : 0;
@@ -2006,6 +2419,7 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
         while (moduleCells.length < modules.length) moduleCells.push(currentCell);
       };
 
+      const pendingShapes: { el: ElementIR; shape: NonNullable<Aside["shape"]> }[] = [];
       for (const el of section.elements || []) {
         const cell = grid.cells.get(el.sourceId) || currentCell;
         if (cell.band !== currentCell.band || cell.col !== currentCell.col) {
@@ -2015,7 +2429,24 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
           dispositions = dispositionsFor(cell.band);
         }
         report.elements.total += 1;
-        sourceElementIds.push(el.sourceId);
+        // Set aside: counted in the report, never filed under a row — it has
+        // no cell, and a row it was filed under would read its box and band.
+        const aside = asideOf.get(el.sourceId);
+        if (!aside) sourceElementIds.push(el.sourceId);
+        if (aside) {
+          if (aside.shape) {
+            // Counted only once a row actually takes it (below) — a band with
+            // nothing carried over has no row to hold it, and reporting it as
+            // landed then would be a success line over a dropped shape.
+            pendingShapes.push({ el, shape: aside.shape });
+          } else if (aside.navConsumed) {
+            report.elements.navConsumed += 1;
+          } else {
+            report.elements.skipped += 1;
+            report.skipped.push({ sourceId: el.sourceId, class: el.class, reason: aside.reason });
+          }
+          continue;
+        }
         if (el.class === "heading" && !firstHeading) firstHeading = collapse(el.textContent);
 
         const slideshowLead = slideshowLeads.get(el.sourceId);
@@ -2134,7 +2565,7 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
                 alt: attrFromHtml(pic.html, "alt") || asset.altText || "",
                 widthPx: Math.min(shownWidthPx(pic.html, pic.box) || pic.box?.w || 64, 160),
                 gapPx: lockup.gapPx,
-                wordsHtml: words.map((w) => styleProseHtml(w as ElementIR, proseLook)).join(""),
+                wordsHtml: words.map((w) => styleProseHtml(w as ElementIR, proseLook, backdropOf((w as ElementIR).sourceId))).join(""),
                 link: imageLink(pic),
               }),
               settings: { importSourceIds: [lockup.image, ...lockup.texts].join(",") },
@@ -2164,7 +2595,7 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
               continue;
             }
           }
-          const html = styleProseHtml(el, proseLook);
+          const html = styleProseHtml(el, proseLook, backdropOf(el.sourceId));
           // Oversize ladder before merging.
           if (html.length > TEXT_MODULE_CHAR_BUDGET) {
             flushProse();
@@ -2347,7 +2778,19 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
       flushProse();
       tagNewModules();
 
-      if (!modules.length) continue; // nothing mappable (e.g. nav-only section)
+      const skipShape = (el: ElementIR, why: string) => {
+        report.elements.skipped += 1;
+        report.skipped.push({
+          sourceId: el.sourceId,
+          class: el.class,
+          reason: `a background shape (a mask drawn by CSS) that was not carried over — ${why}`,
+        });
+      };
+      if (!modules.length) {
+        // nothing mappable (e.g. nav-only section)
+        for (const { el } of pendingShapes) skipShape(el, "nothing else in its band was carried over, so there is no row to put it on");
+        continue;
+      }
       const built = splitIntoRows({
         section,
         baseId: `imps_${String(section.sourceId).replace(/[^a-zA-Z0-9]+/g, "")}`,
@@ -2364,11 +2807,43 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
         ground,
         cardLookOf,
       });
+      // A matched background mask (SC-859) goes on the row holding the
+      // elements of the band it painted. A band split into several rows gets
+      // it on the FIRST: one shape over the top row reads as the original far
+      // better than the same curve repeated on every row. A row holds one
+      // shape, so a second mask landing on a row that already has one is
+      // reported as not carried over rather than quietly overwriting it.
+      for (const { el, shape } of pendingShapes) {
+        const inBand = new Set(
+          (section.elements || [])
+            .filter((e) => (e.containers || []).includes(shape.container))
+            .map((e) => e.sourceId)
+        );
+        const row = built.find((r) => r.sourceElementIds.some((id) => inBand.has(id))) || built[0];
+        if (!row) {
+          skipShape(el, "no row was built to put it on");
+          continue;
+        }
+        if (row.shapeLayer) {
+          skipShape(el, `the row it belongs on already carries another shape (${row.shapeLayer.shape}), and a row holds one`);
+          continue;
+        }
+        row.shapeLayer = shape.layer;
+        report.elements.mapped += 1;
+        row.dispositions.mapped += 1;
+        (report.shapes ||= []).push({
+          pagePath: page.path,
+          sourceId: el.sourceId,
+          shape: shape.layer.shape,
+          what: shape.note,
+        });
+      }
       mappedSections.push(...built);
       pageModules += modules.length;
     }
 
     const slug = uniqueSlug(normalizeImportSlug(page.path), takenSlugs);
+    irPageOfKey.set(key, page);
     pages.push({
       irPath: page.path,
       key,
@@ -2402,11 +2877,15 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
     menuNavs(ir)[0] ||
     null;
   let navSeq = 0;
-  const flattenNav = (items: NavItem[], prefix: string): MenuNavItem[] => {
+  /** Menu item id → the page its menu was captured on, which a bare
+   *  "#about-us" in it is relative to (SC-854). */
+  const navBaseUrl = new Map<string, string>();
+  const flattenNav = (items: NavItem[], prefix: string, pageUrl = ""): MenuNavItem[] => {
     const out: MenuNavItem[] = [];
     const push = (list: NavItem[], parentId: string) => {
       for (const item of list || []) {
         const id = `${prefix}${navSeq++}`;
+        if (pageUrl) navBaseUrl.set(id, pageUrl);
         out.push({ id, label: collapse(item.label), href: item.href || "#", parentId, target: "" });
         push(item.children || [], id);
       }
@@ -2414,14 +2893,14 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
     push(items, "");
     return out;
   };
-  const navItems: MapOutput["navItems"] = headerNav ? flattenNav(headerNav.items, "impnav_") : [];
+  const navItems: MapOutput["navItems"] = headerNav ? flattenNav(headerNav.items, "impnav_", headerNav.pageUrl) : [];
 
   const footerItems: MenuNavItem[] = [];
   const seenFooter = new Set<string>();
   const footerTrees = (ir.taxonomy?.navs || []).filter((n) => n.location === "footer" && n !== headerNav);
   const droppedFooter = new Set<string>();
   for (const tree of footerTrees) {
-    for (const item of flattenNav(tree.items, "impfoot_")) {
+    for (const item of flattenNav(tree.items, "impfoot_", tree.pageUrl)) {
       // The same top-level link in two footer lists is one menu item, and a
       // dropped item takes its children with it.
       const key = `${item.label.toLowerCase()}|${normalizeHref(item.href)}`;
@@ -2536,28 +3015,218 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
     }
   };
 
-  const localizeHtml = (html: string): string =>
-    html.replace(/href="([^"]*)"/g, (whole, href) => {
-      const next = localizeHref(String(href));
-      return next === href ? whole : `href="${next}"`;
-    });
+  // --- Jump links (task SC-854) -------------------------------------------
+  // A link to "#contact-us" — or "/about#team" from another page — points at
+  // the imported section the original's id landed on (ElementIR.anchors).
+  // That section is given the id as its anchor name and the link becomes
+  // "<page path>#<anchor name>"; the runner then stores it by reference once
+  // page ids exist. A link the import cannot point anywhere is listed in
+  // report.jumpLinks.unresolved, never dropped quietly. "Skip to content"
+  // links are left out: the site-wide skip link is its own ticket.
+  type PageAnchors = { mapped: MappedPage; local: string; byId: Map<string, MappedSection> };
+  const anchorsByAddress = new Map<string, PageAnchors>();
+  for (const mapped of pages) {
+    const irPage = irPageOfKey.get(mapped.key);
+    if (!irPage) continue;
+    const sectionOf = new Map<string, MappedSection>();
+    for (const section of mapped.sections) {
+      for (const id of section.sourceElementIds) if (!sectionOf.has(id)) sectionOf.set(id, section);
+    }
+    const elements = (irPage.sections || [])
+      .flatMap((s) => s.elements || [])
+      .sort((a, b) => a.documentPosition - b.documentPosition);
+    const byId = new Map<string, MappedSection>();
+    // An id that landed on something the import did not place (a menu link
+    // the Top Menu consumed, a skipped label) lands on the next thing it did.
+    let pending: string[] = [];
+    for (const el of elements) {
+      if (el.anchors?.length) pending.push(...el.anchors);
+      const section = sectionOf.get(el.sourceId);
+      if (!section || !pending.length) continue;
+      for (const id of pending) if (!byId.has(id)) byId.set(id, section);
+      pending = [];
+    }
+    const entry: PageAnchors = { mapped, local: isRootPath(irPage.path) ? "/" : `/${mapped.slug}`, byId };
+    for (const raw of [irPage.url, irPage.path]) {
+      const v = String(raw || "").trim();
+      if (!v) continue;
+      for (const variant of [v, v.endsWith("/") ? v.slice(0, -1) : `${v}/`]) {
+        if (variant && !anchorsByAddress.has(variant)) anchorsByAddress.set(variant, entry);
+      }
+    }
+  }
+  const pageAnchorsFor = (abs: URL): PageAnchors | undefined => {
+    const bare = new URL(abs.href);
+    bare.hash = "";
+    for (const v of [bare.href, bare.pathname]) {
+      const hit = anchorsByAddress.get(v) || anchorsByAddress.get(v.endsWith("/") ? v.slice(0, -1) : `${v}/`);
+      if (hit) return hit;
+    }
+    return undefined;
+  };
+  /** A section's anchor name, given on first use and unique on its page. */
+  const anchorNameFor = (entry: PageAnchors, section: MappedSection, id: string): string => {
+    if (section.anchorName) return section.anchorName;
+    const taken = new Set(entry.mapped.sections.map((s) => s.anchorName).filter(Boolean));
+    const base = normalizeAnchorName(id) || "section";
+    let name = base;
+    for (let n = 2; taken.has(name); n++) name = `${base}-${n}`;
+    section.anchorName = name;
+    return name;
+  };
+  const sectionLinks = new Map<string, SectionLinkTarget>();
+  /** Did the normalizer look for ids at all? An IR from before SC-854 has
+   *  neither the flag nor a single filed anchor. */
+  const anchorsLooked =
+    ir.anchorsRecorded === true ||
+    (ir.pages || []).some((p) => (p.sections || []).some((s) => (s.elements || []).some((el) => el.anchors?.length)));
+  let notRecordedLinks = 0;
+  const unresolvedSeen = new Set<string>();
+  const leftUnresolved = (onPage: string, href: string, label: string, why: string) => {
+    const key = `${onPage}\u0000${href}`;
+    if (unresolvedSeen.has(key)) return;
+    unresolvedSeen.add(key);
+    report.jumpLinks.unresolved.push({ page: onPage, href, label: collapse(label).slice(0, 80), why });
+  };
+  /**
+   * One link, rewritten for the imported site. `baseUrl` is the original page
+   * the link sat on; `onPage` names that page in the leftovers list. `drop`
+   * means leave the link out (a skip link) — the caller keeps its text.
+   */
+  const localizeLink = (href: string, baseUrl: string, label: string, onPage: string): { href: string; drop?: boolean } => {
+    const raw = String(href || "").trim();
+    const at = raw.indexOf("#");
+    if (at === -1) return { href: localizeHref(raw) };
+    const hash = raw.slice(at + 1);
+    // A text fragment ("#:~:text=…") highlights words; it is not a place.
+    if (hash.startsWith(":~:")) return { href: localizeHref(raw) };
+    // "#" alone is a menu toggle, "#!/x" a script's route: not a place.
+    if (!hash || hash.startsWith("!") || hash.startsWith("/")) return { href: at === 0 ? raw : localizeHref(raw.slice(0, at)) };
+    let abs: URL;
+    try {
+      abs = new URL(raw, baseUrl || ir.sourceUrl);
+    } catch {
+      return { href: raw };
+    }
+    if (!sameSite(abs.href, ir.sourceUrl)) return { href: raw };
+    // "/files/menu.pdf#page=3" opens a file at a page: an asset, left alone
+    // exactly as before jump links were read.
+    if (!looksLikeHtmlUrl(abs.href)) return { href: localizeHref(raw) };
+    let id = hash;
+    try {
+      id = decodeURIComponent(hash);
+    } catch {
+      /* keep it as written */
+    }
+    // Read by its words first: "Skip to content" is a skip link wherever it
+    // jumps. By its id ("#main", "#content") only when nothing the import
+    // built carries that id — a designed link to a section named "content"
+    // is a real link (review of SC-854).
+    if (isSkipLabel(label)) {
+      report.jumpLinks.skipLinks += 1;
+      return { href: "", drop: true };
+    }
+    // Every browser scrolls "#top" to the top of the page by itself.
+    if (id.toLowerCase() === "top") return { href: at === 0 ? "#top" : `${localizeHref(raw.slice(0, at))}#top` };
+    const entry = pageAnchorsFor(abs);
+    if (isSkipLinkId(id) && !entry?.byId.has(id)) {
+      report.jumpLinks.skipLinks += 1;
+      return { href: "", drop: true };
+    }
+    if (!entry) {
+      const bare = new URL(abs.href);
+      bare.hash = "";
+      leftUnresolved(onPage, raw, label, `the page it jumps to (${bare.pathname}) was not imported`);
+      return { href: `${localizeHref(bare.href)}#${hash}` };
+    }
+    const section = entry.byId.get(id);
+    if (!section && !anchorsLooked) {
+      // Nobody looked for the ids on this IR: never call one missing.
+      notRecordedLinks += 1;
+      return { href: `${entry.local}#${hash}` };
+    }
+    if (!section) {
+      leftUnresolved(onPage, raw, label, `nothing the import built on ${entry.local} carries the id "${id}"`);
+      return { href: `${entry.local}#${hash}` };
+    }
+    const fallback = `${entry.local}#${anchorNameFor(entry, section, id)}`;
+    const target = sectionLinks.get(fallback) || { fallback, pageKey: entry.mapped.key, sectionId: section.id, uses: [] };
+    target.uses.push({ page: onPage, href: raw, label: collapse(label).slice(0, 80) });
+    sectionLinks.set(fallback, target);
+    report.jumpLinks.linked += 1;
+    return { href: fallback };
+  };
+
+  /** Marks an href the whole-<a> pass already rewrote, so the plain pass
+   *  below leaves it alone; stripped before the text is stored. */
+  const DONE = "\u0001";
+  const localizeHtml = (html: string, baseUrl: string, onPage: string): string =>
+    html
+      // Jump links first, a whole <a> at a time: a skip link loses its tag
+      // and keeps its words.
+      .replace(/<a\b([^>]*?)\bhref="([^"]*#[^"]*)"([^>]*)>([\s\S]*?)<\/a>/gi, (whole, pre, href, post, inner) => {
+        const next = localizeLink(String(href), baseUrl, String(inner).replace(/<[^>]+>/g, " "), onPage);
+        if (next.drop) return inner;
+        return `<a${pre}${DONE}href="${next.href}"${post}>${inner}</a>`;
+      })
+      // Every other href — including one with "#" the pass above could not
+      // match (an attribute holding ">") — is still localized, so no link
+      // keeps pointing at the client's LIVE site. Here a skip link keeps its
+      // address as written: without its whole tag it cannot be unwrapped.
+      .replace(new RegExp(`(${DONE}?)href="([^"]*)"`, "g"), (whole, done, href) => {
+        if (done) return `href="${href}"`;
+        const raw = String(href);
+        const next = raw.includes("#") ? localizeLink(raw, baseUrl, "", onPage) : { href: localizeHref(raw) };
+        const out = next.drop ? raw : next.href;
+        return out === raw ? whole : `href="${out}"`;
+      });
   for (const page of pages) {
+    const irPage = irPageOfKey.get(page.key);
+    const baseUrl = irPage?.url || ir.sourceUrl;
+    const onPage = irPage ? (isRootPath(irPage.path) ? "/" : `/${page.slug}`) : `/${page.slug}`;
     for (const section of page.sections) {
       for (const module of section.modules) {
         if (module.type === "text" && module.text.includes("href=")) {
-          module.text = localizeHtml(module.text);
+          module.text = localizeHtml(module.text, baseUrl, onPage);
         }
         if (module.type === "button" && module.settings.href) {
-          module.settings.href = localizeHref(module.settings.href);
+          const next = localizeLink(module.settings.href, baseUrl, module.settings.label || module.text || "", onPage);
+          module.settings.href = next.drop ? "" : next.href;
         }
         if (module.type === "image" && module.settings.linkUrl) {
-          module.settings.linkUrl = localizeHref(module.settings.linkUrl);
+          const next = localizeLink(module.settings.linkUrl, baseUrl, module.settings.alt || "", onPage);
+          module.settings.linkUrl = next.drop ? "" : next.href;
         }
       }
     }
   }
-  for (const item of [...navItems, ...footerItems]) {
-    item.href = localizeHref(item.href);
+  // Menus: a skip link leaves the menu, with any items under it.
+  for (const [list, where] of [[navItems, "Top Menu"], [footerItems, "Footer Menu"]] as const) {
+    const dropped = new Set<string>();
+    for (let i = 0; i < list.length; i++) {
+      const item = list[i];
+      if (item.parentId && dropped.has(item.parentId)) {
+        dropped.add(item.id);
+        list.splice(i--, 1);
+        continue;
+      }
+      const next = localizeLink(item.href, navBaseUrl.get(item.id) || ir.sourceUrl, item.label, where);
+      if (next.drop) {
+        dropped.add(item.id);
+        list.splice(i--, 1);
+        continue;
+      }
+      item.href = next.href;
+    }
+  }
+  if (notRecordedLinks) {
+    report.jumpLinks.notRecorded = {
+      links: notRecordedLinks,
+      why:
+        `this import was prepared before the import recorded where jump links land, so its ids were never looked for. ` +
+        `The capture already holds them, so no fresh capture is needed: ask an agent session to re-run the normalize stage on it ` +
+        `(doppler run --config prd -- node scripts/site_import_worker.mjs --stage normalize --job ${ir.jobId || "<job id>"}), then Preview Build again.`,
+    };
   }
   report.menus = {
     top: menus.top
@@ -2597,6 +3266,7 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
     cardGrids: cardGridPlans,
     navItems,
     menus,
+    sectionLinks: Array.from(sectionLinks.values()),
     copyPlan: { crops, assets: Array.from(promotions.values()), unplaced, sourceOverflows },
     report,
   };
@@ -2751,6 +3421,172 @@ export function attachMenuInstances<S extends { id?: string; savedSectionId?: st
     changed = true;
   }
   return { sections: list, changed };
+}
+
+/* ---------------------------------------------------------------------------
+ * Jump links stored by reference (task SC-854)
+ * ------------------------------------------------------------------------ */
+
+/** The ids themes give the main content box, that a "skip to content" link
+ *  jumps to — Genesis's `#genesis-content`, WordPress's `#main`/`#content`. */
+const SKIP_LINK_IDS = /^(main|content|main-content|maincontent|primary|site-content|page-content|genesis-content|skip|skip-content|skip-to-content|skip-link|start-of-content|wp--skip-link--target)$/i;
+
+/**
+ * True for a "skip to content" link: an accessibility shortcut over the menu,
+ * not a place on the page anybody designed. Copied, it is a dead link; the
+ * site-wide skip link is its own ticket. Read by its words first ("Skip to
+ * content"), then by the id it jumps to.
+ */
+export function isSkipLink(id: string, label = ""): boolean {
+  return isSkipLabel(label) || isSkipLinkId(id);
+}
+
+/** "Skip to content", "Skip navigation", "Jump to main content". */
+export function isSkipLabel(label = ""): boolean {
+  return /\bskip\s+(to|navigation|the\s+nav)|\bjump\s+to\s+(main\s+)?content\b/i.test(String(label));
+}
+
+/** An id themes give the main content box (#main, #genesis-content). The
+ *  mapper treats it as a skip link only when nothing it built carries it. */
+export function isSkipLinkId(id: string): boolean {
+  return SKIP_LINK_IDS.test(String(id || "").trim());
+}
+
+/**
+ * A section somebody edited since the last build is kept exactly as they
+ * left it (the clobber guard), so it never receives the anchor name the
+ * mapper gave its fresh copy. A link pointed at it would then jump to a name
+ * nothing carries: a dead link reported as working (review of SC-854). For
+ * each such target — unless the kept copy already wears that very name —
+ * take its links out of `linked`, list each as a leftover saying why, and
+ * leave the target out so the runner does not store it by reference. The
+ * link keeps the plain address it was written with. `editedLive` maps a
+ * protected section's id to the copy on the page now. Returns the targets
+ * still safe to reference.
+ */
+export function demoteEditedSectionLinks(
+  report: MapReport,
+  targets: SectionLinkTarget[],
+  editedLive: Map<string, { anchorName?: unknown } | null | undefined>
+): SectionLinkTarget[] {
+  const kept: SectionLinkTarget[] = [];
+  for (const t of targets || []) {
+    if (!editedLive.has(t.sectionId)) {
+      kept.push(t);
+      continue;
+    }
+    const name = t.fallback.slice(t.fallback.indexOf("#") + 1);
+    const live = editedLive.get(t.sectionId);
+    if (live && String(live.anchorName || "") === name) {
+      kept.push(t);
+      continue;
+    }
+    for (const use of t.uses || []) {
+      report.jumpLinks.linked = Math.max(0, report.jumpLinks.linked - 1);
+      const seen = report.jumpLinks.unresolved.some((u) => u.page === use.page && u.href === use.href);
+      if (!seen) {
+        report.jumpLinks.unresolved.push({
+          page: use.page,
+          href: use.href,
+          label: use.label,
+          why: `the section it jumps to was edited by hand since the last build, so it was not given the anchor name "${name}"`,
+        });
+      }
+    }
+  }
+  return kept;
+}
+
+type LinkModule = { type?: string; text?: string; settings?: Record<string, string> };
+type LinkSection = { id?: string; modules?: LinkModule[] };
+
+/**
+ * Swap every jump-link address the mapper wrote ("/#contact-us") for the
+ * stored reference "page:<pageId>#<sectionId>|/#contact-us" (SC-852's shape),
+ * now that page ids exist. The section's anchor name is then looked up each
+ * time the page is shown, so renaming it never breaks the link. A link whose
+ * page has no id yet keeps its plain address, which still works by itself.
+ * Rich text keeps its href and gains `data-page-link` beside it, the way the
+ * text editor stores a picked page. Pure; returns new sections only when
+ * something changed, and how many links it referenced.
+ */
+export function referenceSectionLinks<S extends LinkSection>(
+  sections: S[],
+  targets: SectionLinkTarget[],
+  pageIds: Record<string, string | number>
+): { sections: S[]; referenced: number } {
+  const byFallback = new Map<string, string>();
+  for (const t of targets || []) {
+    const pageId = pageIds?.[t.pageKey];
+    if (pageId !== undefined && pageId !== null && String(pageId)) {
+      byFallback.set(t.fallback, makePageLink(String(pageId), t.fallback, t.sectionId));
+    }
+  }
+  let referenced = 0;
+  if (!byFallback.size) return { sections, referenced };
+  const refFor = (href: unknown): string | null => {
+    const ref = typeof href === "string" ? byFallback.get(href.trim()) : undefined;
+    return ref || null;
+  };
+  const html = (text: string): string =>
+    text.replace(/<a\b[^>]*>/gi, (tag) => {
+      if (/\sdata-page-link=/i.test(tag)) return tag;
+      const m = /\shref="([^"]*)"/i.exec(tag);
+      const ref = m ? refFor(m[1]) : null;
+      if (!ref) return tag;
+      referenced += 1;
+      return tag.replace(/^<a\b/i, `<a data-page-link="${ref.replace(/&/g, "&amp;").replace(/"/g, "&quot;")}"`);
+    });
+  const next = (sections || []).map((section) => {
+    let changed = false;
+    const modules = (section.modules || []).map((module) => {
+      const settings = { ...(module.settings || {}) };
+      let text = module.text;
+      let touched = false;
+      for (const key of ["href", "linkUrl"]) {
+        const ref = refFor(settings[key]);
+        if (ref) {
+          settings[key] = ref;
+          referenced += 1;
+          touched = true;
+        }
+      }
+      if (typeof settings.navItems === "string" && settings.navItems.includes("#")) {
+        try {
+          const items = JSON.parse(settings.navItems);
+          if (Array.isArray(items)) {
+            let any = false;
+            for (const item of items) {
+              const ref = item && refFor(item.href);
+              if (ref) {
+                item.href = ref;
+                referenced += 1;
+                any = true;
+              }
+            }
+            if (any) {
+              settings.navItems = JSON.stringify(items);
+              touched = true;
+            }
+          }
+        } catch {
+          /* not a list: leave it */
+        }
+      }
+      if (typeof text === "string" && text.includes("#")) {
+        const swapped = html(text);
+        if (swapped !== text) {
+          text = swapped;
+          touched = true;
+        }
+      }
+      if (!touched) return module;
+      changed = true;
+      return { ...module, text, settings };
+    });
+    return changed ? { ...section, modules } : section;
+  });
+  return { sections: referenced ? next : sections, referenced };
 }
 
 /** The reconciliation rule (spec: refuse --apply unless this holds). */

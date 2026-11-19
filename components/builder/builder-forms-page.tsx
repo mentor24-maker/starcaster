@@ -385,15 +385,15 @@ export function BuilderFormsPage() {
             {/* Basic */}
             <section className="builder-forms-section">
               <h4 className="builder-forms-section-heading">Basic</h4>
-              <BuilderSettingRow label="Form name" fullWidth>
+              <BuilderSettingRow label="Form Name" fullWidth>
                 <input type="text" value={draft.name} placeholder="My Form" onChange={(e) => patch({ name: e.target.value })} />
               </BuilderSettingRow>
-              <BuilderSettingRow label="Form type" fullWidth>
+              <BuilderSettingRow label="Form Type" fullWidth>
                 <select value={draft.formType} onChange={(e) => handleFormTypeChange(e.target.value)}>
                   {FORM_TEMPLATES.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
                 </select>
               </BuilderSettingRow>
-              <BuilderSettingRow label="Contact type" fullWidth>
+              <BuilderSettingRow label="Contact Type" fullWidth>
                 <select value={draft.contactType} onChange={(e) => patch({ contactType: e.target.value })}>
                   {CONTACT_TYPE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </select>
@@ -406,21 +406,21 @@ export function BuilderFormsPage() {
               <BuilderSettingRow label="Heading" fullWidth>
                 <input type="text" value={draft.heading} onChange={(e) => patch({ heading: e.target.value })} />
               </BuilderSettingRow>
-              <BuilderSettingRow label="CTA / submit label" fullWidth>
+              <BuilderSettingRow label="CTA / Submit Label" fullWidth>
                 <select value={draft.ctaId} onChange={(e) => patch({ ctaId: e.target.value })}>
                   <option value="">— Use custom label —</option>
                   {ctas.map((c) => <option key={c.id} value={String(c.id)}>{c.cta}</option>)}
                 </select>
               </BuilderSettingRow>
               {!draft.ctaId && (
-                <BuilderSettingRow label="Submit label" fullWidth>
+                <BuilderSettingRow label="Submit Label" fullWidth>
                   <input type="text" value={draft.submitLabel} onChange={(e) => patch({ submitLabel: e.target.value })} />
                 </BuilderSettingRow>
               )}
-              <BuilderSettingRow label="Success message" fullWidth>
+              <BuilderSettingRow label="Success Message" fullWidth>
                 <textarea rows={2} value={draft.successMessage} onChange={(e) => patch({ successMessage: e.target.value })} />
               </BuilderSettingRow>
-              <BuilderSettingRow label="Error message" fullWidth>
+              <BuilderSettingRow label="Error Message" fullWidth>
                 <textarea rows={2} value={draft.errorMessage} onChange={(e) => patch({ errorMessage: e.target.value })} />
               </BuilderSettingRow>
             </section>
@@ -446,7 +446,7 @@ export function BuilderFormsPage() {
             {/* Color */}
             <section className="builder-forms-section">
               <h4 className="builder-forms-section-heading">Color</h4>
-              <BuilderSettingRow label="Accent color" labelFor={accentColorInputId}>
+              <BuilderSettingRow label="Accent Color" labelFor={accentColorInputId}>
                 <BuilderColorWheelInput
                   ariaLabel="Accent color"
                   disabled={draft.matchLandingColor}
@@ -455,32 +455,32 @@ export function BuilderFormsPage() {
                   onChange={(accentColor) => patch({ accentColor })}
                 />
               </BuilderSettingRow>
-              <BuilderSettingRow label="Match page color" fullWidth>
+              <BuilderSettingRow label="Match Page Color" fullWidth>
                 <label className="builder-forms-checkbox-row">
                   <input
                     type="checkbox"
                     checked={draft.matchLandingColor}
                     onChange={(e) => patch({ matchLandingColor: e.target.checked })}
                   />
-                  Use page primary/accent color
+                  Use Page Primary/Accent Color
                 </label>
               </BuilderSettingRow>
               {draft.matchLandingColor && (
                 <>
-                  <BuilderSettingRow label="Color role" fullWidth>
+                  <BuilderSettingRow label="Color Role" fullWidth>
                     <select value={draft.landingColorMode} onChange={(e) => patch({ landingColorMode: e.target.value })}>
                       <option value="primary">Primary Color</option>
                       <option value="accent">Accent Color</option>
                     </select>
                   </BuilderSettingRow>
-                  <BuilderSettingRow label="Add background" fullWidth>
+                  <BuilderSettingRow label="Add Background" fullWidth>
                     <label className="builder-forms-checkbox-row">
                       <input
                         type="checkbox"
                         checked={draft.useLandingBackground}
                         onChange={(e) => patch({ useLandingBackground: e.target.checked })}
                       />
-                      Apply background color to form
+                      Apply Background Color to Form
                     </label>
                   </BuilderSettingRow>
                 </>

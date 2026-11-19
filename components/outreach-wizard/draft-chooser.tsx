@@ -72,7 +72,7 @@ export type DraftChooserProps = {
   onMore: () => void;
 };
 
-export default function DraftChooser({ options, idPrefix, busy, error, footnote, boxLabel = 'Your comment', onApprove, onReject, onMore }: DraftChooserProps): React.ReactElement {
+export default function DraftChooser({ options, idPrefix, busy, error, footnote, boxLabel = 'Your Comment', onApprove, onReject, onMore }: DraftChooserProps): React.ReactElement {
   const kept = keptOptions(options);
   const [picked, setPicked] = useState<number | null>(null);
   const [text, setText] = useState('');

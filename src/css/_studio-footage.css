@@ -174,6 +174,26 @@ table.studio-footage-table:not(.builder-module-preview-table):not(.builder-previ
   min-width: 12ch;
 }
 
+/* Recorded together with (Reel Spinner 3b, SC-832): one line per pair under
+   the file name, the sound switch after it. Wraps with the cell (T0). */
+.studio-footage-pairs {
+  list-style: none;
+  margin: var(--space-1, 4px) 0 0;
+  padding: 0;
+  font-size: var(--text-xs);
+  color: var(--muted, #6b7280);
+}
+
+.studio-footage-pair + .studio-footage-pair {
+  margin-top: var(--space-1, 4px);
+}
+
+.studio-footage-pair-switch {
+  margin-left: var(--space-1, 4px);
+  padding: 0 var(--space-1, 4px);
+  font-size: var(--text-xs);
+}
+
 /* Transcript (86bcdek0e). The state is a sentence, so its cell wraps like the
    File cell rather than pushing the table off a phone screen (T0). */
 .studio-footage-table td.studio-footage-transcript-cell {
@@ -351,4 +371,83 @@ table.studio-footage-table:not(.builder-module-preview-table):not(.builder-previ
   color: inherit;
   padding: 0 0.1em;
   border-radius: 2px;
+}
+
+/* Moments (Reel Spinner 2e, SC-830). One card per scored moment, best first:
+   the score as a chip, when and how long, the quote, then the reasons. Every
+   line wraps rather than widening the page (T0). */
+.studio-moments {
+  margin-top: 0.75rem;
+  min-width: 0;
+}
+
+.studio-moments-summary {
+  margin: 0 0 0.75rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.studio-moments-note {
+  margin: 0 0 0.5rem;
+  color: var(--muted, #6b7280);
+  overflow-wrap: anywhere;
+}
+
+.studio-moments-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.studio-moment {
+  min-width: 0;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--border-light);
+  border-radius: 6px;
+}
+
+.studio-moment-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 0.75rem;
+  min-width: 0;
+}
+
+.studio-moment-score {
+  display: inline-block;
+  min-width: 2.25rem;
+  padding: 0 0.4rem;
+  border-radius: 999px;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.studio-moment-when {
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.studio-moment-watch {
+  color: var(--muted, #6b7280);
+  white-space: nowrap;
+}
+
+.studio-moment-quote {
+  margin: 0.5rem 0 0;
+  padding-left: 0.75rem;
+  border-left: 3px solid var(--border-light);
+  font-style: italic;
+  overflow-wrap: anywhere;
+}
+
+.studio-moment-reasons {
+  margin: 0.4rem 0 0;
+  padding-left: 1.25rem;
+  overflow-wrap: anywhere;
 }

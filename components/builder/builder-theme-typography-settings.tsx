@@ -121,14 +121,14 @@ export function BuilderThemeTypographySettings({ theme, onChange }: BuilderTheme
     <div className="builder-theme-typography">
       <div className="builder-theme-typography-group">
         <h4 className="builder-theme-typography-heading">Fonts</h4>
-        <BuilderSettingRow label="Heading font" fullWidth>
+        <BuilderSettingRow label="Heading Font" fullWidth>
           <BuilderFontSelect
             ariaLabel="Heading font"
             value={fonts.heading}
             onChange={(next) => updateFont("heading", next)}
           />
         </BuilderSettingRow>
-        <BuilderSettingRow label="Body font" fullWidth>
+        <BuilderSettingRow label="Body Font" fullWidth>
           <BuilderFontSelect
             ariaLabel="Body font"
             value={fonts.body}
@@ -141,10 +141,10 @@ export function BuilderThemeTypographySettings({ theme, onChange }: BuilderTheme
         <h4 className="builder-theme-typography-heading">Colors</h4>
         {(
           [
-            ["text", "Body text"],
+            ["text", "Body Text"],
             ["heading", "Headings"],
             ["link", "Links"],
-            ["linkHover", "Link hover"]
+            ["linkHover", "Link Hover"]
           ] as Array<["text" | "heading" | "link" | "linkHover", string]>
         ).map(([role, label]) => (
           <ThemeColorRow
@@ -155,7 +155,7 @@ export function BuilderThemeTypographySettings({ theme, onChange }: BuilderTheme
             onChange={(value) => updateColor(role, value)}
           />
         ))}
-        <BuilderSettingRow label="Link underline">
+        <BuilderSettingRow label="Link Underline">
           <label className="builder-theme-checkbox-label">
             <input
               type="checkbox"
@@ -165,7 +165,7 @@ export function BuilderThemeTypographySettings({ theme, onChange }: BuilderTheme
             />
           </label>
         </BuilderSettingRow>
-        <BuilderSettingRow label="Hover underline">
+        <BuilderSettingRow label="Hover Underline">
           <label className="builder-theme-checkbox-label">
             <input
               type="checkbox"
@@ -179,7 +179,7 @@ export function BuilderThemeTypographySettings({ theme, onChange }: BuilderTheme
 
       <div className="builder-theme-typography-group">
         <h4 className="builder-theme-typography-heading">Type scale</h4>
-        <BuilderSettingRow label="Base size (px)">
+        <BuilderSettingRow label="Base Size (px)">
           <input
             type="number"
             min={10}
@@ -190,7 +190,7 @@ export function BuilderThemeTypographySettings({ theme, onChange }: BuilderTheme
             onChange={(event) => updateScale("baseSize", Number.parseInt(event.target.value, 10) || 0)}
           />
         </BuilderSettingRow>
-        <BuilderSettingRow label="Scale ratio">
+        <BuilderSettingRow label="Scale Ratio">
           <select
             value={scale.ratio ? String(scale.ratio) : ""}
             onChange={(event) => updateScale("ratio", Number.parseFloat(event.target.value) || 0)}
@@ -202,7 +202,7 @@ export function BuilderThemeTypographySettings({ theme, onChange }: BuilderTheme
             ))}
           </select>
         </BuilderSettingRow>
-        <BuilderSettingRow label="Line height">
+        <BuilderSettingRow label="Line Height">
           <input
             type="number"
             min={0.8}
@@ -216,10 +216,10 @@ export function BuilderThemeTypographySettings({ theme, onChange }: BuilderTheme
         <div className="builder-theme-scale-col-headers">
           <span className="builder-setting-label" />
           <span className="builder-theme-scale-col-label">Size (px)</span>
-          <span className="builder-theme-scale-col-label">Line height</span>
+          <span className="builder-theme-scale-col-label">Line Height</span>
           <span className="builder-theme-scale-col-label">Weight</span>
-          <span className="builder-theme-scale-col-label">Top margin (px)</span>
-          <span className="builder-theme-scale-col-label">Bottom margin (px)</span>
+          <span className="builder-theme-scale-col-label">Top Margin (px)</span>
+          <span className="builder-theme-scale-col-label">Bottom Margin (px)</span>
         </div>
         {(["h1", "h2", "h3", "h4", "h5", "h6"] as const).map((h) => (
           <div key={h} className="builder-theme-scale-dual-row">
@@ -280,9 +280,9 @@ export function BuilderThemeTypographySettings({ theme, onChange }: BuilderTheme
         </p>
         {(
           [
-            ["radioAccent", "Radio accent"],
-            ["radioLabel", "Radio label"],
-            ["fieldFocus", "Field focus ring"]
+            ["radioAccent", "Radio Accent"],
+            ["radioLabel", "Radio Label"],
+            ["fieldFocus", "Field Focus Ring"]
           ] as Array<[keyof Pick<typeof COLOR_PLACEHOLDERS, "radioAccent" | "radioLabel" | "fieldFocus">, string]>
         ).map(([role, label]) => (
           <ThemeColorRow

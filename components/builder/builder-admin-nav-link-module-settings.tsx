@@ -24,7 +24,7 @@ const SCHEMA: BuilderSettingsSchema = {
         [
           {
             key: "linkText",
-            label: "Link text",
+            label: "Link Text",
             width: "text-md",
             control: "text",
             placeholder: "Admin",
@@ -38,6 +38,7 @@ const SCHEMA: BuilderSettingsSchema = {
             control: "picker",
             source: "pages",
             valueKind: "path",
+            allowSections: true,
             placeholder: "/admin-login",
             fallback: "/admin-login",
             rendersVia: "AdminNavLinkPreview (builder-template-preview.tsx)"

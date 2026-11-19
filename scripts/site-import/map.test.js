@@ -28,6 +28,8 @@ const {
   splitOversizeHtml,
   writeMappedPages,
   summarizePageWrites,
+  mergeMappedSections,
+  dropStaleImportSections,
   pathOfWriteKey,
   TEXT_MODULE_CHAR_BUDGET,
   buildMenuSection,
@@ -386,7 +388,10 @@ test('delraytennis IR maps with full reconciliation', () => {
   ));
   const out = mapSite(ir, { existingSlugs: [] });
   assert.ok(reportReconciles(out.report), JSON.stringify(out.report.elements));
-  assert.equal(out.report.elements.skipped, 0);
+  // Only the two bare <p></p> tags (SC-849); its 46 <p>&nbsp;</p> blank
+  // lines are spacing and stay.
+  assert.equal(out.report.elements.skipped, 2);
+  assert.ok(out.report.skipped.every((s) => /empty markup/.test(s.reason)), JSON.stringify(out.report.skipped));
   assert.equal(out.pages.length, 2);
   assert.equal(out.pages[0].slug, 'home');
   assert.ok(out.navItems.length > 0);
@@ -753,10 +758,11 @@ test('footer link lists outside a <nav> stay on the page and out of navConsumed'
   assert.deepEqual(withTree.navItems, baseline.navItems);
 
   // Menus on (task 86bchydp6): the links still stay on the page — only the
-  // credits paragraph goes, and it is accounted for with a reason.
+  // credits paragraph goes, and it is accounted for with a reason. The
+  // header's logo goes to the Top Menu instead of showing twice (SC-849).
   const withMenus = mapSite(ir, { existingSlugs: [] });
-  assert.equal(withMenus.report.elements.navConsumed, baseline.report.elements.navConsumed);
-  assert.equal(withMenus.report.elements.mapped, baseline.report.elements.mapped - 1);
+  assert.equal(withMenus.report.elements.navConsumed, baseline.report.elements.navConsumed + 1);
+  assert.equal(withMenus.report.elements.mapped, baseline.report.elements.mapped - 2);
   assert.equal(withMenus.report.skipped.length, 1);
   assert.match(withMenus.report.skipped[0].reason, /theme\/platform credit .*Elegant Themes/);
   assert.ok(reportReconciles(withMenus.report));
@@ -1026,4 +1032,91 @@ test('mapSite reports unplaced files and leaves only the rest in the namespace',
   assert.deepEqual(out.copyPlan.unplaced.map((a) => a.assetId).sort(), ['circ', 'dane', 'fav192', 'hero', 'pdf', 'sub']);
   assert.equal(out.report.assets.unplaced, 6);
   assert.equal(out.report.assets.leftInNamespace, ir.assets.length - out.report.assets.promoted - 6);
+});
+
+// SC-850: a rebuild removes the import's own sections that the new build no
+// longer makes — but only the untouched ones — and never re-makes a page that
+// somebody deleted. Found on Bayside Partners, 2026-11-17: SC-849 stopped the
+// doubled header being made, and the old one stayed on all 7 drafts; the
+// deleted author page came back on every rebuild.
+const crypto = require('node:crypto');
+const fp = (value) => crypto.createHash('sha256').update(JSON.stringify(value)).digest('hex');
+const sec = (id, text) => ({ id, title: id, modules: [{ id: `${id}_m`, type: 'text', text }] });
+const mappedPage = (key, slug, sections) => ({
+  key, irPath: key, name: slug, slug,
+  sections: sections.map((s) => ({ ...s, sourceElementIds: [], dispositions: { mapped: 1, placeholder: 0 } })),
+});
+
+/** A page the first build made: header, hero, body — then the header was edited on a second page. */
+function staleWorld() {
+  const header = sec('imps_pAhdr', 'Logo · Select Page');
+  const hero = sec('imps_pAhero', 'Welcome');
+  const editedOld = sec('imps_pAold', 'Old intro');
+  const hashes = { [header.id]: fp(header), [hero.id]: fp(hero), [editedOld.id]: fp(editedOld) };
+  const handMade = sec('dane_extra', 'Added by hand');
+  const page = {
+    id: 1573, slug: 'home',
+    layoutSections: [header, hero, sec('imps_pAold', 'Old intro — rewritten by Dane'), handMade, sec('imps_pAnohash', 'Not recorded')],
+  };
+  // The fixed mapper no longer makes the header or the old intro.
+  const rebuilt = [mappedPage('/', 'home', [sec('imps_pAhero', 'Welcome (fresh)')])];
+  return { page, hashes, rebuilt };
+}
+
+test('SC-850: a stale import section is removed only when untouched; an edited one stays and is named', () => {
+  const { page, hashes, rebuilt } = staleWorld();
+  const res = dropStaleImportSections(page.layoutSections, rebuilt[0].sections, { recordedHash: (id) => hashes[id], fingerprint: fp });
+  assert.deepEqual(res.removed.map((s) => s.id), ['imps_pAhdr'], 'the untouched old header comes off');
+  assert.deepEqual(res.keptEdited.map((s) => s.id), ['imps_pAold'], 'the edited one is kept and reported');
+  assert.deepEqual(res.sections.map((s) => s.id), ['imps_pAhero', 'imps_pAold', 'dane_extra', 'imps_pAnohash'],
+    'still-produced, edited, hand-made and unrecorded sections all stay, in order');
+});
+
+test('SC-850: through the real write loop, a rebuild leaves no untouched stale section behind', async () => {
+  const { page, hashes, rebuilt } = staleWorld();
+  const store = memoryStore([page]);
+  const io = store.io({ '/': '1573' });
+  io.mergeSections = (existing, incoming) => {
+    const stale = dropStaleImportSections(existing, incoming, { recordedHash: (id) => hashes[id], fingerprint: fp });
+    return mergeMappedSections(stale.sections, incoming, new Set());
+  };
+  const { writes } = await writeMappedPages(rebuilt, io);
+  assert.deepEqual(writes.map((w) => w.action), ['updated']);
+  const after = store.pages.get('1573').layoutSections;
+  assert.deepEqual(after.map((s) => s.id), ['imps_pAhero', 'imps_pAold', 'dane_extra', 'imps_pAnohash']);
+  assert.equal(after[0].modules[0].text, 'Welcome (fresh)', 'the still-produced section is refreshed');
+  assert.equal(after[1].modules[0].text, 'Old intro — rewritten by Dane', 'the edited stale section is untouched');
+
+  // Break-test shape: the merge on its own (what ran before SC-850) keeps the old header.
+  const before = mergeMappedSections(page.layoutSections, rebuilt[0].sections.map(({ sourceElementIds, dispositions, ...s }) => s), new Set());
+  assert.ok(before.some((s) => s.id === 'imps_pAhdr'), 'without the stale pass the old header survives a rebuild');
+});
+
+test('SC-850: a page the import made and somebody deleted is left out, not made again', async () => {
+  const pages = [mappedPage('/', 'home', [sec('imps_pA1', 'Home')]), mappedPage('/author-dane', 'author-dane', [sec('imps_pB1', 'Dane')])];
+  const store = memoryStore([{ id: 1572, slug: 'home', layoutSections: [] }]); // 1573 was deleted
+  const prior = { '/': '1572', '/author-dane': '1573' };
+  const res = await writeMappedPages(pages, store.io(prior));
+  assert.deepEqual(res.writes.map((w) => [w.slug, w.action]), [['home', 'updated']]);
+  assert.deepEqual(res.leftOut, [{ key: '/author-dane', slug: 'author-dane', pageId: '1573' }]);
+  assert.equal(store.pages.size, 1, 'no page was created');
+  assert.equal(res.pageIds['/author-dane'], '1573', 'the id is kept, so the next rebuild still knows it was deleted');
+  assert.deepEqual(summarizePageWrites(pages.length - res.leftOut.length, res.writes).problems, [], 'leaving it out is not a write mismatch');
+
+  // A second rebuild leaves it out again.
+  const again = await writeMappedPages(pages, store.io(res.pageIds));
+  assert.equal(again.leftOut.length, 1);
+  assert.equal(store.pages.size, 1);
+
+  // Asked for, it is made again.
+  const made = await writeMappedPages(pages, { ...store.io(res.pageIds), recreateDeleted: true });
+  assert.deepEqual(made.writes.map((w) => [w.slug, w.action]), [['home', 'updated'], ['author-dane', 'created']]);
+  assert.deepEqual(made.leftOut, []);
+});
+
+test('SC-850: a page never built before is still created', async () => {
+  const store = memoryStore();
+  const res = await writeMappedPages([mappedPage('/new', 'new', [sec('imps_pN1', 'New')])], store.io({}));
+  assert.deepEqual(res.writes.map((w) => w.action), ['created']);
+  assert.deepEqual(res.leftOut, []);
 });

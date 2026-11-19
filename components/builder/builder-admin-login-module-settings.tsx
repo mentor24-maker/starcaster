@@ -43,11 +43,12 @@ const SCHEMA: BuilderSettingsSchema = {
         [
           {
             key: "successRedirect",
-            label: "Redirect on success",
+            label: "Redirect on Success",
             width: "full",
             control: "picker",
             source: "pages",
             valueKind: "path",
+            allowSections: true,
             placeholder: "/admin-dashboard",
             fallback: "/admin-dashboard",
             rendersVia: "AdminLoginPreview (builder-template-preview.tsx)"
@@ -56,7 +57,7 @@ const SCHEMA: BuilderSettingsSchema = {
         [
           {
             key: "formTitle",
-            label: "Form title",
+            label: "Form Title",
             width: "text-md",
             control: "text",
             placeholder: "Admin Sign In",
@@ -65,7 +66,7 @@ const SCHEMA: BuilderSettingsSchema = {
           },
           {
             key: "buttonText",
-            label: "Button text",
+            label: "Button Text",
             width: "text-md",
             control: "text",
             placeholder: "Sign In",
@@ -81,7 +82,7 @@ const SCHEMA: BuilderSettingsSchema = {
         [
           {
             key: "showForgotPassword",
-            label: "Forgot password",
+            label: "Forgot Password",
             width: "check",
             control: "checkbox",
             fallback: "true",

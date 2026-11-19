@@ -256,7 +256,7 @@ export default function LearnControls({ channel, label, onChanged }: {
         </ul>
       ) : null}
       <form className="outreach-wizard-connect-form" onSubmit={(e) => { e.preventDefault(); if (newText.trim()) void add(); }}>
-        <label htmlFor={`outreach-new-lesson-${channel}`}>Add my own lesson</label>
+        <label htmlFor={`outreach-new-lesson-${channel}`}>Add My Own Lesson</label>
         <input
           id={`outreach-new-lesson-${channel}`}
           type="text"

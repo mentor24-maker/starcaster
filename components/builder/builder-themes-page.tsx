@@ -214,12 +214,12 @@ function ColorRow({ label, value, onChange }: ColorRowProps) {
 const PALETTE_ROLE_ROWS: Array<{ bg: keyof BuilderThemePalette; text: keyof BuilderThemePalette; label: string }> = [
   { bg: "header", text: "headerText", label: "Header" },
   { bg: "surface", text: "surfaceText", label: "Section" },
-  { bg: "band", text: "bandText", label: "Soft band" },
-  { bg: "inverse", text: "inverseText", label: "Dark band" },
+  { bg: "band", text: "bandText", label: "Soft Band" },
+  { bg: "inverse", text: "inverseText", label: "Dark Band" },
   { bg: "button", text: "buttonText", label: "Button" },
   // Optional. Left unset, every section takes the Button pair above.
-  { bg: "surfaceButton", text: "surfaceButtonText", label: "Button on light" },
-  { bg: "inverseButton", text: "inverseButtonText", label: "Button on dark" },
+  { bg: "surfaceButton", text: "surfaceButtonText", label: "Button on Light" },
+  { bg: "inverseButton", text: "inverseButtonText", label: "Button on Dark" },
 ];
 
 export function BuilderThemesPage() {
@@ -623,7 +623,7 @@ export function BuilderThemesPage() {
                   onChange={(v) => updatePaletteRole(row.bg, v)}
                 />
                 <ColorRow
-                  label={`${row.label} text`}
+                  label={`${row.label} Text`}
                   value={draft.palette?.[row.text] || ""}
                   onChange={(v) => updatePaletteRole(row.text, v)}
                 />
@@ -678,21 +678,21 @@ export function BuilderThemesPage() {
               contact strip, the header and the hero all start on the same left edge.
             </p>
             <SliderRow
-              label="Border thickness"
+              label="Border Thickness"
               value={draft.borderThickness}
               min={0}
               max={20}
               onChange={(v) => updateDraft({ borderThickness: v })}
             />
             <SliderRow
-              label="Border radius"
+              label="Border Radius"
               value={draft.borderRadius}
               min={0}
               max={50}
               onChange={(v) => updateDraft({ borderRadius: v })}
             />
             <SliderRow
-              label="Container blur"
+              label="Container Blur"
               value={draft.containerBlur}
               min={0}
               max={24}
@@ -779,19 +779,19 @@ export function BuilderThemesPage() {
               </div>
             ))}
             <ColorRow
-              label="Photo overlay tint"
+              label="Photo Overlay Tint"
               value={draft.treatments?.heroOverlay || ""}
               onChange={(v) => updateDraft({ treatments: { ...(draft.treatments || {}), heroOverlay: v } })}
             />
             <SliderRow
-              label="Overlay strength %"
+              label="Overlay Strength %"
               value={Math.round((draft.treatments?.heroOverlayOpacity ?? 0.45) * 100)}
               min={0}
               max={75}
               onChange={(v) =>
                 updateDraft({ treatments: { ...(draft.treatments || {}), heroOverlayOpacity: v / 100 } })}
             />
-            <BuilderSettingRow label="Cards overlap photo">
+            <BuilderSettingRow label="Cards Overlap Photo">
               <input
                 type="checkbox"
                 checked={draft.treatments?.cardOverlap === true}
@@ -799,7 +799,7 @@ export function BuilderThemesPage() {
                   updateDraft({ treatments: { ...(draft.treatments || {}), cardOverlap: e.target.checked } })}
               />
             </BuilderSettingRow>
-            <BuilderSettingRow label="Dark footer band">
+            <BuilderSettingRow label="Dark Footer Band">
               <input
                 type="checkbox"
                 checked={draft.treatments?.footerInverse === true}
@@ -808,7 +808,7 @@ export function BuilderThemesPage() {
               />
             </BuilderSettingRow>
             {/* Every Button that has no colour of its own follows these. */}
-            <BuilderSettingRow label="Button style">
+            <BuilderSettingRow label="Button Style">
               <select
                 aria-label="Button style"
                 value={draft.treatments?.buttonStyle === "outline" ? "outline" : "fill"}
@@ -825,7 +825,7 @@ export function BuilderThemesPage() {
               </select>
             </BuilderSettingRow>
             <SliderRow
-              label="Button corners px"
+              label="Button Corners px"
               value={draft.treatments?.buttonRadius ?? 0}
               min={0}
               max={60}

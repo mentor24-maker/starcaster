@@ -46,6 +46,7 @@ import { getDefaultEmailTemplateName, type BuilderEmailFunction } from "@/lib/bu
 import { inferModuleClassFromBuilderModules, resolveModuleClassForBuilderModule } from "@/lib/module-class-triggers";
 
 import type { BuilderModalAnchor } from "@/lib/builder-anchored-modal";
+import { BuilderPageSectionsContext } from "@/components/builder/builder-page-sections-context";
 import { appendRichTextImageToHtml } from "@/lib/rich-text-image";
 import type { GalleryTarget, ModulePaletteGroup, ModulePaletteItem } from "./builder/builder-types";
 import { layoutOptions } from "./builder/builder-types";
@@ -3086,7 +3087,15 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage, 
 
   // --- Render ---
 
+  // The page being edited, for the panels that need its sections (task
+  // SC-852): Anchor name's "already taken" and the menu link picker's list.
+  const pageSectionsForPanels = useMemo(
+    () => (builderMode === "pages" ? { pageId: selectedPageId, sections: draft.layoutSections } : null),
+    [builderMode, selectedPageId, draft.layoutSections]
+  );
+
   return (
+    <BuilderPageSectionsContext.Provider value={pageSectionsForPanels}>
     <section
       className={`admin-section builder-editor-section${builderMode === "modules" ? " builder-editor-section-modules" : ""}`}
     >
@@ -3738,5 +3747,6 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage, 
         />
       ) : null}
     </section>
+    </BuilderPageSectionsContext.Provider>
   );
 }

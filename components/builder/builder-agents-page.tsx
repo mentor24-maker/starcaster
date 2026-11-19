@@ -385,7 +385,7 @@ export function BuilderAgentsPage({ initialView, onRegisterSetView }: Props) {
                 checked={draft.manual_confirmed}
                 onChange={(e) => set("manual_confirmed", e.target.checked)}
               />
-              I manually confirm this API action.
+              I Confirm This API Action
             </label>
           </div>
 

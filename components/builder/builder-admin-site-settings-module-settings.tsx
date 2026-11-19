@@ -27,7 +27,7 @@ const SCHEMA: BuilderSettingsSchema = {
         [
           {
             key: "showTitle",
-            label: "Show title",
+            label: "Show Title",
             width: "check",
             control: "checkbox",
             fallback: "true",
@@ -35,7 +35,7 @@ const SCHEMA: BuilderSettingsSchema = {
           },
           {
             key: "panelTitle",
-            label: "Title text",
+            label: "Title Text",
             width: "text-md",
             control: "text",
             placeholder: "Site Settings",

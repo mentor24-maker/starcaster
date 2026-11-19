@@ -87,7 +87,7 @@ async function renderCrmForm(liveSite: boolean, fields: unknown[] = FIELDS) {
 const text = () => document.body.textContent ?? "";
 const inputs = (name: string) => Array.from(container!.querySelectorAll<HTMLInputElement>(`input[name="${name}"]`));
 const fieldsetFor = (legend: string) =>
-  Array.from(container!.querySelectorAll("fieldset")).find((f) => f.querySelector("legend")?.textContent === legend) ?? null;
+  Array.from(container!.querySelectorAll("fieldset")).find((f) => f.querySelector("legend")?.textContent?.replace(/\*$/, "") === legend) ?? null;
 
 function click(input: HTMLInputElement) {
   act(() => { input.click(); });

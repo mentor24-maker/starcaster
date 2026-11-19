@@ -3,6 +3,7 @@
     "irVersion": "1.0",
     "jobId": "job-fixture-blazefishcards",
     "sourceUrl": "https://www.blazefish.com/",
+    "anchorsRecorded": true,
     "capturedAt": "2026-08-08T04:21:48.034Z",
     "pages": [
       {
@@ -4272,7 +4273,10 @@
                 },
                 "documentPosition": 147,
                 "depth": 5,
-                "assetRefs": []
+                "assetRefs": [],
+                "anchors": [
+                  "play"
+                ]
               },
               {
                 "sourceId": "p2a0c975e-4b3352b8",
@@ -4367,7 +4371,10 @@
                 },
                 "documentPosition": 150,
                 "depth": 5,
-                "assetRefs": []
+                "assetRefs": [],
+                "anchors": [
+                  "book"
+                ]
               },
               {
                 "sourceId": "p2a0c975e-64fe9e65",
@@ -4538,6 +4545,9 @@
                 "containers": [
                   "238",
                   "239"
+                ],
+                "anchors": [
+                  "programs"
                 ]
               },
               {
@@ -5659,7 +5669,10 @@
                 },
                 "documentPosition": 186,
                 "depth": 6,
-                "assetRefs": []
+                "assetRefs": [],
+                "anchors": [
+                  "schedule"
+                ]
               },
               {
                 "sourceId": "p2a0c975e-5e989383",
@@ -6880,6 +6893,9 @@
                 "assetRefs": [],
                 "containers": [
                   "335"
+                ],
+                "anchors": [
+                  "juniors"
                 ]
               },
               {
@@ -7426,7 +7442,10 @@
                 },
                 "documentPosition": 243,
                 "depth": 6,
-                "assetRefs": []
+                "assetRefs": [],
+                "anchors": [
+                  "locations"
+                ]
               },
               {
                 "sourceId": "p2a0c975e-bbd5deb5",
@@ -8110,6 +8129,9 @@
                 ],
                 "containers": [
                   "404"
+                ],
+                "anchors": [
+                  "contact"
                 ]
               },
               {

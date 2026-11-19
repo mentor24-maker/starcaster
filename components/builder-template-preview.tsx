@@ -6,6 +6,16 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { type CSSProperties, type FormEvent, type MouseEvent, Suspense, createContext, createElement, useCallback, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
 import { type PageAddressMap, resolvePageLinksInHtml, resolvePageLinksInSettings } from "@/lib/page-link";
+import { handleSectionJumpClick, useJumpToAddressSection } from "@/lib/section-jump";
+import { type HeadingAnchorAllocator, addHeadingAnchors, applyHeadingAnchors, planHeadingAnchors } from "@/lib/heading-anchors";
+import {
+  type PageHeading,
+  pickTableOfContentsEntries,
+  readPageHeadings,
+  resolveTableOfContentsSettings,
+  sameHeadings,
+  tableOfContentsEmptyNote
+} from "@/lib/table-of-contents";
 import {
   EMPTY_MEDIA_FILTERS,
   MEDIA_ASPECTS,
@@ -27,6 +37,7 @@ import {
   formatRichTextContent,
   getBuilderBackgroundStyle,
   getBuilderRowOverlayScreenStyle,
+  getSectionShapeLayerStyle,
   getLayoutColumns,
   groupJoinedSections,
   isPlainTextVariant,
@@ -231,6 +242,7 @@ import { resolveEmailMergeTokensForPreview } from "@/lib/builder-email-template"
 import { getPlayerPortalAuthSettings, PlayerPortalAuthForm } from "@/components/player-portal-auth-form";
 import { useGoogleFontLinks } from "@/components/builder/use-google-font-links";
 import { useLibraryFontFaces } from "@/components/builder/use-library-font-faces";
+import { skipLinkTargetElementId } from "@/lib/skip-link-target";
 
 type BuilderTemplatePreviewProps = {
   layoutSections: BuilderTemplateSection[];
@@ -276,6 +288,14 @@ type BuilderTemplatePreviewProps = {
    * live site: the Builder shows each page as it is.
    */
   siteWideBugReport?: SiteWideBugReport | null;
+  /**
+   * The section the live page's hidden "Skip to content" link jumps to
+   * (SC-857), picked by `pickSkipLinkTarget`. Matched by object identity, not
+   * id: copies of one saved section share an id. That section wears the
+   * link's target id and `tabIndex={-1}`, so focus moves there, not just the
+   * scroll position. Only honoured with `liveSite`.
+   */
+  skipLinkTarget?: BuilderTemplateSection | null;
 };
 
 /**
@@ -293,6 +313,80 @@ const PageAddressContext = createContext<PageAddressMap | null>(null);
  * through BuilderModulePreview too).
  */
 const SiteWideBugReportContext = createContext(false);
+
+/**
+ * The page's heading anchors (task SC-856): the id each Text module's headings
+ * get, planned once for the whole page so a repeated heading is numbered
+ * across modules (`junior-programs`, `junior-programs-2`), plus an allocator
+ * holding every id the page uses, for rich text that arrives later (a blog
+ * post's body). Null outside a drawn page (an email), where nothing is added.
+ */
+type HeadingAnchorPlan = { ids: Map<string, string[]>; allocator: HeadingAnchorAllocator };
+const HeadingAnchorContext = createContext<HeadingAnchorPlan | null>(null);
+
+/**
+ * Rich text with its heading anchors. A module the page-wide plan covers takes
+ * its planned ids; anything else is numbered against a FORK of the page's ids,
+ * so drawing it twice gives the same ids both times.
+ */
+function useAnchoredRichText(html: string, moduleId?: string): string {
+  const plan = useContext(HeadingAnchorContext);
+  return useMemo(() => {
+    if (!plan || !html) return html;
+    const planned = moduleId ? plan.ids.get(moduleId) : undefined;
+    return planned ? applyHeadingAnchors(html, planned) : addHeadingAnchors(html, plan.allocator.fork());
+  }, [plan, html, moduleId]);
+}
+
+function TextModulePreview({ module }: { module: import("@/lib/builder-template").BuilderTemplateModule }) {
+  const variant = module.settings.variant ?? "";
+  // Simple Text keeps every other text-module behaviour (alignment, width,
+  // background) and changes only how the copy itself is turned into HTML —
+  // plus the type overrides, which are its own since it has no type scale.
+  const isPlainText = isPlainTextVariant(module.settings);
+  const formatted = isPlainText ? formatPlainTextContent(module.text) : formatRichTextContent(module.text);
+  // Rich text only: Simple Text is the operator's own markup, left as typed.
+  const anchored = useAnchoredRichText(isPlainText ? "" : formatted, module.id);
+  const html = isPlainText ? formatted : anchored;
+
+  return (
+    <div
+      className={`builder-preview-text builder-preview-text-${variant || "default"}`}
+      style={{
+        ...getTextModuleWidthStyle(module.settings),
+        ...(isPlainText ? getPlainTextModuleStyle(module.settings) : {}),
+        ...getTextModuleRhythmStyle(module.settings),
+        ...getTextModuleFrameStyle(module.settings)
+      }}
+      dangerouslySetInnerHTML={{ __html: html || "" }}
+    />
+  );
+}
+
+/**
+ * A blog post's body, its headings anchored like a Text module's (task SC-856).
+ * The body is fetched after the page has drawn, so the address's `#heading` is
+ * looked for again once it is on screen — the page's own look found nothing.
+ */
+function BlogPostBodyHtml({ body, jumpToAddress }: { body: string; jumpToAddress: boolean }) {
+  const html = useAnchoredRichText(formatRichTextContent(body) || "");
+  useJumpToAddressSection(jumpToAddress, html);
+  return <div className="blog-post-body builder-preview-text" dangerouslySetInnerHTML={{ __html: html }} />;
+}
+
+/** Every Text module on the page, in the order the page shows them. */
+function planPageHeadingAnchors(layoutSections: BuilderTemplateSection[]): HeadingAnchorPlan {
+  const entries: Array<{ key: string; html: string }> = [];
+  const reserved: string[] = [];
+  for (const section of layoutSections || []) {
+    if (section.anchorName) reserved.push(section.anchorName);
+    for (const module of section.modules || []) {
+      if (module.type !== "text" || isPlainTextVariant(module.settings) || !module.id) continue;
+      entries.push({ key: module.id, html: formatRichTextContent(module.text) });
+    }
+  }
+  return planHeadingAnchors(entries, reserved);
+}
 
 type ContactFormField = {
   id: string;
@@ -323,8 +417,12 @@ function isNavPathActive(href: string, activePath: string) {
 function toPublicHref(href: string): string {
   const clean = href.trim();
   if (!clean || clean === "#" || /^https?:/i.test(clean) || clean.startsWith("mailto:")) return clean || "#";
-  if (clean.startsWith("/")) return clean === "/home" ? "/" : clean;
+  // The home page is "/", with or without a section named after it ("/home#team"
+  // → "/#team", task SC-852), so a link to the home page's own section from the
+  // home page stays on the page instead of loading /home.
+  if (clean.startsWith("/")) return clean === "/home" ? "/" : clean.startsWith("/home#") ? `/${clean.slice(5)}` : clean;
   if (clean === "home") return "/";
+  if (clean.startsWith("home#")) return `/${clean.slice(4)}`;
   return `/${clean.replace(/^\/+/, "")}`;
 }
 
@@ -445,7 +543,7 @@ function ContactFormPreview({
   );
 }
 
-type CrmFormField = { key: string; label: string; type: string; required: boolean; options?: string[] };
+type CrmFormField = { key: string; label: string; type: string; required: boolean; options?: string[]; width?: string };
 type CrmFormStyles = Record<string, string | undefined>;
 type CrmFormData = {
   id?: string;
@@ -899,7 +997,14 @@ function CrmFormPreview({
     const onStyles = (event: Event) => {
       const detail = (event as CustomEvent<CrmFormStylesEventDetail>).detail;
       if (!detail || detail.formId !== crmFormId) return;
-      setForm((current) => (current ? { ...current, styles: detail.styles } : current));
+      setForm((current) => {
+        if (!current) return current;
+        const widths = detail.fieldWidths;
+        const fields = widths
+          ? (current.fields ?? []).map((f) => (f.key in widths ? { ...f, width: widths[f.key] } : f))
+          : current.fields;
+        return { ...current, styles: detail.styles, fields };
+      });
     };
     window.addEventListener(CRM_FORM_STYLES_EVENT, onStyles);
     return () => window.removeEventListener(CRM_FORM_STYLES_EVENT, onStyles);
@@ -993,10 +1098,12 @@ function CrmFormPreview({
    * impossible. The canvas still draws it, which is where it can be fixed.
    */
   if (liveSite && visibleFields.length === 0) return null;
+  // Labels above sit in a flex column, where `alignSelf: start` would shrink
+  // the label to its words and lose Label Align; stretched, text-align works.
   const labelStyle = {
     justifySelf: renderStyles.cssVars['--crm-form-label-justify'],
     textAlign: renderStyles.normalized.labelAlign as CSSProperties['textAlign'],
-    alignSelf: 'start'
+    alignSelf: renderStyles.normalized.labelPosition === "above" ? 'stretch' : 'start'
   } as CSSProperties;
   const shellStyle = {
     ...themeContextStyle,
@@ -1013,6 +1120,21 @@ function CrmFormPreview({
   const buttonStyle = {
     ...renderStyles.button
   } as CSSProperties;
+  // Label Position and Required Mark (SC-860). Half width only means
+  // something with labels above: beside, every question is a label|box row of
+  // the form's own two-track grid, and two of those cannot share a line.
+  const labelsAbove = renderStyles.normalized.labelPosition === "above";
+  const showRequiredMark = renderStyles.normalized.requiredMarker !== "none";
+  const fieldClass = (base: string, field: CrmFormField) =>
+    labelsAbove && field.width === "half" ? `${base} is-half` : base;
+  const labelText = (field: CrmFormField) => (
+    <>
+      {field.label}
+      {showRequiredMark && field.required ? (
+        <span className="builder-crm-form-required" aria-hidden="true">*</span>
+      ) : null}
+    </>
+  );
 
   return (
     <div className="builder-crm-form-shell" style={shellStyle}>
@@ -1021,7 +1143,11 @@ function CrmFormPreview({
           {form.heading}
         </div>
       ) : null}
-      <form className="builder-contact-form builder-crm-form" onSubmit={submitCrmForm} style={formStyle}>
+      <form
+        className={`builder-contact-form builder-crm-form${labelsAbove ? " is-labels-above" : ""}`}
+        onSubmit={submitCrmForm}
+        style={formStyle}
+      >
         <input type="text" name="_trap" value={honeypot} onChange={(e) => setHoneypot(e.target.value)} style={{ display: "none" }} aria-hidden="true" tabIndex={-1} />
         {message ? <div className="builder-contact-form-message">{message}</div> : null}
         {error ? <div className="builder-contact-form-error">{error}</div> : null}
@@ -1040,8 +1166,8 @@ function CrmFormPreview({
             // cannot sit inside a <label> either; its label is named by id.
             if (field.type === "multiselect") {
               return (
-                <div className="builder-contact-form-field builder-crm-form-multiselect-field" key={field.key}>
-                  <span id={labelId} style={labelStyle}>{field.label}</span>
+                <div className={fieldClass("builder-contact-form-field builder-crm-form-multiselect-field", field)} key={field.key}>
+                  <span id={labelId} style={labelStyle}>{labelText(field)}</span>
                   {control}
                 </div>
               );
@@ -1051,15 +1177,15 @@ function CrmFormPreview({
             // hold only one control.
             if (crmIsChoiceGroupField(field)) {
               return (
-                <fieldset className="builder-contact-form-field builder-crm-form-choice-field" key={field.key}>
-                  <legend style={labelStyle}>{field.label}</legend>
+                <fieldset className={fieldClass("builder-contact-form-field builder-crm-form-choice-field", field)} key={field.key}>
+                  <legend style={labelStyle}>{labelText(field)}</legend>
                   {control}
                 </fieldset>
               );
             }
             return (
-              <label className="builder-contact-form-field" key={field.key}>
-                <span style={labelStyle}>{field.label}</span>
+              <label className={fieldClass("builder-contact-form-field", field)} key={field.key}>
+                <span style={labelStyle}>{labelText(field)}</span>
                 {control}
               </label>
             );
@@ -1760,6 +1886,106 @@ function CrmContactsTablePreview({
  * module's settings before it gets here. The defaults are the editor card's
  * (builder-module-card.tsx), so the two draw the same trail.
  */
+/**
+ * Table of Contents (task SC-863): the page's headings as jump links.
+ *
+ * It reads the headings the page SHOWS once they are on screen — every
+ * h2–h6 with an id inside this page, in order (the ids come from SC-856's
+ * heading anchors). Nothing is stored, so it always matches the page as
+ * published. It keeps watching, because a blog post's body arrives after the
+ * page has drawn; the re-read is cheap and changes nothing unless the
+ * headings did.
+ *
+ * Clicking a link needs nothing here: the page's own click handler
+ * (`handleSectionJumpClick`) glides to any `#id` on the page and puts it in
+ * the address, the same as a section anchor.
+ *
+ * Until the first reading, and on a live page that has no headings, it
+ * renders nothing at all — never a lone title over empty space (landmine 16).
+ */
+function TableOfContentsModule({
+  settings,
+  liveSite = false,
+  emailPreview = false
+}: {
+  settings: Record<string, string>;
+  liveSite?: boolean;
+  emailPreview?: boolean;
+}) {
+  const toc = resolveTableOfContentsSettings(settings);
+  const markerRef = useRef<HTMLSpanElement | null>(null);
+  const navRef = useRef<HTMLElement | null>(null);
+  const [headings, setHeadings] = useState<PageHeading[] | null>(null);
+
+  useEffect(() => {
+    if (emailPreview || typeof window === "undefined") return;
+    const self = navRef.current || markerRef.current;
+    const root: Element = self?.closest("[data-builder-page]") || document.body;
+    let frame = 0;
+    const read = () => {
+      frame = 0;
+      const next = readPageHeadings(root, navRef.current);
+      setHeadings((current) => (current && sameHeadings(current, next) ? current : next));
+    };
+    read();
+    const observer = typeof MutationObserver === "function"
+      ? new MutationObserver(() => {
+          if (!frame) frame = window.requestAnimationFrame(read);
+        })
+      : null;
+    observer?.observe(root, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ["id"] });
+    return () => {
+      observer?.disconnect();
+      if (frame) window.cancelAnimationFrame(frame);
+    };
+  }, [emailPreview]);
+
+  // An email cannot jump anywhere, and has no page to read.
+  if (emailPreview) return null;
+
+  const entries = headings ? pickTableOfContentsEntries(headings, toc) : [];
+  if (entries.length === 0) {
+    // A hidden marker, so the first reading can find which page it is on.
+    const marker = <span ref={markerRef} hidden data-table-of-contents="" />;
+    if (liveSite || headings === null) return marker;
+    return (
+      <>
+        {marker}
+        <BuilderOnlyNote liveSite={liveSite} className="builder-contact-form-stub">
+          {tableOfContentsEmptyNote(toc.levels, headings.length > 0)}
+        </BuilderOnlyNote>
+      </>
+    );
+  }
+
+  const color = toc.color || "#0f4f8f";
+  return (
+    <nav
+      aria-label={toc.title || "On this page"}
+      className="builder-preview-toc"
+      data-table-of-contents=""
+      ref={navRef}
+      style={{ textAlign: toc.alignment, fontSize: toc.fontSize }}
+    >
+      {toc.title ? <p className="builder-preview-toc-title">{toc.title}</p> : null}
+      <ul>
+        {entries.map((entry) => (
+          <li
+            className={`builder-preview-toc-item builder-preview-toc-depth-${entry.depth}`}
+            data-toc-depth={entry.depth}
+            key={entry.id}
+            style={entry.depth ? { paddingInlineStart: `${entry.depth * 1.25}em` } : undefined}
+          >
+            <a href={`#${encodeURIComponent(entry.id)}`} style={{ color }}>
+              {entry.text}
+            </a>
+          </li>
+        ))}
+      </ul>
+    </nav>
+  );
+}
+
 function BreadcrumbModulePreview({
   settings,
   liveSite = false
@@ -1870,7 +2096,8 @@ export function BuilderTemplatePreview({
   applyThemePageMargins = true,
   suppressShellBackground = false,
   pageAddresses = null,
-  siteWideBugReport = null
+  siteWideBugReport = null,
+  skipLinkTarget = null
 }: BuilderTemplatePreviewProps) {
   const siteWideBugReportActive = liveSite && Boolean(siteWideBugReport);
   const shellBackground = suppressShellBackground
@@ -1894,8 +2121,24 @@ export function BuilderTemplatePreview({
   // And any font-library font (lf:<slug>) — its files, for this project only.
   useLibraryFontFaces([theme, layoutSections], projectId || resolveSessionProjectId(), emailPreview);
 
+  // A link to a section of this page glides there, and an address naming a
+  // section lands on it once the sections exist (task SC-852). Visitor-facing
+  // pages only: in the editor a click selects, it does not navigate.
+  const sectionJumpsEnabled = !emailPreview && (liveSite || previewMode);
+  useJumpToAddressSection(sectionJumpsEnabled, layoutSections);
+
+  // Every heading in the page's rich text gets an anchor from its words,
+  // numbered across the whole page (task SC-856). Added as it is drawn, never
+  // saved. Not in an email, where nothing can jump to it.
+  const headingAnchorPlan = useMemo(
+    () => (emailPreview ? null : planPageHeadingAnchors(layoutSections)),
+    [emailPreview, layoutSections]
+  );
+
   function handleAdminLogoutLinkClick(event: MouseEvent<HTMLDivElement>) {
     if (emailPreview) return;
+    // Not stopped: the link's own handlers (a phone menu closing itself) still run.
+    if (sectionJumpsEnabled && handleSectionJumpClick(event)) return;
     const target = event.target;
     if (!(target instanceof Element)) return;
     const anchor = target.closest("a[href]");
@@ -2009,6 +2252,11 @@ export function BuilderTemplatePreview({
       // 400s. Found in review round 5 of the Bug Report module (PR #365),
       // where it fired `?projectId=` empty.
       projectId={projectId}
+      skipLinkTargetId={
+        liveSite && skipLinkTarget && section === skipLinkTarget
+          ? skipLinkTargetElementId(section)
+          : undefined
+      }
       section={
         joined
           ? { ...section, background: createDefaultBackgroundSettings(), widthMode: "contained" }
@@ -2052,7 +2300,10 @@ export function BuilderTemplatePreview({
   return (
     <PageAddressContext.Provider value={pageAddresses}>
     <SiteWideBugReportContext.Provider value={siteWideBugReportActive}>
+    <HeadingAnchorContext.Provider value={headingAnchorPlan}>
     <div
+      // The page a Table of Contents reads its headings from (SC-863).
+      data-builder-page=""
       className={
         shellClassName
           ? pageOverlaySections.length > 0
@@ -2106,6 +2357,7 @@ export function BuilderTemplatePreview({
         />
       ) : null}
     </div>
+    </HeadingAnchorContext.Provider>
     </SiteWideBugReportContext.Provider>
     </PageAddressContext.Provider>
   );
@@ -2126,7 +2378,8 @@ function BuilderSectionPreview({
   heroBannerUrl,
   heroOverlay,
   heroOverlayOpacity,
-  overlapsHero = false
+  overlapsHero = false,
+  skipLinkTargetId
 }: {
   section: BuilderTemplateSection;
   emailPreview?: boolean;
@@ -2149,6 +2402,8 @@ function BuilderSectionPreview({
   heroOverlayOpacity?: number;
   /** Treatment: this section pulls up over the previous image section. */
   overlapsHero?: boolean;
+  /** Set on the one section the live page's "Skip to content" link targets (SC-857). */
+  skipLinkTargetId?: string;
 }) {
   // Names this row in its own tablet/phone CSS. useId rather than section.id:
   // copies of one saved section share an id, and must not share rules.
@@ -2323,6 +2578,11 @@ function BuilderSectionPreview({
   const sectionOverlayScreenStyle = isOverlayLayoutCollapsed
     ? undefined
     : getBuilderRowOverlayScreenStyle(section.overlayScreen);
+  // The section's shape layer (task SC-859): a curve, wave or slant over the
+  // background and tint, under the columns. Undefined when there is none, so
+  // no element is mounted and the row renders exactly as before.
+  const sectionShapeLayerStyle = isOverlayLayoutCollapsed ? undefined : getSectionShapeLayerStyle(section.shapeLayer);
+  const sectionHasLayers = Boolean(sectionBackgroundLayer || sectionOverlayScreenStyle || sectionShapeLayerStyle);
 
   // A function of the row, not a constant, so the tablet and phone rules below
   // are computed by exactly this code on the row as each device sees it.
@@ -2400,9 +2660,7 @@ function BuilderSectionPreview({
       // out is the point of 86bbwmp2y rather than a side effect — a dropdown in
       // a tinted row was cut off for the same reason it was in a video one.
       // (`row-overlay-screen-only-leaves-the-row-uncontained` holds this.)
-      ...(sectionBackgroundLayer || sectionOverlayScreenStyle
-        ? { position: "relative" }
-        : {}),
+      ...(sectionHasLayers ? { position: "relative" } : {}),
       display: "grid",
       gridTemplateColumns: sectionGridTemplate,
       ...(isOverlayLayoutCollapsed ? { gap: 0 } : getSectionColumnGapStyle(s)),
@@ -2458,14 +2716,19 @@ function BuilderSectionPreview({
       }${
         section.widthMode === "full-width" ? " builder-preview-section-full-width" : ""
       }${
-        sectionBackgroundLayer || sectionOverlayScreenStyle
-          ? " builder-preview-section-layered"
-          : ""
+        sectionHasLayers ? " builder-preview-section-layered" : ""
       }${
         // Drops the stylesheet's default section corner, which the overlay
         // screen would otherwise inherit and paint (86bcvqemm).
         sectionOverlayScreenStyle ? " builder-preview-section-has-overlay-screen" : ""
       }`}
+      // The section's anchor name (task SC-852): `/#contact-us` lands here.
+      // Absent when the section has none, so no row gains an id it never had.
+      // The "Skip to content" target (SC-857) keeps the anchor name when it has
+      // one (skipLinkTargetElementId), and takes focus so the next Tab lands
+      // in the page's content rather than back in the menu.
+      id={skipLinkTargetId || section.anchorName || undefined}
+      tabIndex={skipLinkTargetId ? -1 : undefined}
       style={gridStyle}
       {...(deviceCss ? { [BUILDER_DEVICE_SCOPE_ATTRIBUTE]: deviceScopeId } : {})}
     >
@@ -2487,6 +2750,14 @@ function BuilderSectionPreview({
       ) : null}
       {sectionOverlayScreenStyle ? (
         <div className="builder-preview-row-overlay-screen" style={sectionOverlayScreenStyle} />
+      ) : null}
+      {sectionShapeLayerStyle ? (
+        <div
+          className="builder-preview-row-shape-layer"
+          data-shape={section.shapeLayer?.shape}
+          data-shape-side={section.shapeLayer?.side}
+          style={sectionShapeLayerStyle}
+        />
       ) : null}
       {columnKeys.map((columnKey) => {
         const columnModules = section.modules.filter((module) => module.column === columnKey);
@@ -3015,26 +3286,7 @@ function BuilderModulePreviewBody({
   }
 
   if (module.type === "text") {
-    // Simple Text keeps every other text-module behaviour (alignment, width,
-    // background) and changes only how the copy itself is turned into HTML —
-    // plus the type overrides, which are its own since it has no type scale.
-    const isPlainText = isPlainTextVariant(module.settings);
-    const html = isPlainText
-      ? formatPlainTextContent(module.text)
-      : formatRichTextContent(module.text);
-
-    return (
-      <div
-        className={`builder-preview-text builder-preview-text-${variant || "default"}`}
-        style={{
-          ...getTextModuleWidthStyle(module.settings),
-          ...(isPlainText ? getPlainTextModuleStyle(module.settings) : {}),
-          ...getTextModuleRhythmStyle(module.settings),
-          ...getTextModuleFrameStyle(module.settings)
-        }}
-        dangerouslySetInnerHTML={{ __html: html || "" }}
-      />
-    );
+    return <TextModulePreview module={module} />;
   }
 
   if (module.type === "code") {
@@ -3276,6 +3528,10 @@ function BuilderModulePreviewBody({
 
   if (module.type === "breadcrumb") {
     return <BreadcrumbModulePreview settings={module.settings} liveSite={liveSite} />;
+  }
+
+  if (module.type === "table-of-contents") {
+    return <TableOfContentsModule settings={module.settings} liveSite={liveSite} emailPreview={emailPreview} />;
   }
 
   if (module.type === "galaxy") {
@@ -4916,7 +5172,7 @@ function BlogPostCreatePreview({ settings }: { settings: Record<string, string> 
               </div>
             ) : null}
             <div style={{ flex: "0 1 12rem", minWidth: 0 }}>
-              <label style={labelStyle}>Post date</label>
+              <label style={labelStyle}>Post Date</label>
               <input
                 style={inputStyle}
                 type="date"
@@ -5074,7 +5330,7 @@ function BlogPostCreatePreview({ settings }: { settings: Record<string, string> 
             <div style={{ padding: "0 0.875rem 0.875rem" }}>
               {showCategories ? (
                 <div style={fieldStyle}>
-                  <label style={labelStyle}>Categories (slugs, comma-separated)</label>
+                  <label style={labelStyle}>Categories (Slugs, Comma-separated)</label>
                   <input
                     style={inputStyle}
                     type="text"
@@ -5092,7 +5348,7 @@ function BlogPostCreatePreview({ settings }: { settings: Record<string, string> 
 
               {showTags ? (
                 <div style={fieldStyle}>
-                  <label style={labelStyle}>Tags (comma-separated)</label>
+                  <label style={labelStyle}>Tags (Comma-separated)</label>
                   <input
                     style={inputStyle}
                     type="text"
@@ -5610,7 +5866,7 @@ function BlogImportPanel({ onImported, onClose }: { onImported: () => void; onCl
         <button type="button" className="builder-blog-import-btn" onClick={selectAllProbable}>Select all probable posts</button>
         <button type="button" className="builder-blog-import-btn" onClick={() => setSelected(new Set())}>Select none</button>
         <label className="builder-blog-import-author">
-          Author when the source has none:{" "}
+          Author When the Source Has None:{" "}
           <input
             type="text"
             value={defaultAuthor}
@@ -9010,7 +9266,7 @@ function EventManagerPreview({
         ) : null}
         {repeat.enabled ? (
           <div className="builder-event-manager-field">
-            <label className="builder-event-manager-label" htmlFor="event-repeat-until">Until (optional)</label>
+            <label className="builder-event-manager-label" htmlFor="event-repeat-until">Until (Optional)</label>
             <input
               id="event-repeat-until"
               className="builder-event-manager-input"
@@ -9119,7 +9375,7 @@ function EventManagerPreview({
                             />
                           </label>
                           <label className="builder-event-manager-label">
-                            Instructor this date
+                            Instructor This Date
                             <input
                               className="builder-event-manager-input"
                               value={entry?.instructor || ""}
@@ -9128,7 +9384,7 @@ function EventManagerPreview({
                             />
                           </label>
                           <label className="builder-event-manager-label">
-                            Note for this date
+                            Note for This Date
                             <input
                               className="builder-event-manager-input"
                               value={entry?.note || ""}
@@ -9254,7 +9510,7 @@ function EventManagerPreview({
             checked={isAllDay}
             onChange={(e) => toggleAllDay(e.target.checked)}
           />
-          <span>All day</span>
+          <span>All Day</span>
         </label>
         <label className="builder-event-manager-check">
           <input
@@ -9860,7 +10116,7 @@ function BlogCategoryManagerPreview({ settings }: { settings: Record<string, str
             ) : null}
             {showSortOrder ? (
               <div style={fieldStyle}>
-                <label style={labelStyle}>Sort order</label>
+                <label style={labelStyle}>Sort Order</label>
                 <input type="number" style={{ ...inputStyle, width: 80 }} value={form.sortOrder} onChange={(e) => setForm((f) => ({ ...f, sortOrder: e.target.value }))} />
               </div>
             ) : null}
@@ -10339,10 +10595,7 @@ function BlogPostViewPreview({
           ) : null}
         </div>
         {post.body ? (
-          <div
-            className="blog-post-body builder-preview-text"
-            dangerouslySetInnerHTML={{ __html: formatRichTextContent(post.body) || "" }}
-          />
+          <BlogPostBodyHtml body={post.body} jumpToAddress={liveSite} />
         ) : null}
       </article>
     );
@@ -10382,10 +10635,7 @@ function BlogPostViewPreview({
         {excerpt ? <p className="blog-post-excerpt">{excerpt}</p> : null}
       </div>
       {body ? (
-        <div
-          className="blog-post-body builder-preview-text"
-          dangerouslySetInnerHTML={{ __html: formatRichTextContent(body) || "" }}
-        />
+        <BlogPostBodyHtml body={body} jumpToAddress={false} />
       ) : (
         <p className="blog-post-body" style={{ color: "#9ca3af" }}>Post body will appear here when opened with ?post=slug.</p>
       )}
@@ -12274,8 +12524,13 @@ function toPreviewHref(href: string): string {
   if (!clean || clean.startsWith("#") || clean.startsWith("http") || clean.startsWith("mailto:") || clean.endsWith(".html")) {
     return clean || "#";
   }
-  const withoutTrailingSlash = clean.endsWith("/") && clean.length > 1 ? clean.slice(0, -1) : clean;
-  return `${withoutTrailingSlash}.html`;
+  // A section of a page ("/about#team") keeps its "#name" AFTER the ".html".
+  const hashAt = clean.indexOf("#");
+  const path = hashAt === -1 ? clean : clean.slice(0, hashAt);
+  const hash = hashAt === -1 ? "" : clean.slice(hashAt);
+  if (!path || path.endsWith(".html")) return clean;
+  const withoutTrailingSlash = path.endsWith("/") && path.length > 1 ? path.slice(0, -1) : path;
+  return `${withoutTrailingSlash}.html${hash}`;
 }
 
 type NavRenderItem = {
@@ -13720,7 +13975,7 @@ function AdminLoginPreview({
             </div>
             {forgotNotice && <div style={noticeStyle}>{forgotNotice}</div>}
             <form onSubmit={handleResetSubmit}>
-              <label style={labelStyle}>6-digit code</label>
+              <label style={labelStyle}>6-digit Code</label>
               <input
                 type="text"
                 required
@@ -13733,7 +13988,7 @@ function AdminLoginPreview({
                 onChange={(e) => setResetCode(e.target.value.replace(/\D/g, ""))}
                 placeholder="123456"
               />
-              <label style={labelStyle}>New password</label>
+              <label style={labelStyle}>New Password</label>
               <input
                 type="password"
                 required
@@ -13744,7 +13999,7 @@ function AdminLoginPreview({
                 onChange={(e) => setResetPassword(e.target.value)}
                 placeholder="At least 8 characters"
               />
-              <label style={labelStyle}>Confirm new password</label>
+              <label style={labelStyle}>Confirm New Password</label>
               <input
                 type="password"
                 required
@@ -13776,7 +14031,7 @@ function AdminLoginPreview({
               Enter your email and we&rsquo;ll send you a 6-digit code to set a new password.
             </div>
             <form onSubmit={handleForgotRequest}>
-              <label style={labelStyle}>Email address</label>
+              <label style={labelStyle}>Email Address</label>
               <input
                 type="email"
                 required
@@ -13809,7 +14064,7 @@ function AdminLoginPreview({
     <div style={cardStyle}>
       <div style={{ fontWeight: 700, fontSize: 20, color: "#18324a", marginBottom: 20 }}>{formTitle}</div>
       <form onSubmit={handleLogin}>
-        <label style={labelStyle}>Email address</label>
+        <label style={labelStyle}>Email Address</label>
         <input type="email" required style={inputStyle} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
         <label style={labelStyle}>Password</label>
         <input type="password" required style={inputStyle} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" />
@@ -14379,7 +14634,7 @@ function AdminSupportFormPreview({
         </div>
 
         <div>
-          <label htmlFor="admin-support-title" style={labelStyle}>Issue title</label>
+          <label htmlFor="admin-support-title" style={labelStyle}>Issue Title</label>
           <input
             id="admin-support-title"
             type="text"
@@ -14393,7 +14648,7 @@ function AdminSupportFormPreview({
         </div>
 
         <div>
-          <label htmlFor="admin-support-description" style={labelStyle}>Issue description</label>
+          <label htmlFor="admin-support-description" style={labelStyle}>Issue Description</label>
           <textarea
             id="admin-support-description"
             rows={6}
@@ -14407,7 +14662,7 @@ function AdminSupportFormPreview({
 
         {showScreenshot && (
           <div>
-            <label htmlFor="admin-support-screenshot" style={labelStyle}>Screenshot (optional)</label>
+            <label htmlFor="admin-support-screenshot" style={labelStyle}>Screenshot (Optional)</label>
             <p style={{ margin: "0 0 6px", fontSize: 12, color: "var(--muted, #888)" }}>
               A picture of what you are seeing helps a lot. Images up to about 6MB.
             </p>
@@ -15641,7 +15896,7 @@ function AdminRelatedArticlesPreview({
             old two-column layout cut every term name off with an ellipsis. */}
         <div style={{ display: "flex", gap: "0.75rem", alignItems: "flex-end", flexWrap: "wrap", marginBottom: "0.9rem" }}>
           <div style={{ flex: "1 1 320px", minWidth: 0 }}>
-            <label style={labelStyle} htmlFor="admin-blog-links-term">Show articles filed under</label>
+            <label style={labelStyle} htmlFor="admin-blog-links-term">Show Articles Filed Under</label>
             <select
               id="admin-blog-links-term"
               style={{ ...inputStyle, background: "#fff" }}

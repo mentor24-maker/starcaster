@@ -265,7 +265,7 @@ function NavFeatureModuleEditor({
           {/* "Module", not "Content": the type's own panel below brings a
               Content axis of its own. */}
           <div className="builder-schema-group-title">Module</div>
-          <BuilderModuleField label="Module label" width="text-md">
+          <BuilderModuleField label="Module Label" width="text-md">
             <input
               type="text"
               value={featureModule.name}
@@ -1272,7 +1272,7 @@ export function BuilderNavigationModuleSettings({
                    * ever applies while that item's own dropdown is open.
                    */
                   key: "navLinkRadiusTopOnly",
-                  label: "Square bottom when open",
+                  label: "Square Bottom When Open",
                   width: "check",
                   control: "checkbox",
                   fallback: String(NAV_STYLE_DEFAULTS.linkRadiusTopOnly),
@@ -1488,6 +1488,7 @@ export function BuilderNavigationModuleSettings({
                         <BuilderProjectDataPicker
                           source="pages"
                           valueKind="path"
+                          allowSections
                           value={item.href}
                           onChange={(href) => updateItem(item.id, { href })}
                           noneLabel="— No link —"

@@ -305,6 +305,7 @@ export function BuilderImageModuleSettings({
                 <BuilderProjectDataPicker
                   source="pages"
                   valueKind="path"
+                  allowSections
                   value={ctx.settings.linkUrl ?? ""}
                   onChange={(next) => ctx.set("linkUrl", isPageLink(next) ? next : normalizeBuilderAssetUrl(next))}
                   noneLabel="— No link —"
@@ -328,7 +329,7 @@ export function BuilderImageModuleSettings({
           [
             {
               key: "alt",
-              label: "Alt text",
+              label: "Alt Text",
               width: "full",
               control: "text",
               placeholder: "Describe the image for screen readers",

@@ -1068,6 +1068,149 @@ export const RENDER_CONTRACTS = [
       return null;
     },
   },
+  ...[
+    { width: 1280, phone: false },
+    { width: 420, phone: true },
+  ].map(({ width, phone }) => ({
+    id: phone
+      ? 'crm-form-half-width-questions-stack-on-a-phone'
+      : 'crm-form-labels-above-and-two-half-questions-share-a-row',
+    why:
+      'Label Position "Above" and half-width questions (task SC-860) exist so an imported contact form ' +
+      'comes out the shape of the original: Bayside\'s has every label over its box and First and Last ' +
+      'side by side. jsdom checks the classes; only a browser can say the two boxes really sit on one ' +
+      'line, at about half the width of a full question, with each label above its box — and that on a ' +
+      'phone they take a whole row each again, because two half boxes at 420px are too narrow to type in. ' +
+      'The form is served from a fixture, so this needs no database.',
+    section: {
+      layout: 'single',
+      modules: [{ type: 'crm-form', text: '', settings: { crmFormId: 'form_contract_layout' } }],
+    },
+    serve: [{
+      url: /\/api\/crm\/forms\/form_contract_layout/,
+      json: {
+        ok: true,
+        data: {
+          id: 'form_contract_layout',
+          heading: '',
+          submitLabel: 'Send',
+          successMessage: 'Thanks',
+          errorMessage: 'Sorry',
+          crmConfigId: 'crm_contract',
+          styles: { labelPosition: 'above', fieldWidth: '100%' },
+          fields: [
+            { key: 'first_name', label: 'First', type: 'text', required: true, width: 'half' },
+            { key: 'last_name', label: 'Last', type: 'text', required: true, width: 'half' },
+            { key: 'email', label: 'Email', type: 'email', required: true },
+          ],
+        },
+      },
+    }],
+    emulate: { liveSite: true, viewport: { width, height: 900 } },
+    selector: 'form.builder-crm-form',
+    read: ['display'],
+    series: {
+      count: 1,
+      everyMs: 0,
+      read: ['display'],
+      selectors: {
+        first: 'input[name="first_name"]',
+        last: 'input[name="last_name"]',
+        email: 'input[name="email"]',
+        firstLabel: 'label:has(> input[name="first_name"]) > span',
+        mark: 'label:has(> input[name="first_name"]) .builder-crm-form-required',
+      },
+    },
+    expect(sample) {
+      if (!sample.found) return 'no CRM form rendered — the fixture form was not served or the module drew nothing.';
+      const f = sample.series?.[0];
+      if (!f) return 'no series frame was taken — the contract measured nothing.';
+      if (!f.first || !f.last || !f.email) return 'a question\'s box is missing — First, Last and Email must all render.';
+      if (!f.firstLabel) return 'First has no label span.';
+      if (!f.mark) return 'First is required but its label carries no asterisk.';
+      if (f.email.width < 100) return `the Email box is ${Math.round(f.email.width)}px wide — too narrow to judge anything against.`;
+      if (!(f.firstLabel.top + f.firstLabel.height <= f.first.top + 1)) {
+        return `First's label (top ${Math.round(f.firstLabel.top)}, height ${Math.round(f.firstLabel.height)}) is not above its box (top ${Math.round(f.first.top)}) — the labels are still beside.`;
+      }
+      if (phone) {
+        if (!(f.last.top > f.first.top + f.first.height)) {
+          return `at ${width}px Last (top ${Math.round(f.last.top)}) sits on First's line (top ${Math.round(f.first.top)}) — half questions must stack on a phone.`;
+        }
+        if (Math.abs(f.first.width - f.email.width) > 2) {
+          return `at ${width}px First is ${Math.round(f.first.width)}px and Email ${Math.round(f.email.width)}px — a half question must take the whole row on a phone.`;
+        }
+        return null;
+      }
+      if (Math.abs(f.first.top - f.last.top) > 1) {
+        return `First (top ${Math.round(f.first.top)}) and Last (top ${Math.round(f.last.top)}) are not on one line — two half-width questions must share a row.`;
+      }
+      const ratio = f.first.width / f.email.width;
+      if (ratio < 0.4 || ratio > 0.6) {
+        return `First is ${Math.round(f.first.width)}px against Email's ${Math.round(f.email.width)}px (${ratio.toFixed(2)}) — a half question should be about half as wide.`;
+      }
+      if (!(f.email.top > f.first.top + f.first.height)) return 'Email is not below First and Last — a full question must take its own row.';
+      return null;
+    },
+  })),
+  {
+    id: 'crm-form-labels-above-thank-you-takes-the-whole-row-on-a-phone',
+    why:
+      'With Label Position "Above" the form is a two-column grid so two half questions can share a ' +
+      'row (task SC-860). The older phone and narrow-column rules put the Thank-you and error banners ' +
+      'in column 1, and with labels above that is only HALF the form: on a phone the visitor\'s ' +
+      '"Thank you" sat squeezed into the left half beside an empty cell (SC-860 review). Only a ' +
+      'browser after a real submit can see it, so this presses Send at 420px against a served reply ' +
+      'and measures the banner against the form. No database.',
+    section: {
+      layout: 'single',
+      modules: [{ type: 'crm-form', text: '', settings: { crmFormId: 'form_contract_thanks' } }],
+    },
+    serve: [
+      {
+        url: /\/api\/crm\/forms\/form_contract_thanks/,
+        json: {
+          ok: true,
+          data: {
+            id: 'form_contract_thanks',
+            heading: '',
+            submitLabel: 'Send',
+            successMessage: 'Thanks for writing to us',
+            errorMessage: 'Sorry',
+            crmConfigId: 'crm_contract',
+            styles: { labelPosition: 'above', fieldWidth: '100%' },
+            fields: [
+              { key: 'first_name', label: 'First', type: 'text', required: false, width: 'half' },
+              { key: 'last_name', label: 'Last', type: 'text', required: false, width: 'half' },
+            ],
+          },
+        },
+      },
+      { url: /\/api\/crm\/contact-submit/, json: { ok: true, data: {} } },
+    ],
+    emulate: { liveSite: true, viewport: { width: 420, height: 900 } },
+    click: ['form.builder-crm-form button[type="submit"]'],
+    selector: 'form.builder-crm-form .builder-contact-form-message',
+    read: ['display'],
+    probes: {
+      banner: {
+        subject: 'form.builder-crm-form .builder-contact-form-message',
+        against: 'form.builder-crm-form',
+      },
+    },
+    expect(sample) {
+      if (!sample.found) return 'no Thank-you banner appeared after pressing Send — the submit was not answered or the message did not render, so its width cannot be judged.';
+      const probe = sample.probes?.banner;
+      if (!probe) return 'no probe was taken — the contract measured nothing.';
+      if (probe.missing) return `the probe could not find \`${probe.missing}\` — nothing to measure the banner against.`;
+      const banner = probe.subjectBox.right - probe.subjectBox.left;
+      const form = probe.againstBox.right - probe.againstBox.left;
+      if (form < 200) return `the form is ${Math.round(form)}px wide — too narrow to tell half from whole.`;
+      if (banner < form * 0.8) {
+        return `the Thank-you banner is ${Math.round(banner)}px in a ${Math.round(form)}px form — it is sitting in one of the two label-above columns instead of taking the whole row.`;
+      }
+      return null;
+    },
+  },
   {
     id: 'crm-form-choose-one-draws-every-option-as-one-radio-group',
     why:
@@ -1244,6 +1387,275 @@ export const RENDER_CONTRACTS = [
       return Math.abs(offset) <= 2
         ? null
         : `a button set to Centered sits ${Math.round(offset)}px off the middle of its column (button ${Math.round(sb.left)}-${Math.round(sb.right)}, column ${Math.round(ab.left)}-${Math.round(ab.right)}) — its Alignment is not reaching the wrapper.`;
+    },
+  },
+  {
+    id: 'menu-link-to-a-named-section-lands-on-it',
+    why:
+      'On baysidepartners.com the menu\'s About Us, Services and Contact Us did nothing: they were ' +
+      '`/#about-us`-style jump links and no section on any StarCaster page could carry a name ' +
+      '(task SC-852, operator 2026-11-17). A section now has an Anchor name, rendered as its id, ' +
+      'and a menu item stores the section by its id — so the name in the address is looked up at ' +
+      'render time and renaming the anchor breaks nothing. This puts a menu at the top of a page ' +
+      'that scrolls, links one item to the subject section by REFERENCE with a stale saved name ' +
+      '("old-name"), says the section is now named "contact-us", clicks the item and measures ' +
+      'where the section ended up: at the top of the window, with the link pointing at #contact-us.',
+    section: {
+      layout: 'single',
+      anchorName: 'contact-us',
+      spacers: 3,
+      leadSections: [{
+        modules: [{
+          type: 'navigation',
+          settings: {
+            navItems: JSON.stringify([
+              { id: 'jump', label: 'Contact Us', href: 'page:4242#section-render-contract|/old-page#old-name' },
+            ]),
+          },
+        }],
+      }],
+      modules: [{ type: 'heading', text: 'Contact Us', settings: {} }],
+    },
+    // The page the preview is drawn on, and the section's name NOW.
+    pageAddresses: { 4242: 'builder-preview.html', '4242#section-render-contract': 'contact-us' },
+    emulate: { reducedMotion: 'reduce' },
+    click: '.site-nav-link[href*="#"]',
+    selector: '#contact-us',
+    read: ['display'],
+    series: {
+      count: 1,
+      everyMs: 0,
+      read: ['display'],
+      attrs: ['href', 'id'],
+      selectors: { link: '.site-nav-link[href*="#"]', section: 'section#contact-us' },
+    },
+    expect(sample) {
+      if (!sample.found) return 'no section carries the id "contact-us" — the Anchor name did not reach the rendered page.';
+      const frame = sample.series?.[0];
+      if (!frame?.link) return 'the menu item did not render as a link, so where it points could not be read.';
+      if (!frame.section) return 'the named section was not found after the click, so where it landed could not be measured.';
+      const href = String(frame.link.href || '');
+      if (href.endsWith('#old-name')) return `the menu link still points at the name saved when it was picked (${href}) — the section reference was not resolved to its current anchor name.`;
+      if (!href.endsWith('#contact-us')) return `the menu link points at ${JSON.stringify(href)}, expected the section's current name (#contact-us).`;
+      if (Math.abs(frame.section.top) > 4) {
+        return `after clicking the menu item the section sits ${Math.round(frame.section.top)}px from the top of the window — the page did not jump to it.`;
+      }
+      return null;
+    },
+  },
+  {
+    id: 'table-of-contents-lists-the-pages-headings-and-jumps-to-one',
+    why:
+      'Long pages gave a reader no way to jump between headings (task SC-863, slice 2 of the ' +
+      '2026-11-17 anchor sweep). The Table of Contents module reads the headings the page SHOWS, ' +
+      'with the anchors SC-856 gives them, so nothing stored can go stale. On a live page this puts ' +
+      'the module at the top and three H2s with two H3s three screens below; counts the links (five, ' +
+      'in page order), reads that an H3 sits a step in, clicks "Adults" and measures that the page ' +
+      'landed on that heading.',
+    section: {
+      layout: 'single',
+      spacers: 3,
+      leadSections: [{ modules: [{ type: 'table-of-contents', settings: {} }] }],
+      modules: [{
+        type: 'text',
+        text: '<h2>Juniors</h2><p>Kids.</p><h3>Ages 5 to 8</h3><h3>Ages 9 to 12</h3>' +
+          '<h2>Adults</h2><p>Grown-ups.</p><h2>Private Lessons</h2>',
+      }],
+    },
+    emulate: { liveSite: true, reducedMotion: 'reduce' },
+    click: 'nav.builder-preview-toc a[href="#adults"]',
+    selector: 'nav.builder-preview-toc li',
+    read: ['display'],
+    series: {
+      count: 1,
+      everyMs: 0,
+      read: ['paddingInlineStart'],
+      attrs: ['href', 'data-toc-depth'],
+      selectors: {
+        first: 'nav.builder-preview-toc li:nth-child(1)',
+        sub: 'nav.builder-preview-toc li:nth-child(2)',
+        firstLink: 'nav.builder-preview-toc li:nth-child(1) a',
+        lastLink: 'nav.builder-preview-toc li:nth-child(5) a',
+        heading: 'h2#adults',
+      },
+    },
+    expect(sample) {
+      if (!sample.found) return 'no Table of Contents list rendered on a live page that has five headings.';
+      if (sample.matches !== 5) return `the list has ${sample.matches} links; the page has three H2s and two H3s, so five were expected.`;
+      const frame = sample.series?.[0] || {};
+      if (!frame.firstLink || frame.firstLink.href !== '#juniors') return `the first link points at ${JSON.stringify(frame.firstLink?.href)}, expected #juniors (page order).`;
+      if (!frame.lastLink || frame.lastLink.href !== '#private-lessons') return `the last link points at ${JSON.stringify(frame.lastLink?.href)}, expected #private-lessons.`;
+      if (frame.sub?.['data-toc-depth'] !== '1') return `the H3 "Ages 5 to 8" is at depth ${JSON.stringify(frame.sub?.['data-toc-depth'])}, expected 1 (indented).`;
+      if (parseFloat(frame.sub.paddingInlineStart) <= parseFloat(frame.first?.paddingInlineStart || '0')) {
+        return `the H3 link is not indented: it starts ${frame.sub.paddingInlineStart} in, the H2 above it ${frame.first?.paddingInlineStart}.`;
+      }
+      if (!frame.heading) return 'no h2#adults on the page after the click, so where it landed could not be measured.';
+      if (Math.abs(frame.heading.top) > 4) {
+        return `after clicking "Adults" the heading sits ${Math.round(frame.heading.top)}px from the top of the window — the page did not jump to it.`;
+      }
+      return null;
+    },
+  },
+  {
+    id: 'table-of-contents-on-a-live-page-with-no-headings-renders-nothing',
+    why:
+      'A Table of Contents on a page with no headings must leave nothing on the live site — no lone ' +
+      '"On this page" title over empty space (landmine 16, task SC-863). Paired with the presence ' +
+      'contract above, which proves the list renders at all when there is something to list.',
+    section: {
+      layout: 'single',
+      modules: [
+        { type: 'table-of-contents', settings: {} },
+        { type: 'text', text: '<p>A page with no headings at all.</p>' },
+      ],
+    },
+    emulate: { liveSite: true },
+    selector: '.builder-preview-toc, .builder-only-note',
+    absent: true,
+  },
+  {
+    id: 'table-of-contents-in-the-builder-says-why-it-is-empty',
+    why:
+      'In the Builder, an empty Table of Contents must say WHY it is empty (landmine 17), and only ' +
+      'there (task SC-863). The same page as the contract above, not live.',
+    section: {
+      layout: 'single',
+      modules: [
+        { type: 'table-of-contents', settings: {} },
+        { type: 'text', text: '<p>A page with no headings at all.</p>' },
+      ],
+    },
+    selector: '.builder-only-note',
+    read: ['display'],
+    expect(sample) {
+      if (!sample.found) return 'the Builder showed nothing where an empty Table of Contents sits; it should name why it is empty.';
+      return sample.text.startsWith('No headings on this page yet')
+        ? null
+        : `the Builder note reads ${JSON.stringify(sample.text)}, not the sentence naming why the list is empty.`;
+    },
+  },
+  {
+    id: 'button-link-to-a-named-section-lands-on-it',
+    why:
+      'SC-852 let a menu link to a section of a page; a "Contact us" button still could only send a ' +
+      'visitor to the top of one (task SC-853, the 2026-11-17 anchor sweep). Every page picker now ' +
+      'offers the chosen page\'s named sections and stores the section by its id. This links a Button ' +
+      'at the top of a page that scrolls to the subject section by REFERENCE with a stale saved name ' +
+      '("old-name"), says the section is now named "contact-us", clicks the button and measures where ' +
+      'the section ended up: at the top of the window, with the button pointing at #contact-us.',
+    section: {
+      layout: 'single',
+      anchorName: 'contact-us',
+      spacers: 3,
+      leadSections: [{
+        modules: [{ type: 'button', text: 'Contact us', settings: { href: 'page:4242#section-render-contract|/old-page#old-name' } }],
+      }],
+      modules: [{ type: 'heading', text: 'Contact Us', settings: {} }],
+    },
+    pageAddresses: { 4242: 'builder-preview.html', '4242#section-render-contract': 'contact-us' },
+    emulate: { reducedMotion: 'reduce' },
+    click: 'a.builder-preview-button[href*="#"]',
+    selector: '#contact-us',
+    read: ['display'],
+    series: {
+      count: 1,
+      everyMs: 0,
+      read: ['display'],
+      attrs: ['href', 'id'],
+      selectors: { link: 'a.builder-preview-button[href*="#"]', section: 'section#contact-us' },
+    },
+    expect(sample) {
+      if (!sample.found) return 'no section carries the id "contact-us" — the Anchor name did not reach the rendered page.';
+      const frame = sample.series?.[0];
+      if (!frame?.link) return 'the button did not render as a link to a section, so where it points could not be read.';
+      if (!frame.section) return 'the named section was not found after the click, so where it landed could not be measured.';
+      const href = String(frame.link.href || '');
+      if (href.endsWith('#old-name')) return `the button still points at the name saved when it was picked (${href}) — the section reference was not resolved to its current anchor name.`;
+      if (!href.endsWith('#contact-us')) return `the button points at ${JSON.stringify(href)}, expected the section's current name (#contact-us).`;
+      if (Math.abs(frame.section.top) > 4) {
+        return `after clicking the button the section sits ${Math.round(frame.section.top)}px from the top of the window — the page did not jump to it.`;
+      }
+      return null;
+    },
+  },
+  {
+    id: 'rich-text-link-to-a-named-section-points-at-its-current-name',
+    why:
+      'A link typed inside rich text can now name a section of a page too (task SC-853, done-means 2). ' +
+      'It keeps a working href and carries the reference beside it in data-page-link. This saves the ' +
+      'href with the section\'s OLD name and says the section is now "contact-us": the rendered link ' +
+      'must point at the current name.',
+    section: {
+      layout: 'single',
+      anchorName: 'contact-us',
+      modules: [{
+        type: 'text',
+        text: '<p><a href="/old-page#old-name" data-page-link="page:4242#section-render-contract|/old-page#old-name">Write to us</a></p>',
+        settings: {},
+      }],
+    },
+    pageAddresses: { 4242: 'builder-preview.html', '4242#section-render-contract': 'contact-us' },
+    selector: '#contact-us',
+    read: ['display'],
+    series: { count: 1, everyMs: 0, read: ['display'], attrs: ['href'], selectors: { link: 'a[data-page-link]' } },
+    expect(sample) {
+      const frame = sample.series?.[0]?.link;
+      if (!frame) return 'the rich-text link did not render, so where it points could not be read.';
+      const href = String(frame.href || '');
+      if (href.endsWith('#old-name')) return `the rich-text link still points at the name saved with it (${href}) — the section reference was not resolved.`;
+      if (!href.endsWith('#contact-us')) return `the rich-text link points at ${JSON.stringify(href)}, expected the section's current name (#contact-us).`;
+      return null;
+    },
+  },
+  {
+    id: 'rich-text-headings-get-anchors-numbered-across-the-page',
+    why:
+      'Long pages gave a reader no way to jump to a heading: the original Delray and Dane of Earth ' +
+      'pages carried heading ids and StarCaster dropped them (task SC-856, from the 2026-11-17 ' +
+      'anchor sweep). Every heading in a Text module now gets an id from its words as the page ' +
+      'is drawn, numbered across the WHOLE page — each Text module is drawn on its own, so a ' +
+      'per-module count would hand two modules the same id. This puts "Junior Programs" in two ' +
+      'modules, a heading with its own id, and a "Contact Us" heading in a section already ' +
+      'named contact-us; reads every id; then clicks a link to the second "Junior Programs" and ' +
+      'measures that the page landed on it.',
+    section: {
+      layout: 'single',
+      anchorName: 'contact-us',
+      spacers: 3,
+      modules: [
+        { type: 'text', text: '<p><a href="#junior-programs-2">Jump to the second</a></p>' },
+        { type: 'text', text: '<h2>Junior Programs</h2><p>First.</p>' },
+        { type: 'text', text: '<h2>Junior Programs</h2><p>Second.</p>' },
+        { type: 'text', text: '<h2 id="my-name">Kept Its Name</h2><h3>Contact Us</h3>' },
+      ],
+    },
+    emulate: { reducedMotion: 'reduce' },
+    click: '.builder-preview-text a[href="#junior-programs-2"]',
+    selector: '#junior-programs-2',
+    read: ['display'],
+    series: {
+      count: 1,
+      everyMs: 0,
+      read: ['display'],
+      attrs: ['id'],
+      selectors: {
+        first: '#junior-programs',
+        second: '#junior-programs-2',
+        kept: 'h2#my-name',
+        contact: 'h3#contact-us-2',
+      },
+    },
+    expect(sample) {
+      if (!sample.found) return 'no heading carries the id "junior-programs-2" — the second "Junior Programs" was not numbered across the page.';
+      const frame = sample.series?.[0] || {};
+      if (!frame.first) return 'the first "Junior Programs" heading has no id "junior-programs" — headings in rich text are not getting anchors.';
+      if (!frame.kept) return 'the heading written with id="my-name" lost it — an id a heading already has must be kept.';
+      if (!frame.contact) return 'the "Contact Us" heading is not "contact-us-2" — it collided with (or was not numbered past) the section\'s anchor name.';
+      if (!frame.second) return 'the second "Junior Programs" heading could not be found after the click, so where it landed could not be measured.';
+      if (Math.abs(frame.second.top) > 4) {
+        return `after clicking the link the second "Junior Programs" heading sits ${Math.round(frame.second.top)}px from the top of the window — the page did not jump to it.`;
+      }
+      return null;
     },
   },
   {
@@ -3756,6 +4168,67 @@ export const RENDER_CONTRACTS = [
       return null;
     },
   })),
+
+  /*
+   * THE SECTION SHAPE LAYER (task SC-859) — a curve, wave or slant painted as
+   * an SVG background over the section's own. No computed style says where an
+   * SVG's fill landed, so these read the PIXELS: on a dark band, a white curve
+   * chosen for the LEFT must be white near the left edge and leave the band
+   * dark near the right — and the same curve on the RIGHT the other way
+   * round, so "it painted somewhere" cannot pass for "it painted where it was
+   * put". Plus the absence: a section without a shape mounts no layer.
+   */
+  ...[
+    { id: 'section-shape-curve-paints-on-the-left', side: 'left', white: 0.06, dark: 0.94 },
+    { id: 'section-shape-curve-paints-on-the-right', side: 'right', white: 0.94, dark: 0.06 },
+  ].map(({ id, side, white, dark }) => ({
+    id,
+    why:
+      'Bayside\'s Contact Us band has a white curve over its photo so the address sits on white; a ' +
+      'section had nowhere to hold one, so the import dropped it (SC-859). The shape is an SVG ' +
+      'background, so only its pixels prove it rendered, and on the side chosen.',
+    section: {
+      layout: 'single',
+      background: { mode: 'color', color: '#101820' },
+      shapeLayer: { shape: 'curve', side, color: '#ffffff', opacity: 100 },
+      modules: [{ type: 'heading', text: 'Contact Us', settings: {}, column: 'left' }],
+    },
+    selector: '.builder-preview-section-layered',
+    read: ['position'],
+    pixelsInside: { points: [[white, 0.85], [dark, 0.85]], size: 8 },
+    expect(sample) {
+      const px = sample.pixelsInside;
+      if (!px || !px[0] || !px[1]) {
+        return 'the pixels inside the section could not be read (off-screen, or the screenshot failed) — nothing was measured.';
+      }
+      const [onShape, offShape] = px;
+      const sum = (c) => c.r + c.g + c.b;
+      if (sum(offShape) > 120) {
+        return `the band away from the shape reads rgb(${offShape.r}, ${offShape.g}, ${offShape.b}), not the dark ` +
+          'background — either the shape covers the wrong side or the scene is wrong.';
+      }
+      if (sum(onShape) < 700) {
+        return `near the ${side} edge the band reads rgb(${onShape.r}, ${onShape.g}, ${onShape.b}), not the white ` +
+          `shape — the ${side} curve did not paint there.`;
+      }
+      return null;
+    },
+  })),
+
+  {
+    id: 'section-without-a-shape-mounts-no-shape-layer',
+    why:
+      'A row with no shape must render exactly as it did before shapes existed: no extra element ' +
+      '(the phone reverse-stack rules count a row\'s children). Paired with the two contracts above, ' +
+      'so it cannot pass because shapes never render at all (SC-859).',
+    section: {
+      layout: 'single',
+      background: { mode: 'color', color: '#101820' },
+      modules: [{ type: 'heading', text: 'No shape', settings: {}, column: 'left' }],
+    },
+    selector: '.builder-preview-row-shape-layer',
+    absent: true,
+  },
 
   {
     id: 'row-overlay-screen-keeps-a-radius-the-operator-set',
@@ -6598,6 +7071,7 @@ export const RENDER_CONTRACTS = [
       return statusesInOrder(sample, ['Requested', 'Ready to launch', 'Live']);
     },
   },
+  ...skipLinkContracts(),
   {
     id: 'spirality-tasks-stacks-to-one-column-on-a-phone',
     why:
@@ -6632,4 +7106,132 @@ function statusesInOrder(sample, names) {
   return got.join(' | ') === names.join(' | ')
     ? null
     : `the status groups read "${got.join(' | ')}", not "${names.join(' | ')}" (the tracker's order and names, empty statuses left out).`;
+}
+
+/**
+ * The hidden "Skip to content" link every live page starts with (SC-857): a
+ * menu row above a content row, rendered as a published page. Three readings,
+ * because the link is three promises — hidden until Tab, visible on Tab, and
+ * Enter moves the keyboard past the menu. The page with no sections (no link)
+ * is a unit test in lib/builder-client/skip-link-target.test.ts.
+ */
+function skipLinkContracts() {
+  const section = {
+    layout: 'single',
+    leadSections: [{
+      modules: [{
+        type: 'navigation',
+        settings: { navItems: JSON.stringify([{ id: 'home', label: 'Home', href: '/' }]) },
+      }],
+    }],
+    modules: [{ type: 'heading', text: 'Page content', settings: {} }],
+  };
+  const why =
+    'Delray\'s and Press Play\'s original sites both opened with a hidden "Skip to content" link, ' +
+    'and StarCaster pages had none (task SC-857, from the 2026-11-17 anchor sweep). Keyboard and ' +
+    'screen-reader visitors had to tab through the whole menu on every page, and accessibility ' +
+    'checkers flag the gap. ';
+  return [
+    {
+      id: 'skip-link-is-on-the-live-page-and-hidden-until-tabbed-to',
+      why: why + 'Before anyone presses Tab the link must be on the page (a screen reader finds it) ' +
+        'and take up no visible space, so every page looks exactly as it did; and it must point at ' +
+        'the content row, never the menu row.',
+      section,
+      emulate: { liveSite: true },
+      selector: 'a.site-skip-link',
+      read: ['clipPath', 'display'],
+      series: {
+        count: 1,
+        everyMs: 0,
+        read: ['display'],
+        attrs: ['href', 'tabindex'],
+        selectors: {
+          target: 'section#site-main-content',
+          menuTarget: '.builder-preview-section-navigation#site-main-content',
+        },
+      },
+      expect(sample) {
+        if (!sample.found) return 'no "Skip to content" link on the live page.';
+        if (sample.matches !== 1) return `${sample.matches} skip links on the page — expected exactly one.`;
+        if (sample.text !== 'Skip to content') return `the link reads "${sample.text}", expected "Skip to content".`;
+        if (sample.styles.display === 'none') return 'the link is display:none, so screen readers cannot find it either — hide it by clipping instead.';
+        if (sample.box.width > 1 || sample.box.height > 1) {
+          return `before any key is pressed the link is ${sample.box.width}×${sample.box.height}px — it shows on every page.`;
+        }
+        const frame = sample.series?.[0];
+        if (!frame) return 'no series frame was taken — the contract measured nothing.';
+        if (frame.menuTarget) return 'the link jumps to the menu row, not past it.';
+        if (!frame.target) return 'no section carries id="site-main-content", so the link jumps nowhere.';
+        if (frame.target.tabindex !== '-1') return `the target section has tabindex ${JSON.stringify(frame.target.tabindex)} — without -1 the keyboard does not follow the jump.`;
+        return null;
+      },
+    },
+    {
+      id: 'skip-link-shows-top-left-when-tabbed-to',
+      why: why + 'Once the keyboard reaches it the link must be plainly visible: a solid box in the ' +
+        'top-left corner of the window with a visible outline.',
+      section,
+      emulate: { liveSite: true },
+      press: { selector: 'a.site-skip-link', key: 'Shift' },
+      selector: 'a.site-skip-link',
+      read: ['position', 'outlineStyle', 'clipPath'],
+      series: { count: 1, everyMs: 0, read: ['left'], selectors: { link: 'a.site-skip-link' } },
+      expect(sample) {
+        if (!sample.found) return 'no "Skip to content" link on the live page.';
+        if (sample.box.width < 60 || sample.box.height < 20) {
+          return `with keyboard focus the link is ${sample.box.width}×${sample.box.height}px — it does not show when tabbed to.`;
+        }
+        if (sample.styles.clipPath && sample.styles.clipPath !== 'none') return `the focused link is still clipped (${sample.styles.clipPath}).`;
+        if (sample.styles.position !== 'fixed') return `the focused link is position:${sample.styles.position} — it must sit in the window's corner wherever the page is scrolled.`;
+        if (!sample.styles.outlineStyle || sample.styles.outlineStyle === 'none') return 'the focused link has no outline.';
+        const link = sample.series?.[0]?.link;
+        if (!link) return 'no series frame was taken — where the link sits could not be read.';
+        if (link.top < 0 || link.top > 40 || parseFloat(link.left) > 40) return `the focused link sits at top ${Math.round(link.top)}px, left ${link.left} — expected the top-left corner.`;
+        return null;
+      },
+    },
+    {
+      id: 'skip-link-jumps-past-a-shared-header-that-holds-no-menu',
+      why: why + 'A real site\'s header is usually a shared (saved) section, often a logo or contact ' +
+        'strip with the menu in its own row below it. The link must jump past BOTH. The first build ' +
+        'pointed at the shared strip, above the menu, because the page loader dropped the ' +
+        '"shared section" marker before the link chose its target (the SC-857 send-back).',
+      section: {
+        ...section,
+        leadSections: [
+          {
+            savedSectionId: 'saved-render-contract-logo-bar',
+            canonical: true,
+            modules: [{ type: 'heading', text: 'Shared logo bar', settings: {} }],
+          },
+          ...section.leadSections,
+        ],
+      },
+      emulate: { liveSite: true },
+      selector: 'section#site-main-content',
+      read: ['display'],
+      expect(sample) {
+        if (!sample.found) return 'no section carries id="site-main-content", so the link jumps nowhere.';
+        if (sample.matches !== 1) return `${sample.matches} sections carry the skip link's target id — expected exactly one.`;
+        if (/Shared logo bar/.test(sample.text)) return 'the link jumps to the shared logo bar, above the menu — the next Tab goes straight into the menu.';
+        if (!/Page content/.test(sample.text)) return `the link jumps to a section reading "${sample.text.slice(0, 60)}", not the page content.`;
+        return null;
+      },
+    },
+    {
+      id: 'skip-link-enter-moves-focus-past-the-menu',
+      why: why + 'Pressing Enter must move keyboard focus to the content row, not just scroll: ' +
+        'otherwise the next Tab lands back in the menu and the link saved nothing.',
+      section,
+      emulate: { liveSite: true },
+      press: { selector: 'a.site-skip-link', key: 'Enter' },
+      selector: 'section#site-main-content:focus',
+      read: ['display'],
+      expect(sample) {
+        if (!sample.found) return 'after Enter on the skip link the content section does not have focus — the jump moved the scroll at most, not the keyboard.';
+        return null;
+      },
+    },
+  ];
 }

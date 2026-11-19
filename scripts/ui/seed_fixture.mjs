@@ -40,6 +40,8 @@ const crmFormsStore = require(path.join(ROOT, 'lib/crmFormsStore.js'));
 const videoSessionsStore = require(path.join(ROOT, 'lib/videoSessionsStore.js'));
 const videoSourcesStore = require(path.join(ROOT, 'lib/videoSourcesStore.js'));
 const videoTranscriptsStore = require(path.join(ROOT, 'lib/videoTranscriptsStore.js'));
+const videoMomentsStore = require(path.join(ROOT, 'lib/videoMomentsStore.js'));
+const videoAudioPairsStore = require(path.join(ROOT, 'lib/videoAudioPairsStore.js'));
 const youtubeOutreachStore = require(path.join(ROOT, 'lib/youtubeOutreachStore.js'));
 const substackNotesStore = require(path.join(ROOT, 'lib/substackNotesStore.js'));
 const substackMinerStore = require(path.join(ROOT, 'lib/substackMinerStore.js'));
@@ -395,6 +397,16 @@ const buildTuned = (ids) => ({
     },
   },
 
+  // No heading list to seed: the module reads the page's headings (SC-863).
+  // A long title and non-default levels so every field in the panel is filled.
+  'table-of-contents': {
+    name: 'Table of Contents',
+    settings: {
+      title: LONG, headingLevels: 'all', indentSubheadings: 'false', alignment: 'center',
+      fontSize: '18', color: '#1d4ed8',
+    },
+  },
+
   'blog-toc': {
     name: 'On This Page',
     settings: {
@@ -730,7 +742,8 @@ const buildTuned = (ids) => ({
     name: 'Book a Court',
     settings: {
       text: 'Book a court on the reservation system',
-      href: '/delray-beach-tennis-center-court-reservations',
+      // This page, so the Link picker also shows its Section list (SC-853).
+      href: '/panel-lattice-check',
       buttonSize: 'large', fontSize: '18', bold: 'true', underline: 'true',
       alignment: 'center', textColor: '#ffffff', buttonHoverColor: '#0b3a6b',
       borderStyle: 'solid', borderWidth: '2', borderColor: '#0f4f8f', borderRadius: '24',
@@ -987,6 +1000,13 @@ const buildPanelCheckSection = (ids) => {
   return {
   id: 'section-panel-lattice-check',
   title: 'Panel Lattice Check',
+  /*
+   * An anchor name (task SC-853), so every page picker on this page that
+   * points at this page shows its "a section on that page" list — the Button
+   * below links here. With no named section the list never renders, and the
+   * check would pass over a control it never saw.
+   */
+  anchorName: 'panel-check-section-anchor-name-long-enough-to-measure',
   layout: 'single',
   locked: false,
   alignment: 'left',
@@ -1051,6 +1071,12 @@ const buildPanelCheckSection = (ids) => {
     background: { mode: 'gradient', color: '#1b2a4a', color2: '#4cbb17' },
     opacity: 45,
   },
+  /*
+   * A SHAPE (task SC-859), for the Overlay group's reason above: with no
+   * shape the Shape group renders one "None" dropdown and its Side, Color and
+   * Opacity rows are never measured.
+   */
+  shapeLayer: { shape: 'curve', side: 'left', color: '#ffffff', opacity: 71 },
   /*
    * AND A VIDEO CELL FILL, which is a THIRD panel again — and the one that
    * reached the operator staggered.
@@ -1561,9 +1587,10 @@ async function ensureCrm(projectId, userId) {
       submitLabel: 'Send it to the front desk',
       successMessage: 'Thank you — the desk has your details.',
       accentColor: '#0f4f8f',
+      styles: { labelPosition: 'above' },
       fields: [
         { key: 'email', label: 'Email', type: 'email', required: true },
-        { key: 'first_name', label: 'First Name', type: 'text', required: true },
+        { key: 'first_name', label: 'First Name', type: 'text', required: true, width: 'half' },
         { key: 'ntrp_rating', label: 'NTRP Rating', type: 'text', required: false },
       ],
     }, scope);
@@ -1571,6 +1598,16 @@ async function ensureCrm(projectId, userId) {
   if (!form?.id) {
     console.error('  could not create the fixture CRM form — the crm-form panel will seed empty.');
     return { crmConfigId: config.id, crmFormId: '' };
+  }
+  // Labels above (SC-860): the panel lists a Full / Half width row per
+  // question only in that layout, so a fixture left with labels beside would
+  // measure the Form Appearance column without them and report OK on rows it
+  // never saw. Patched onto an existing fixture form, and read back.
+  if (form.styles?.labelPosition !== 'above') {
+    const patched = await crmFormsStore.updateForm(form.id, { stylesPatch: { labelPosition: 'above' } }, scope);
+    if (patched?.styles?.labelPosition !== 'above') {
+      console.error('  could not set the fixture CRM form\'s labels above — the question width rows will not be measured.');
+    }
   }
   return { crmConfigId: config.id, crmFormId: form.id };
 }
@@ -1731,6 +1768,28 @@ const FIXTURE_TRANSCRIPTS = {
   }),
 };
 
+/**
+ * Reel Spinner's scored moments (Reel Spinner 2e, SC-830), on the hour-long
+ * file: a summary, a long unbroken quote that must wrap, and a fingerprint no
+ * current notes can match, so the Moments view shows its "scored against older
+ * notes" line and the Score again button — the states worth measuring.
+ * A full replacement, so a re-seed changes nothing.
+ */
+const FIXTURE_MOMENTS = {
+  'fixture-footage-01': () => ({
+    status: 'done',
+    summary: 'Saturday match-play: the tiebreak call-out and the follow-through drill are the two clips worth sharing.',
+    briefFingerprint: 'fixture-older-notes',
+    model: 'fixture',
+    runStartedAt: new Date(Date.now() - 60 * 1000).toISOString(),
+    moments: [
+      { start_s: 754, end_s: 790.5, score: 91, project: 'Delray Beach Tennis Center', mood: 'warm', reasons: ['Says the junior programme\'s promise in one sentence.', 'Clear sound, no one talking over it.'], quote: 'Every kid who walks onto court one gets the same coaching we give the ranked players.' },
+      { start_s: 25.9, end_s: 52, score: 74, project: 'Delray Beach Tennis Center', mood: 'light', reasons: ['A visible before-and-after on the forehand.'], quote: `Watch the follow-through here: ${'finish-high-over-the-shoulder-'.repeat(6)}` },
+      { start_s: 3100, end_s: 3108, score: 42, project: '', mood: '', reasons: [], quote: '' },
+    ],
+  }),
+};
+
 async function seedStudioFootage(scope) {
   // Not `must`: a lookup's miss is `data: null`, and `must` answers
   // `res.data ?? res` — the whole envelope, which is truthy, so every miss
@@ -1761,6 +1820,7 @@ async function seedStudioFootage(scope) {
   ];
   let made = 0;
   let found = 0;
+  const idByHash = {};
   for (const shoot of shoots) {
     let session = lookup(await videoSessionsStore.findSessionByTitle(shoot.title, scope), 'find footage session');
     if (!session) {
@@ -1774,8 +1834,12 @@ async function seedStudioFootage(scope) {
       const transcript = FIXTURE_TRANSCRIPTS[file.hash];
       if (existing) {
         found += 1;
+        idByHash[file.hash] = existing.id;
         if (transcript) {
           must(await videoTranscriptsStore.upsertTranscript(existing.id, transcript(), scope), 'transcript footage file');
+        }
+        if (FIXTURE_MOMENTS[file.hash]) {
+          must(await videoMomentsStore.upsertMoments(existing.id, FIXTURE_MOMENTS[file.hash](), scope), 'score footage file');
         }
         // A fixture seeded before the File column existed has no localPath,
         // so the column would only ever measure its fallbacks. Fill it in.
@@ -1789,14 +1853,33 @@ async function seedStudioFootage(scope) {
         await videoSourcesStore.createSource({ sessionId: session.id, contentHash: hash, ...rest }, scope),
         'create footage file'
       );
+      idByHash[hash] = created.id;
       if (transcript) {
         must(await videoTranscriptsStore.upsertTranscript(created.id, transcript(), scope), 'transcript footage file');
+      }
+      if (FIXTURE_MOMENTS[hash]) {
+        must(await videoMomentsStore.upsertMoments(created.id, FIXTURE_MOMENTS[hash](), scope), 'score footage file');
       }
       made += 1;
     }
   }
+  // Reel Spinner 3b (SC-832): one pair lined up, one refused with its reason,
+  // so the File column measures the long "recorded together with" lines.
+  // Upserts, so a re-seed changes nothing.
+  for (const [a, b, data] of FIXTURE_PAIRS) {
+    if (!idByHash[a] || !idByHash[b]) continue;
+    const pairData = typeof data === 'function' ? data(idByHash) : data;
+    must(await videoAudioPairsStore.upsertAudioPair(idByHash[a], idByHash[b], pairData, scope), 'pair footage files');
+  }
   return { made, found };
 }
+
+const FIXTURE_PAIRS = [
+  ['fixture-footage-01', 'fixture-footage-02', (ids) => ({
+    status: 'done', offsetS: -30.12, driftS: 0.02, confidence: 0.88, audioSourceId: ids['fixture-footage-02'],
+  })],
+  ['fixture-footage-01', 'fixture-footage-05', { status: 'failed', error: 'drift', offsetS: 12.5, driftS: 0.31, confidence: 0.7 }],
+];
 
 let footageSeeded = null;
 try {

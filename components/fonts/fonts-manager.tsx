@@ -477,7 +477,7 @@ function AddFontForm({ onSaved, onCancel }: {
       <h3 className="fonts-manager-form-title">Add Font</h3>
       <div className="fonts-manager-form-grid">
         <label className="fonts-manager-field">
-          <span>Family name</span>
+          <span>Family Name</span>
           <input type="text" name="family" value={form.family} onChange={set('family')} placeholder="Orbitron" required />
         </label>
         <label className="fonts-manager-field">
@@ -493,7 +493,7 @@ function AddFontForm({ onSaved, onCancel }: {
           </select>
         </label>
         <label className="fonts-manager-field">
-          <span>Source link</span>
+          <span>Source Link</span>
           <input
             type="url"
             name="sourceUrl"
@@ -928,7 +928,7 @@ export default function FontsManager(): React.ReactElement {
               </span>
             </div>
             <label className="fonts-manager-field">
-              <span>Sample text</span>
+              <span>Sample Text</span>
               <input
                 type="text"
                 name="sampleText"

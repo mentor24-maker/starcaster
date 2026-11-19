@@ -18,6 +18,7 @@ import {
   type BuilderGradientLayer
 } from "./builder-gradient-layers";
 export * from "./builder-gradient-layers";
+export * from "./section-shape-layer";
 import {
   HEADLINE_ROTATOR_DEFAULT_FONT_SIZE,
   HEADLINE_ROTATOR_DEFAULT_MIN_HEIGHT,
@@ -26,9 +27,12 @@ import {
 import { normalizeBuilderAssetUrl, safeText } from "@/lib/builder-asset-url";
 import { escapeHtmlText, sanitizeInlineHtml, sanitizeRichTextHtml } from "@/lib/sanitize-html";
 import { rewriteRichTextImageSrcInHtml } from "@/lib/rich-text-image";
+import { normalizeAnchorName } from "@/lib/page-link";
+import { TABLE_OF_CONTENTS_DEFAULT_SETTINGS } from "./table-of-contents";
 
 export { normalizeBuilderAssetUrl, resolvePublicBuilderAssetUrl, safeText } from "@/lib/builder-asset-url";
 import { backgroundImageUrlFor } from "@/lib/image-renditions";
+import { normalizeSectionShapeLayer, type SectionShapeLayer } from "./section-shape-layer";
 import { normalizeProximityEffectSettings } from "./proximity-effects";
 import {
   BACKGROUND_PARALLAX_SPEED_INERT,
@@ -120,6 +124,7 @@ export const BUILDER_MODULE_TYPES = [
   "tractor-nav",
   "galaxy",
   "breadcrumb",
+  "table-of-contents",
   "blog-post-list",
   "blog-post-card",
   "blog-author-bio",
@@ -630,6 +635,14 @@ export type BuilderTemplateSection = {
   title: string;
   locked: boolean;
   isPrivate: boolean;
+  /**
+   * The section's anchor name ("contact-us"): rendered as the section's `id`
+   * on the page, so `/#contact-us` lands on it, and what a link to this
+   * section shows in the address (task SC-852). Absent when the section has
+   * none — the key is never written empty, so untouched rows save unchanged.
+   * Cleaned by `normalizeAnchorName` (lib/builder-client/page-link.js).
+   */
+  anchorName?: string;
   /** ID of the saved section this was instantiated from, if any. */
   savedSectionId?: string;
   /** When true, this instance stays in sync with the master saved section. */
@@ -719,6 +732,14 @@ export type BuilderTemplateSection = {
   deviceOverrides?: BuilderSectionDeviceOverrides;
   background: BackgroundSettings;
   overlayScreen?: RowOverlayScreenSettings;
+  /**
+   * A curve, wave or slant in one colour, painted over the background (and
+   * its overlay screen) and under the content — Divi's background mask,
+   * Elementor's shape divider (task SC-859). Absent on nearly every row, and
+   * only written when a shape is chosen, so an untouched row's saved JSON
+   * does not change. See `section-shape-layer.ts`.
+   */
+  shapeLayer?: SectionShapeLayer;
   cellBackgrounds: Record<string, BackgroundSettings>;
   /**
    * A tint/dimmer screen over ONE cell's background, keyed by column — the
@@ -2617,6 +2638,7 @@ export function normalizeModuleType(value: unknown): BuilderTemplateModuleType {
     type === "tractor-nav" ||
     type === "galaxy" ||
     type === "breadcrumb" ||
+    type === "table-of-contents" ||
     type === "blog-post-list" ||
     type === "blog-post-card" ||
     type === "blog-author-bio" ||
@@ -3648,11 +3670,16 @@ export function normalizeLayoutSections(value: unknown): BuilderTemplateSection[
       // same normalized value the legacy key ends up with.
       const cellPadding = normalizeCellPadding(normalizedSection.cellPadding, layout);
       const deviceOverrides = normalizeSectionDeviceOverrides(normalizedSection.deviceOverrides);
+      const anchorName = normalizeAnchorName(normalizedSection.anchorName);
       const cellDeviceOverrides = normalizeCellDeviceOverrides(normalizedSection.cellDeviceOverrides, layout);
+      const shapeLayer = normalizeSectionShapeLayer(normalizedSection.shapeLayer);
 
       return {
         id: safeText(normalizedSection.id, 120) || `section-${sectionIndex + 1}`,
         title: safeText(normalizedSection.title, 255),
+        // Spread for the same reason as deviceOverrides below: a row with no
+        // anchor name must not gain the key.
+        ...(anchorName ? { anchorName } : {}),
         layout,
         widthMode: normalizedSection.widthMode === "full-width" ? "full-width" : "contained",
         widthPercent: normalizeSpacingValue(normalizedSection.widthPercent, "100", 25, 100),
@@ -3704,6 +3731,11 @@ export function normalizeLayoutSections(value: unknown): BuilderTemplateSection[
         ...(cellDeviceOverrides ? { cellDeviceOverrides } : {}),
         background: normalizeBackgroundSettings(normalizedSection.background),
         overlayScreen: normalizeRowOverlayScreenSettings(normalizedSection.overlayScreen),
+        // Spread for the same reason as deviceOverrides: a row with no shape
+        // must serialize without the key at all.
+        // Kept at opacity 0 too, so dragging the strength down and back up
+        // does not lose the shape the operator chose.
+        ...(shapeLayer.shape !== "none" ? { shapeLayer } : {}),
         cellBackgrounds: normalizeCellBackgrounds(normalizedSection.cellBackgrounds, layout),
         cellOverlayScreens: normalizeCellOverlayScreens(normalizedSection.cellOverlayScreens, layout),
         cellPadding: cellPadding,
@@ -4150,6 +4182,12 @@ export function createEmptyModule(
                             activeColor: "",
                             bold: "false",
                             alignment: "left"
+                          }
+                      : type === "table-of-contents"
+                        ? {
+                            // Nothing about the headings is stored: the list is
+                            // read from the page as it is shown (task SC-863).
+                            ...TABLE_OF_CONTENTS_DEFAULT_SETTINGS
                           }
                       : type === "blog-post-list"
                         ? {

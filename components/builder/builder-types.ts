@@ -162,6 +162,12 @@ export const modulePaletteGroups: Array<{
   },
   { value: "breadcrumb", label: "Breadcrumb", icon: "›", description: "Horizontal trail showing the visitor's location in the site hierarchy." },
   {
+    value: "table-of-contents",
+    label: "Table of Contents",
+    icon: "≡",
+    description: "Lists the page's headings as links that jump to each one."
+  },
+  {
     value: "site-search",
     label: "Search",
     icon: "⌕",
@@ -746,6 +752,17 @@ export const modulePaletteItems: ModulePaletteItem[] = [
     settings: {}
   },
   {
+    id: "table-of-contents-standard",
+    type: "table-of-contents",
+    group: "table-of-contents",
+    label: "Table of Contents",
+    icon: "≡",
+    description: "Lists this page's headings as jump links, read from the page itself, so it always matches what is published.",
+    name: "",
+    text: "",
+    settings: {}
+  },
+  {
     id: "confetti-celebration",
     type: "confetti",
     group: "special-effects",
@@ -1016,9 +1033,12 @@ export const modulePaletteItems: ModulePaletteItem[] = [
     id: "blog-toc-standard",
     type: "blog-toc",
     group: "blog",
-    label: "Table of Contents",
+    // Not the automatic "Table of Contents" (table-of-contents, SC-863): this
+    // one's headings are typed by hand, and it does not show on a published
+    // page. Named apart so the module list never offers two of one name.
+    label: "Table of Contents (hand-typed)",
     icon: "≡",
-    description: "A navigational list of headings that links readers to sections within the post.",
+    description: "A hand-typed list of headings. Shown in the Builder only; for one on the live page use Table of Contents.",
     name: "",
     text: "",
     settings: {}

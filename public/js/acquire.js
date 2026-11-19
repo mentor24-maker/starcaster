@@ -2449,7 +2449,7 @@ App.acquire = (function () {
         '      <input id="acquirePageEditTitle" type="text" class="form-control" />',
         '    </div>',
         '    <div class="form-group" style="margin-bottom:1rem;">',
-        '      <label for="acquirePageEditEmails" style="display:block;margin-bottom:0.25rem;">Emails (comma-separated)</label>',
+        '      <label for="acquirePageEditEmails" style="display:block;margin-bottom:0.25rem;">Emails (Comma-separated)</label>',
         '      <input id="acquirePageEditEmails" type="text" class="form-control" />',
         '    </div>',
         '    <div style="display:flex;gap:0.5rem;justify-content:flex-end;">',
@@ -3241,7 +3241,7 @@ App.acquire = (function () {
 
     const maxPagesGroup = document.createElement('div');
     maxPagesGroup.className = 'form-group';
-    maxPagesGroup.innerHTML = '<label>Max pages to crawl</label>';
+    maxPagesGroup.innerHTML = '<label>Max Pages to Crawl</label>';
     const maxPagesInput = document.createElement('input');
     maxPagesInput.type = 'number';
     maxPagesInput.id = 'peerHarvestMaxPages';
@@ -3255,7 +3255,7 @@ App.acquire = (function () {
 
     const exclusionsGroup = document.createElement('div');
     exclusionsGroup.className = 'form-group';
-    exclusionsGroup.innerHTML = '<label>Keyword exclusions <span style="color:var(--text-secondary);font-weight:normal">(comma-separated)</span></label>';
+    exclusionsGroup.innerHTML = '<label>Keyword Exclusions <span style="color:var(--text-secondary);font-weight:normal">(comma-separated)</span></label>';
     const exclusionsInput = document.createElement('textarea');
     exclusionsInput.className = 'form-control';
     exclusionsInput.rows = 2;
@@ -6484,11 +6484,11 @@ App.acquire = (function () {
     slot.innerHTML = [
       '<form class="pi-editor-form" autocomplete="off">',
       '  <div class="pi-editor-row">',
-      '    <label>Handler name<input class="pi-field" name="name" type="text" value="' + escAttr(pattern.suggestedName || '') + '" required /></label>',
+      '    <label>Handler Name<input class="pi-field" name="name" type="text" value="' + escAttr(pattern.suggestedName || '') + '" required /></label>',
       '  </div>',
       '  <div class="pi-editor-row pi-editor-row-2col">',
       '    <label>Type<select class="pi-field" name="type">' + typeOptions + '</select></label>',
-      '    <label>Source tag <small>(for promote/strip)</small><input class="pi-field" name="tag" type="text" placeholder="e.g. u, em" value="' + escAttr(pattern.suggestedTag || '') + '" /></label>',
+      '    <label>Source Tag <small>(for promote/strip)</small><input class="pi-field" name="tag" type="text" placeholder="e.g. u, em" value="' + escAttr(pattern.suggestedTag || '') + '" /></label>',
       '  </div>',
       '  <div class="pi-editor-row">',
       '    <label>Pattern <small>(regex, for delete/find-replace)</small><input class="pi-field" name="pattern" type="text" placeholder="e.g. \\(\\d{3}\\)\\s*\\d{3}-\\d{4}" /></label>',
@@ -6580,7 +6580,7 @@ App.acquire = (function () {
       '  <div class="pi-ai-divider">AI Handler Builder — describe a pattern, Claude generates the config</div>',
       '  <form class="pi-editor-form" id="piAiForm" autocomplete="off">',
       '    <div class="pi-editor-row">',
-      '      <label>Describe the pattern<textarea class="pi-field pi-ai-desc" name="description" rows="3" placeholder="e.g. Bold labels in numbered list items should stay bold, but the description text after the colon should not be bold." required></textarea></label>',
+      '      <label>Describe the Pattern<textarea class="pi-field pi-ai-desc" name="description" rows="3" placeholder="e.g. Bold labels in numbered list items should stay bold, but the description text after the colon should not be bold." required></textarea></label>',
       '    </div>',
       '    <div class="pi-editor-row">',
       '      <label>Sample HTML <small>(optional — paste a snippet to improve accuracy)</small><textarea class="pi-field pi-ai-html" name="sampleHtml" rows="4" placeholder="<li><strong>Expert Naturalization Attorneys: Our team has years of experience...</strong></li>"></textarea></label>',
@@ -6594,11 +6594,11 @@ App.acquire = (function () {
       '    <div class="pi-ai-divider" style="margin-top:12px;">Generated Handler — review and save</div>',
       '    <form class="pi-editor-form" id="piAiSaveForm" autocomplete="off">',
       '      <div class="pi-editor-row">',
-      '        <label>Handler name<input class="pi-field" name="name" type="text" required /></label>',
+      '        <label>Handler Name<input class="pi-field" name="name" type="text" required /></label>',
       '      </div>',
       '      <div class="pi-editor-row pi-editor-row-2col">',
       '        <label>Type<select class="pi-field" name="type">' + typeOptions + '</select></label>',
-      '        <label>Source tag <small>(promote/strip)</small><input class="pi-field" name="tag" type="text" placeholder="e.g. u, em" /></label>',
+      '        <label>Source Tag <small>(promote/strip)</small><input class="pi-field" name="tag" type="text" placeholder="e.g. u, em" /></label>',
       '      </div>',
       '      <div class="pi-editor-row">',
       '        <label>Pattern <small>(regex)</small><input class="pi-field" name="pattern" type="text" /></label>',

@@ -185,7 +185,7 @@ export function SiteImportThemePanel({
           </ul>
           <label className="site-import-theme-default">
             <input type="checkbox" checked={makeDefault} onChange={(e) => setMakeDefault(e.target.checked)} />{" "}
-            Make it this project&apos;s default theme
+            Make It This Project&apos;s Default Theme
             {preview.previousDefaultName ? ` (instead of “${preview.previousDefaultName}”)` : ""}
           </label>
           <p className={`site-import-theme-default-note${makeDefault ? " is-warning" : ""}`}>

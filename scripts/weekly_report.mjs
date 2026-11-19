@@ -105,16 +105,20 @@ const REPORTS_DIR = HOME_CHECK.dir;
   }
 }
 // THE TRACKER, NOT CLICKUP (SC-792). The ticket stages are read from this
-// project on the tracker, the narrative ticket is filed in the bus project,
-// and failures post to the bus through the same `postBusMessage` every other
-// alarm uses. Both names come from spirality.project.json, the one file that
-// says where this project's tickets live, so they cannot drift from the door.
+// project on the tracker, and failures post to the bus through the same
+// `postBusMessage` every other alarm uses. The project name comes from
+// spirality.project.json, the one file that says where this project's tickets
+// live, so it cannot drift from the door.
+//
+// The narrative ticket is filed in THIS project too, never the bus (SC-817).
+// The bus is a place to talk; no loop ever builds from it. SC-792 moved the
+// filing there, and the first edition after that (SCBUS-6) sat Queued with
+// nothing to pick it up until it was moved by hand.
 const { postBusMessage } = require(path.join(REPO, 'scripts/lib/clickup.cjs'));
 const PROJECT_CONFIG = (() => {
   try { return JSON.parse(fs.readFileSync(path.join(REPO, 'spirality.project.json'), 'utf8')); } catch (_) { return {}; }
 })();
 const TRACKER_PROJECT = PROJECT_CONFIG.projectSlug || 'starcaster';
-const BUS_PROJECT = PROJECT_CONFIG.busProject || 'starcaster-bus';
 const GH_REPO = 'mentor24-maker/starcaster';
 // How many CI runs to ask GitHub for. Big enough that a normal week comes back
 // whole — this repo ran 466 in one seven-day window — and finite so that a
@@ -640,7 +644,7 @@ the numbers are the script's, the words are yours.`;
 
   const scratch = scratchFile('ticket.md', body);
   const res = run('npm', ['run', '--silent', 'clickup', '--', 'task',
-    '--list', BUS_PROJECT, '--name', `Weekly report: ${WINDOW.from} to ${WINDOW.to} — write the narrative`,
+    '--list', TRACKER_PROJECT, '--name', `Weekly report: ${WINDOW.from} to ${WINDOW.to} — write the narrative`,
     '--body-file', scratch.path, '--status', 'Queued', '--priority', 'normal'], { timeout: 180000 });
   scratch.cleanup();
   if (!res.ok) {
@@ -648,7 +652,7 @@ the numbers are the script's, the words are yours.`;
     console.error(`Could not file the narrative ticket: ${res.reason}`);
     return;
   }
-  console.error(`Narrative ticket filed in the tracker's ${BUS_PROJECT} project.`);
+  console.error(`Narrative ticket filed in the tracker's ${TRACKER_PROJECT} project, where a build pass picks it up.`);
 }
 
 /**

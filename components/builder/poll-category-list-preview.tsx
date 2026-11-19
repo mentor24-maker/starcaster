@@ -137,7 +137,7 @@ export function PollCategoryListPreview({
             </button>
           </div>
           <label className={`${className}-picker`}>
-            <span className="sr-only">Jump to category</span>
+            <span className="sr-only">Jump to Category</span>
             <input
               aria-label="Jump to category"
               className={`${className}-picker-input`}

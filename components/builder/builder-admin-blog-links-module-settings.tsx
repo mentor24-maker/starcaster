@@ -46,7 +46,7 @@ const SCHEMA: BuilderSettingsSchema = {
         [
           {
             key: "showTitle",
-            label: "Show title",
+            label: "Show Title",
             width: "check",
             control: "checkbox",
             fallback: "true",
@@ -54,7 +54,7 @@ const SCHEMA: BuilderSettingsSchema = {
           },
           {
             key: "panelTitle",
-            label: "Title text",
+            label: "Title Text",
             width: "text-md",
             control: "text",
             placeholder: "Tag Manager",
@@ -67,7 +67,7 @@ const SCHEMA: BuilderSettingsSchema = {
           /* The Auto-tag extension's button (ticket 86bbw4dcp): toggle first, then the label it gates. */
           {
             key: "showAutoTag",
-            label: "Auto-tag button",
+            label: "Auto-tag Button",
             width: "check",
             control: "checkbox",
             fallback: "true",
@@ -75,7 +75,7 @@ const SCHEMA: BuilderSettingsSchema = {
           },
           {
             key: "autoTagButtonLabel",
-            label: "Button text",
+            label: "Button Text",
             width: "text-md",
             control: "text",
             placeholder: "Auto-tag",
@@ -92,7 +92,7 @@ const SCHEMA: BuilderSettingsSchema = {
         [
           {
             key: "showTags",
-            label: "Tag manager",
+            label: "Tag Manager",
             width: "check",
             control: "checkbox",
             fallback: "true",
@@ -111,7 +111,7 @@ const SCHEMA: BuilderSettingsSchema = {
            */
           {
             key: "managerPageUrl",
-            label: "Blog Manager page",
+            label: "Blog Manager Page",
             width: "text-md",
             control: "picker",
             source: "pages",
@@ -122,7 +122,7 @@ const SCHEMA: BuilderSettingsSchema = {
           },
           {
             key: "postViewUrl",
-            label: "Post view page",
+            label: "Post View Page",
             width: "text-md",
             control: "picker",
             source: "pages",

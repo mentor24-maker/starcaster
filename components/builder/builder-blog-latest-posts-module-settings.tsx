@@ -134,7 +134,7 @@ export function BuilderBlogLatestPostsModuleSettings({ module, onUpdateModule, t
           [
             {
               key: "latestPosts",
-              label: "Latest posts",
+              label: "Latest Posts",
               width: "check",
               control: "checkbox",
               fallback: "true",

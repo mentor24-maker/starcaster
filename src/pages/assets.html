@@ -798,7 +798,7 @@
                    <option value="8">8 Seconds (Standard)</option>
                    <option value="16">16 Seconds (Extended)</option>
                  </select>
-                 <label for="videoCreationPrompt" style="color: var(--primary-color); margin-top: 0.5rem;">Describe the video</label>
+                 <label for="videoCreationPrompt" style="color: var(--primary-color); margin-top: 0.5rem;">Describe the Video</label>
                  <textarea id="videoCreationPrompt" style="flex: 1; resize: vertical; min-height: 200px;" placeholder="Describe the video generation sequences precisely..."></textarea>
                  <button type="button" class="btn btn-primary" onclick="App.assetsVideo.submitCreationPrompt()" style="width: 100%;">Generate Video</button>
               </div>
@@ -871,4 +871,12 @@
         <p class="page-heading-desc">Fonts that are not Google Fonts, each name drawn in its own lettering. Only fonts a business website may use are accepted.</p>
         <!-- React island. Mounted by react-entry.js; see components/fonts/fonts-manager.tsx. -->
         <div id="assetsFontsReactRoot"></div>
+      </section>
+      <section id="assetsContextPage" class="app-page hidden">
+        <div class="page-heading-row">
+          <h2>Assets: Context</h2>
+        </div>
+        <p class="page-heading-desc">Reference material agents read: notes about this project they should know before they work on it.</p>
+        <!-- React island. Mounted by builder-react-entry.tsx (it carries the rich-text editor); see components/context/context-manager.tsx. -->
+        <div id="assetsContextReactRoot"></div>
       </section>
