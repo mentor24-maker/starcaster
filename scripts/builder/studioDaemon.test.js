@@ -217,8 +217,8 @@ test('runDaemon watches Drive by default, on its own cadence across ticks', asyn
   q.close();
 });
 
-test('the daemon\'s default watcher list is the Drive watch, the cache sweep, then the rescore watch', () => {
-  assert.deepEqual(Object.keys(daemon.WATCHERS), [STAGE_WATCH, daemon.STAGE_CACHE_SWEEP, daemon.STAGE_RESCORE_WATCH]);
+test('the daemon\'s default watcher list is the Drive watch, the cache sweep, the rescore watch, then the re-cut watch', () => {
+  assert.deepEqual(Object.keys(daemon.WATCHERS), [STAGE_WATCH, daemon.STAGE_CACHE_SWEEP, daemon.STAGE_RESCORE_WATCH, 'recut.watch']);
   assert.equal(daemon.WATCHERS[STAGE_WATCH].everyMs, daemon.DEFAULT_DRIVE_WATCH_EVERY_MS);
   assert.equal(daemon.WATCHERS[daemon.STAGE_RESCORE_WATCH].everyMs, 60 * 1000);
 });
