@@ -1444,6 +1444,63 @@ export const RENDER_CONTRACTS = [
     },
   },
   {
+    id: 'back-to-top-appears-after-a-screen-and-returns-to-the-top',
+    why:
+      'A reader at the bottom of a long page had no quick way back up (task SC-864, slice 3 of the ' +
+      '2026-11-17 anchor sweep). A page can now turn on a round Back to top button. It must be ' +
+      'hidden at the top of the page, show once the reader is more than a screen down, and bring ' +
+      'them back to the top when pressed. This reads it at the top (hidden), scrolls 3000px down ' +
+      '(shown), presses it and measures where the page ended up: at the top.',
+    section: {
+      layout: 'single',
+      spacers: 4,
+      pageOptions: { backToTop: true },
+      modules: [{ type: 'text', text: '<p>A long page.</p>' }],
+    },
+    emulate: { reducedMotion: 'reduce' },
+    selector: 'a.site-back-to-top',
+    read: ['visibility'],
+    series: {
+      count: 4,
+      everyMs: 300,
+      scrollTo: [0, 3000, 3000, 3000],
+      clickAt: { 3: 'a.site-back-to-top' },
+      read: ['visibility', 'opacity', 'position'],
+      attrs: ['href', 'aria-label'],
+      selectors: { button: 'a.site-back-to-top' },
+    },
+    expect(sample) {
+      if (!sample.found) return 'no Back to top button rendered on a page that turned it on.';
+      const [top, , down, after] = sample.series || [];
+      if (!top?.button || !down?.button || !after) return 'the series did not record the button at every step, so its behaviour could not be read.';
+      if (top.button.href !== '#top') return `the button links to ${JSON.stringify(top.button.href)}, expected "#top" (a real link, so it works from the keyboard).`;
+      if (top.button['aria-label'] !== 'Back to top') return `a screen reader would announce ${JSON.stringify(top.button['aria-label'])}, expected "Back to top".`;
+      if (top.button.position !== 'fixed') return `the button is position: ${top.button.position}, so it does not stay in the corner as the page scrolls.`;
+      if (top.button.visibility !== 'hidden') return `at the top of the page the button is visibility: ${top.button.visibility} — it should stay hidden until the reader scrolls a screen.`;
+      if (!(down.scrollY > 1000)) return `the page only scrolled to ${down.scrollY}px, so "after a screen" was never reached and the test proves nothing.`;
+      if (down.button.visibility !== 'visible' || Number(down.button.opacity) < 0.9) {
+        return `${down.scrollY}px down the button is visibility: ${down.button.visibility}, opacity ${down.button.opacity} — it did not appear after scrolling.`;
+      }
+      if (after.clickMissing) return `the button (${after.clickMissing}) could not be found to press.`;
+      if (after.scrollY > 4) return `after pressing Back to top the page is still ${after.scrollY}px down — it did not return to the top.`;
+      return null;
+    },
+  },
+  {
+    id: 'back-to-top-off-renders-nothing',
+    why:
+      'Back to top is off by default, and off must change NOTHING on an existing page — no hidden ' +
+      'button in the markup (task SC-864). Paired with the presence contract above, which proves ' +
+      'the button renders at all when it is on.',
+    section: {
+      layout: 'single',
+      spacers: 4,
+      modules: [{ type: 'text', text: '<p>A long page.</p>' }],
+    },
+    selector: '.site-back-to-top',
+    absent: true,
+  },
+  {
     id: 'table-of-contents-lists-the-pages-headings-and-jumps-to-one',
     why:
       'Long pages gave a reader no way to jump between headings (task SC-863, slice 2 of the ' +

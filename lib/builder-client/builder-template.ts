@@ -819,6 +819,8 @@ export type BuilderPageRecord = {
   isPrivate: boolean;
   /** Site Search ranking. Optional: pages saved before it exists read as "normal". */
   searchPriority?: string;
+  /** Page-level switches (Back to top). Absent = every switch off. */
+  pageOptions?: BuilderPageOptions;
 };
 
 export type BuilderCellModuleRecord = {
@@ -4682,6 +4684,7 @@ export function rowToBuilderPage(row: Record<string, unknown>): BuilderPageRecor
     pageBackground: document.pageBackground,
     theme: document.theme,
     layoutSections: document.layoutSections,
+    ...(document.pageOptions ? { pageOptions: document.pageOptions } : {}),
     createdAt: safeText(row.created_at ?? row.createdAt, 120),
     updatedAt: safeText(row.updated_at ?? row.updatedAt, 120),
     isPublished: Boolean(row.is_published ?? row.isPublished ?? true),
@@ -4689,17 +4692,44 @@ export function rowToBuilderPage(row: Record<string, unknown>): BuilderPageRecor
   };
 }
 
+/**
+ * Page-level switches that are not a background, a theme or a section — stored
+ * in the layout document beside those three (task SC-864), so they need no
+ * database column and travel with every save, revision and published snapshot
+ * that already carries the document.
+ *
+ * Every switch is OFF by default, and a document whose switches are all off
+ * carries no `pageOptions` key at all — so every page saved before this
+ * existed stores, and renders, byte-identically.
+ */
+export type BuilderPageOptions = {
+  /** Show the round "Back to top" button once the reader has scrolled a screen. */
+  backToTop?: boolean;
+};
+
+/** The switches that are ON, or null when none is — never an object of falses. */
+export function normalizePageOptions(value: unknown): BuilderPageOptions | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const raw = value as Record<string, unknown>;
+  const options: BuilderPageOptions = {};
+  if (raw.backToTop === true) options.backToTop = true;
+  return Object.keys(options).length ? options : null;
+}
+
 export function normalizeBuilderDocument(value: unknown): {
   pageBackground: BackgroundSettings;
   theme: BuilderTheme;
   layoutSections: BuilderTemplateSection[];
+  pageOptions?: BuilderPageOptions;
 } {
   if (value && typeof value === "object" && !Array.isArray(value)) {
     const document = value as Record<string, unknown>;
+    const pageOptions = normalizePageOptions(document.pageOptions);
     return {
       pageBackground: normalizeBackgroundSettings(document.pageBackground),
       theme: normalizeTheme(document.theme),
-      layoutSections: normalizeLayoutSections(document.sections ?? document.layoutSections)
+      layoutSections: normalizeLayoutSections(document.sections ?? document.layoutSections),
+      ...(pageOptions ? { pageOptions } : {})
     };
   }
 
@@ -4714,10 +4744,13 @@ export function serializeBuilderDocument(input: {
   pageBackground?: unknown;
   theme?: unknown;
   layoutSections?: unknown;
+  pageOptions?: unknown;
 }) {
+  const pageOptions = normalizePageOptions(input.pageOptions);
   return {
     pageBackground: normalizeBackgroundSettings(input.pageBackground),
     theme: normalizeTheme(input.theme),
-    sections: normalizeLayoutSections(input.layoutSections)
+    sections: normalizeLayoutSections(input.layoutSections),
+    ...(pageOptions ? { pageOptions } : {})
   };
 }

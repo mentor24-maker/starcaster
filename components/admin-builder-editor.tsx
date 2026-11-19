@@ -208,6 +208,8 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage, 
   const [pageTemplateId, setPageTemplateId] = useState("");
   const [pageVisibility, setPageVisibility] = useState<PageVisibility>("public");
   const [pageSearchPriority, setPageSearchPriority] = useState<string>("normal");
+  // Page-level "Back to top" button (SC-864). Off unless the page says so.
+  const [pageBackToTop, setPageBackToTop] = useState(false);
   const [draft, setDraft] = useState(createDraftFromTemplate(null));
   const [collapsedSectionIds, setCollapsedSectionIds] = useState<string[]>([]);
   const [newSectionOpenFocusId, setNewSectionOpenFocusId] = useState<string | null>(null);
@@ -730,6 +732,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage, 
     // Pages saved before the column existed have nothing here; "normal" is
     // what unset means everywhere else too.
     setPageSearchPriority(page?.searchPriority || "normal");
+    setPageBackToTop(page?.pageOptions?.backToTop === true);
     setCollapsedSectionIds(page?.layoutSections.map((section) => section.id) ?? []);
   }, [builderMode, selectedPageId, pages]);
 
@@ -2074,6 +2077,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage, 
     setPageThemeId("");
     setPageVisibility("public");
     setPageSearchPriority("normal");
+    setPageBackToTop(false);
     setDraft(createDraftFromPage(null));
     setMessage(null);
     setError(null);
@@ -2492,6 +2496,8 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage, 
           ...(!selectedPageId || pageThemeDirtyRef.current ? { themeId: pageThemeId || null } : {}),
           ...pageVisibilityToFlags(pageVisibility),
           searchPriority: pageSearchPriority,
+          // Always named, so turning it OFF is a write too: `{}` clears it.
+          pageOptions: pageBackToTop ? { backToTop: true } : {},
           pageBackground: draft.pageBackground,
           theme: draft.theme,
           layoutSections: draft.layoutSections
@@ -2856,6 +2862,9 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage, 
       themeShellBackground: paletteSource,
       // So a link stored by reference previews at the page's current address.
       pageAddresses: buildPageAddressMap(pages),
+      // The preview shows the Back to top button only for the page being
+      // edited, never for a template preview (SC-864).
+      ...(builderMode === "pages" && pageBackToTop ? { pageOptions: { backToTop: true } } : {}),
     };
   }
 
@@ -3349,6 +3358,8 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage, 
           onSetPageVisibility={setPageVisibility}
           pageSearchPriority={pageSearchPriority}
           onSetPageSearchPriority={setPageSearchPriority}
+          pageBackToTop={pageBackToTop}
+          onSetPageBackToTop={setPageBackToTop}
           autoNewPage={autoNewPage}
           autoOpenPageDetails={Boolean(initialRecordId && initialMode === "pages")}
           snapshots={snapshots}

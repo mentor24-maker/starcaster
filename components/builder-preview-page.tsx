@@ -18,6 +18,7 @@ import {
   mergeCrmThemePalette,
 } from "@/components/builder/builder-utils";
 import { BuilderViewportShellLayout } from "@/components/builder/builder-viewport-shell-layout";
+import { SiteBackToTop } from "@/components/site-back-to-top";
 import { starcasterScopedHeaders, unwrapEnvelope } from "@/lib/adapters/starcaster-app";
 import { buildPageAddressMap } from "@/lib/page-link";
 import { isPrivateSiteSlug } from "@/lib/public-site-page-slugs";
@@ -44,6 +45,8 @@ type PreviewDraft = {
   pageBackground: ReturnType<typeof createDefaultBackgroundSettings>;
   theme: ReturnType<typeof normalizeBuilderDocument>["theme"];
   layoutSections: ReturnType<typeof normalizeBuilderDocument>["layoutSections"];
+  /** Page-level switches (Back to top, SC-864), exactly as the live page reads them. */
+  pageOptions?: ReturnType<typeof normalizeBuilderDocument>["pageOptions"];
   themePalette?: CrmThemePalette;
   themeStyles?: BuilderThemeStyles;
   themeId?: string;
@@ -268,6 +271,7 @@ export function BuilderPreviewPage() {
           pageBackground: document.pageBackground,
           theme: document.theme,
           layoutSections: withSectionLineage(parsed, document.layoutSections),
+          pageOptions: document.pageOptions,
           themePalette: storedPalette,
           themeStyles: resolvedStyles,
           themeId,
@@ -356,6 +360,10 @@ export function BuilderPreviewPage() {
         siteWideBugReport={draft.siteWideBugReport ?? null}
       />
     </BuilderViewportShellLayout>
+    <SiteBackToTop
+      enabled={draft.pageOptions?.backToTop === true}
+      accentColor={(themePalette ?? draft.themePalette)?.accentColor}
+    />
     </>
   ) : null;
 

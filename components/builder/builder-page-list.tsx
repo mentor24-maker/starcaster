@@ -91,6 +91,9 @@ type BuilderPageListProps = {
   onSetPageVisibility: (visibility: PageVisibility) => void;
   pageSearchPriority: string;
   onSetPageSearchPriority: (value: string) => void;
+  /** The page's "Back to top" button (SC-864). Optional so older mounts read as off. */
+  pageBackToTop?: boolean;
+  onSetPageBackToTop?: (value: boolean) => void;
   autoNewPage?: boolean;
   /** When mounted to edit a specific page (e.g. Manage Pages CRUD edit), open Page Details. */
   autoOpenPageDetails?: boolean;
@@ -136,6 +139,8 @@ export function BuilderPageList({
   onSetPageVisibility,
   pageSearchPriority,
   onSetPageSearchPriority,
+  pageBackToTop = false,
+  onSetPageBackToTop,
   autoNewPage,
   autoOpenPageDetails,
   snapshots,
@@ -977,6 +982,21 @@ export function BuilderPageList({
                 ))}
               </select>
             </label>
+            {onSetPageBackToTop ? (
+              <label className="field">
+                <span>Back to Top</span>
+                <select
+                  className="builder-page-details-field"
+                  value={pageBackToTop ? "show" : "off"}
+                  onChange={(event) => onSetPageBackToTop(event.target.value === "show")}
+                  onBlur={handlePageDetailsFieldBlur}
+                  title="A round button in the bottom-right corner of the live page, shown once a reader has scrolled down a screen"
+                >
+                  <option value="off">Off</option>
+                  <option value="show">Show after scrolling</option>
+                </select>
+              </label>
+            ) : null}
             <div className="builder-meta-grid-pages-background">
               <BuilderBackgroundControls
                 label="Background"

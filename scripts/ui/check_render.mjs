@@ -130,6 +130,11 @@ function documentForSection({
   modules = [],
   background,
   pageBackground,
+  /*
+   * The page's own switches (`pageOptions`, task SC-864) — Back to top is an
+   * element drawn after the whole page, which no section can ask for.
+   */
+  pageOptions,
   overlayScreen,
   // The section's shape layer (task SC-859) — a real element, like the tint.
   shapeLayer,
@@ -316,6 +321,7 @@ function documentForSection({
      * did not exist until a page could wear a video.
      */
     ...(pageBackground ? { pageBackground } : {}),
+    ...(pageOptions ? { pageOptions } : {}),
     ...(documentTheme ? { theme: documentTheme } : {}),
     ...theme,
   };
@@ -514,7 +520,26 @@ function sample(page, selector, read, settleMs, series, probes, dispatch) {
           // against the new scroll position before anything is read.
           await new Promise((resolve) => requestAnimationFrame(() => resolve()));
         }
-        const frame = { scrollY: scroller ? scroller.scrollTop : 0 };
+        /*
+         * `clickAt` presses an element BEFORE a frame is read — `{ 3: '.x' }`
+         * clicks `.x` ahead of frame 3. For a control that only exists once
+         * the page has scrolled (Back to top, task SC-864), the contract-level
+         * `click` cannot reach it: that runs before any scrolling. A selector
+         * matching nothing records `clickMissing` on the frame, never a quiet
+         * read of the unclicked page.
+         */
+        let clickMissing = null;
+        const clickSel = series.clickAt ? series.clickAt[i] : null;
+        if (clickSel) {
+          const target = document.querySelector(clickSel);
+          if (target) {
+            target.click();
+            await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+          } else {
+            clickMissing = clickSel;
+          }
+        }
+        const frame = { scrollY: scroller ? scroller.scrollTop : 0, ...(clickMissing ? { clickMissing } : {}) };
         for (const [name, sel] of Object.entries(series.selectors)) {
           const node = document.querySelector(sel);
           if (!node) { frame[name] = null; continue; }
