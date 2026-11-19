@@ -57,6 +57,12 @@ const SHOT_DIR = path.join(ROOT, '.ui-check');
  * loads after the toggle opens, like the Find creators table (SC-887). If it
  * never appears the screen is SKIPPED, never reported as fitting.
  *
+ * `tab` (optional, with `open`) is `{ pick, back }`: a tab clicked before
+ * `open` when it is not already selected, and the tab clicked afterwards to
+ * put the page back — the Outreach channel tabs remember the last one picked,
+ * so leaving Substack selected would make every YouTube entry after it skip
+ * (SC-889). Nothing matching `pick` means SKIPPED, never fitting.
+ *
  * `search` (optional) types `text` into `input`, presses Return, and measures
  * once `ready` appears — for results that only exist after a search, like the
  * Footage screen's "Search what you said" (86bcdek0z). No `ready` means the
@@ -137,6 +143,17 @@ const SCREENS = [
     ready: '[data-channel="youtube"] .yt-conversations-table tbody tr',
     // Write replies / Skip / Save as contact / Open are the last column (SC-888).
     inReach: ['.yt-conversations-table thead th.actions-col', '.yt-conversations-table tbody td.actions-col'],
+    inReachFrom: 1280,
+  },
+  {
+    id: 'engageOutreachPage',
+    label: 'Engage: Outreach, Substack Find conversations table',
+    shot: 'substack-conversations',
+    tab: { pick: '.outreach-wizard-tabs [role="tab"]:has-text("Substack")', back: '.outreach-wizard-tabs [role="tab"]:has-text("YouTube")' },
+    open: '[data-channel="substack"] [data-stage="conversations"] .outreach-wizard-stage-toggle',
+    ready: '[data-channel="substack"] .substack-conversations-table tbody tr',
+    // Write replies / Skip / Add writer / Open are the last column (SC-889).
+    inReach: ['.substack-conversations-table thead th.actions-col', '.substack-conversations-table tbody td.actions-col'],
     inReachFrom: 1280,
   },
 ];
@@ -224,11 +241,27 @@ try {
 
       await revealPanels(page, { revealSelfHidden: REVEAL_HIDDEN });
       await page.waitForTimeout(900);
+      const putTabBack = async () => {
+        if (!screen.tab?.back) return;
+        const back = page.locator(screen.tab.back).first();
+        if (await back.count() && (await back.getAttribute('aria-selected')) !== 'true') await back.click();
+      };
+      if (screen.tab) {
+        const tab = page.locator(screen.tab.pick).first();
+        if (!(await tab.count())) {
+          console.log(`skip  ${String(width).padStart(4)}  ${screen.label} — nothing matches ${screen.tab.pick}`);
+          skipped += 1;
+          continue;
+        }
+        if ((await tab.getAttribute('aria-selected')) !== 'true') await tab.click();
+        await page.waitForTimeout(600);
+      }
       if (screen.open) {
         const target = page.locator(screen.open).first();
         if (!(await target.count())) {
           console.log(`skip  ${String(width).padStart(4)}  ${screen.label} — nothing matches ${screen.open} (is the fixture seeded?)`);
           skipped += 1;
+          await putTabBack();
           continue;
         }
         if ((await target.getAttribute('aria-expanded')) !== 'true') await target.click();
@@ -241,6 +274,7 @@ try {
             skipped += 1;
             const opened = page.locator(`${screen.open}[aria-expanded="true"]`).first();
             if (await opened.count()) await opened.click();
+            await putTabBack();
             continue;
           }
         }
@@ -317,6 +351,7 @@ try {
         if (await clear.count() && await clear.isEnabled()) await clear.click();
       }
       if (screen.select) await page.locator(screen.select).first().uncheck();
+      await putTabBack();
 
       const problems = [];
       for (const what of outOfReach) problems.push(`${what} — out of reach without sliding the table sideways`);

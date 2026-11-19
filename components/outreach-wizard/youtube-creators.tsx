@@ -38,7 +38,10 @@ export type YoutubeCreator = {
   decisionReasons: string[];
   note: string;
   suggestion: Suggestion | null;
+  /** Only on the reply to an approval (SC-881): how reading the channel straight away went. */
+  commentsRead?: CommentsRead;
 };
+export type CommentsRead = { state: 'read' | 'recent' | 'busy' | 'failed'; comments: number; videos: number; error: string; quota?: boolean; noKey?: boolean; saveError?: string };
 export type Keywords = { keywords: string[]; source: 'saved' | 'substack_miner' | 'none' };
 
 type Api = (path: string, options?: RequestInit) => Promise<Record<string, any>>;
@@ -64,6 +67,37 @@ export function keywordsSourceText(k: Keywords | null): string {
   if (k.source === 'saved') return 'Searching YouTube for these keywords.';
   if (k.source === 'substack_miner') return 'No outreach keywords saved yet, so these are the Substack Miner\'s. Save to make them the Outreach list.';
   return 'No keywords yet. Add the subjects you want creators in, separated by commas.';
+}
+
+function plural(n: number, word: string): string {
+  return `${n} ${word}${n === 1 ? '' : 's'}`;
+}
+
+/** A reason ready to sit inside a sentence: no trailing full stop. */
+function clause(reason: string): string {
+  return reason.trim().replace(/[.\s]+$/, '');
+}
+
+/**
+ * What reading a just-approved channel found, as a sentence (SC-881). The
+ * approval is saved whatever this says; a read that did not happen says why,
+ * and says when it will next be tried only where that is true: the quota
+ * case names its reset time, a missing API key promises nothing, and only an
+ * ordinary failure points at the three-hourly read.
+ */
+export function commentsReadText(read: CommentsRead | undefined): string {
+  if (!read) return '';
+  if (read.state === 'read') {
+    if (!read.videos) return 'Read: no videos in the last 14 days, so there are no comments to show yet.';
+    if (!read.comments) return `Read ${plural(read.videos, 'video')}, but none has any comments yet, so there is nothing from it in Find conversations.`;
+    return `Read: ${plural(read.comments, 'comment')} on ${plural(read.videos, 'video')}. They are in Find conversations now.`;
+  }
+  if (read.state === 'recent') return `Already read in the last hour: ${plural(read.comments, 'comment')} on ${plural(read.videos, 'video')}.`;
+  if (read.state === 'busy') return 'Its comments are already being read; they will be in Find conversations in a moment.';
+  const unrecorded = read.saveError ? ` That reason could not be recorded on the channel either: ${clause(read.saveError)}.` : '';
+  if (read.noKey) return `The approval is saved, but its comments were not read: ${clause(read.error || 'no YouTube API key is set up on the server')}. Nothing can read them until a key is set up.${unrecorded}`;
+  if (read.quota) return `The approval is saved, but its comments were not read: ${clause(read.error || "YouTube's quota for today is used up")}. Nothing can be read from YouTube before then; the first scheduled read after that picks it up.${unrecorded}`;
+  return `The approval is saved, but its comments could not be read: ${clause(read.error || 'unknown error')}. The scheduled read tries again within three hours.${unrecorded}`;
 }
 
 /** One run's outcome as a sentence. `cannotTell` (quota) leads, because it overrides the counts. */
@@ -284,15 +318,18 @@ export default function YoutubeCreators({ onChanged }: { onChanged?: () => void 
 
   const decide = async (creator: YoutubeCreator, status: Decision, decisionReasons: string[], note: string): Promise<boolean> => {
     setBusy(creator.id); setDialogError('');
+    if (status === 'approved') setNotice(`Approving ${creator.name || 'the channel'} and reading its newest videos now…`);
     try {
       const reply = await post(`${CREATORS_PATH}/${encodeURIComponent(creator.id)}/decide`, { status, decisionReasons, note });
-      const saved = reply?.data as YoutubeCreator;
+      const { commentsRead, ...saved } = reply?.data as YoutubeCreator;
       setCreators((list) => (list || []).map((c) => (c.id === creator.id ? saved : c)));
-      setNotice(`${saved.name || 'The channel'} ${status === 'approved' ? 'approved' : 'rejected'}${decisionReasons.length ? `, because: ${decisionReasons.join(', ')}` : ''}.`);
+      const decidedText = `${saved.name || 'The channel'} ${status === 'approved' ? 'approved' : 'rejected'}${decisionReasons.length ? `, because: ${decisionReasons.join(', ')}` : ''}.`;
+      setNotice([decidedText, commentsReadText(commentsRead)].filter(Boolean).join(' '));
       onChanged?.();
       return true;
     } catch (err) {
       const message = `The decision was not saved: ${errorText(err)}`;
+      setNotice('');
       if (deciding) setDialogError(message); else setError(message);
       return false;
     } finally { setBusy(''); }

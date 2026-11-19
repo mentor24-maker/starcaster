@@ -2129,6 +2129,27 @@ async function seedSubstackMiner(scope) {
   if (rejected && rejected.status === 'candidate') {
     must(await substackMinerStore.updateCandidate(rejected.id, { status: 'rejected' }, scope), 'reject Substack Miner writer');
   }
+  // Notes for the Outreach page's Find conversations table (SC-889), so it
+  // has rows to measure at 1280/1440/1920: the approved writer's own Notes
+  // (a long one cut between words, an unbroken run with no space in it) and
+  // a Note a keyword search found on the long-named writer, who is not
+  // approved, so its row carries all four icons. The writer's own Notes are
+  // dated hours ago on EVERY run, because the list drops a Note older than 14
+  // days; the found one keeps the date it was first found (the store ignores
+  // a link it already has), so after two weeks only the approved rows remain.
+  const ago = (h) => new Date(Date.now() - h * 3600 * 1000).toISOString();
+  const approvedNow = must(await substackMinerStore.listCandidates(1000, scope), 'list Substack Miner writers').find((c) => c.handle === 'fixture-approved');
+  if (approvedNow) {
+    must(await substackMinerStore.recordRecentNotes(approvedNow.id, [
+      { url: 'https://substack.com/@fixture-approved/note/c-900001', text: `How the Substack algorithm decides who sees a Note in the first hour, and why ${'replying early to the people who already read you matters more than posting more often. '.repeat(3)}`, postedAt: ago(4), replies: 3, likes: 20 },
+      { url: 'https://substack.com/@fixture-approved/note/c-900002', text: '#substackgrowth/notes-algorithm/attention/slow-writing/reply-guy-energy-done-right', postedAt: ago(30), replies: 0, likes: 2 },
+    ], scope), 'save Substack Notes for Find conversations');
+  }
+  if (nightSkies) {
+    must(await substackMinerStore.recordFoundNotes(nightSkies.id, [
+      { url: 'https://substack.com/@fixture-night-skies/note/c-900003', text: 'Tonight the marsh was so dark I could see the winter Milky Way for the first time in years.' },
+    ], 'night skies', scope), 'save a keyword-found Substack Note');
+  }
   must(await substackMinerStore.saveSettings({ keywords: ['night skies', 'substack growth'] }, scope), 'save Substack Miner keywords');
   return { total: writers.length };
 }
