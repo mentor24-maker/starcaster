@@ -43,7 +43,9 @@
  *   request) is this recording's, but not yet a verdict: the job fails through
  *   the queue's retry rules, and only when those run out is a `failed` row
  *   written, saying why — so the screen never shows "not scored" for a
- *   recording that was tried five times.
+ *   recording that was tried five times. A recording that already has `done`
+ *   moments (a rescore meeting an outage) keeps them; only the blocked job
+ *   says why the rescore did not happen.
  *
  * THE BRIEF IS FINGERPRINTED, NOT WATCHED. Every row stores the fingerprint of
  * the notes it was scored against. Editing the notes does NOT rescore anything
@@ -425,11 +427,47 @@ async function momentsJob({
   queue.fail(job.id, owner, why);
   const after = typeof queue.getJob === 'function' ? queue.getJob(job.id) : null;
   if (after && after.state === 'blocked') {
-    const saved = await catalog.upsertMoments(sourceId, { ...failedRow, rulesVersion: RULES_VERSION, runStartedAt }, scope);
-    return { ...base, outcome: 'failed', jobAction: 'blocked', reason: why,
-      ...(saved.ok ? {} : { rowNotWritten: saved.error }) };
+    return recordRetriesRanOut({ catalog, sourceId, scope, failedRow, runStartedAt, base, why });
   }
   return { ...base, outcome: 'failed', jobAction: 'failed', reason: why };
+}
+
+/**
+ * The queue's retries ran out on a failure that was never a verdict (a rate
+ * limit, a timeout, a provider refusing the request). The blocked job carries
+ * the reason either way; the question is what the ROW says.
+ *
+ * A recording that already has `done` moments KEEPS them. This is a rescore
+ * that met a temporary outage, and five rate limits must not replace paid-for,
+ * good moments with an empty `failed` row (SC-829 review). Its rescore stamp is
+ * left standing, and the watcher reports the blocked job's reason against it.
+ *
+ * Otherwise the `failed` row is written, so the screen never shows "not
+ * scored" for a recording tried five times — and READ BACK like every other
+ * write here (landmines 12/13). When the existing row cannot be read, nothing
+ * is written: overwriting what might be good moments is the expensive mistake.
+ */
+async function recordRetriesRanOut({ catalog, sourceId, scope, failedRow, runStartedAt, base, why }) {
+  const blocked = { ...base, outcome: 'failed', jobAction: 'blocked', reason: why };
+  const before = await catalog.getMomentsBySource(sourceId, scope);
+  if (!before.ok) {
+    return { ...blocked, rowNotWritten: `the existing moments could not be read (${before.error}), `
+      + 'so nothing was written over them; the blocked job carries the reason' };
+  }
+  if (before.data && text(before.data.status) === MOMENTS_DONE) {
+    const count = Array.isArray(before.data.moments) ? before.data.moments.length : 0;
+    return { ...blocked, keptEarlierMoments: count,
+      rowNotWritten: `the ${count} moment(s) already scored were kept; the blocked job carries the reason` };
+  }
+  const saved = await catalog.upsertMoments(sourceId, { ...failedRow, rulesVersion: RULES_VERSION, runStartedAt }, scope);
+  if (!saved.ok) return { ...blocked, rowNotWritten: saved.error };
+  const back = await catalog.getMomentsBySource(sourceId, scope);
+  if (!back.ok) return { ...blocked, rowNotWritten: `the failed row was written but could not be read back: ${back.error}` };
+  if (!back.data || text(back.data.status) !== MOMENTS_FAILED || text(back.data.error) !== text(failedRow.error)) {
+    return { ...blocked, rowNotWritten: `the failed row was written but read back as "${text(back.data && back.data.status) || 'nothing'}", `
+      + `so the catalog did not keep it. Fix: inspect video_moments for source ${sourceId} by hand.` };
+  }
+  return blocked;
 }
 
 /**

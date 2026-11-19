@@ -20,3 +20,11 @@ Dane asks for one.
 
 The 34 recordings that already have their cuts are queued with
 `npm run studio:backfill-moments -- --apply` once this is merged.
+
+After review, three things were tightened. A rescore that keeps hitting
+temporary AI errors (rate limits, timeouts) now leaves the recording's good
+moments alone instead of replacing them with an empty "failed" result. Finding
+a recording's cuts again no longer quietly buys a new scoring for a recording
+that already has moments, since rescoring is Dane's call. And the catch-up
+command now lists a recording whose job is stuck separately, with the reason,
+instead of counting it as "waiting".

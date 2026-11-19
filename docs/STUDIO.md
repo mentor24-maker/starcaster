@@ -430,7 +430,8 @@ with no cut-marks row and no job waiting, and prints the running tally —
 ## Scoring moments (Reel Spinner step 2)
 
 Once a recording's cut marks are `done`, the cut-marks step puts a `moments`
-job on the queue and the Mini picks out the stretches of 20 to 60 seconds worth
+job on the queue — unless that recording already has a moments row, because a
+re-run of the cut marks must not quietly buy a rescore — and the Mini picks out the stretches of 20 to 60 seconds worth
 sharing on their own, plus a one-paragraph summary. Like the cut marks, each
 result is a list of **decisions** — "41.2 s to 78.9 s scores 86, it speaks to
 WaveCenter" — stored in `video_moments`, one row per recording. No video file
@@ -459,7 +460,9 @@ never this step's: the first provider in the order that can pay. The row's
   retrying would pay for the same refusal again.
 - **Any other failed call** (a timeout, a rate limit) retries on the queue's
   usual schedule, and only when the retries run out is a `failed` row written,
-  saying why.
+  saying why. **A recording already scored keeps its moments**: a rescore that
+  meets a run of rate limits leaves the good moments alone, and the blocked
+  job says why the rescore did not happen.
 - **A save that fails after the AI answered** keeps the answer on the Mini for
   a day, so the retry saves it without paying for it twice.
 - **Rescoring:** the screen (step 2e) stamps `rescore_requested_at`; the
@@ -484,6 +487,9 @@ recording with finished cut marks, no moments row and no job waiting, and
 prints the running tally — `moments: 33 done · 0 failed · 0 still to do`. It
 is a dry run until you add `-- --apply` (each job is one paid AI call), and a
 second `--apply` queues nothing.
+A recording whose scoring job is **blocked** is listed separately with the
+job's reason: it is not waiting and will not be scored until somebody fixes
+that reason and deletes the blocked job.
 
 ## Matching iPhone and Zoom recordings (Reel Spinner step 3)
 

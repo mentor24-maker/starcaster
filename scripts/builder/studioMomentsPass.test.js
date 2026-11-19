@@ -278,6 +278,74 @@ test('a call that keeps failing writes a FAILED row only when the retries run ou
   assert.match(row.error, /429\): rate limited/);
 });
 
+test('a RESCORE that keeps hitting temporary errors keeps the good moments it already had', async (t) => {
+  const c = clock();
+  const queue = tmpQueue(t, { clock: c.now, maxAttempts: 3 });
+  const catalog = fakeCatalog();
+  enqueueMoments(queue, { sourceId: SRC });
+  await pass(queue, catalog, { score: scorer(ANSWERED).score, readBrief: brief('fp-v2'), now: c.now, ...alarms() });
+  const good = catalog.moments.get(SRC);
+  assert.equal(good.status, 'done');
+  assert.equal(good.moments.length, 5);
+  const writesBefore = catalog.writes.length;
+
+  // Dane asks for a rescore; the provider rate-limits every try until the job blocks.
+  c.advance(60 * 1000);
+  const askedAt = new Date(c.now()).toISOString();
+  good.rescoreRequestedAt = askedAt;
+  assert.equal((await watchRescores({ queue, env: ENV, catalog })).processed.length, 1);
+  const limited = scorer({ ok: false, code: 'provider_error', error: 'Anthropic refused the request (429): rate limited' });
+  let last;
+  for (let i = 0; i < 3; i += 1) {
+    c.advance(2 * 60 * 60 * 1000);
+    // eslint-disable-next-line no-await-in-loop
+    last = await pass(queue, catalog, { score: limited.score, readBrief: brief('fp-v3'), now: c.now, ...alarms() });
+  }
+  const job = queue.listJobs({ stage: STAGE_MOMENTS }).find((j) => j.state === 'blocked');
+  assert.ok(job, 'the rescore job is blocked, carrying the reason');
+  assert.match(job.lastError, /429\): rate limited/);
+  assert.equal(last.failed[0].keptEarlierMoments, 5, JSON.stringify(last, null, 2));
+
+  const row = catalog.moments.get(SRC);
+  assert.equal(row.status, 'done', 'a temporary outage is not a verdict on the recording');
+  assert.equal(row.moments.length, 5, 'the paid-for moments survive');
+  assert.equal(row.briefFingerprint, 'fp-v2');
+  assert.equal(catalog.writes.length, writesBefore, 'nothing was written over them');
+  assert.equal(row.rescoreRequestedAt, askedAt, 'the request is still standing, unanswered');
+  const watched = await watchRescores({ queue, env: ENV, catalog });
+  assert.equal(watched.processed.length, 0, 'not re-queued every minute');
+  assert.match(watched.skipped[0].why, /is blocked: .*rate limited/);
+});
+
+test('retries running out with no earlier moments: the FAILED row is read back, and a row that did not stick is named', async (t) => {
+  const c = clock();
+  const queue = tmpQueue(t, { clock: c.now, maxAttempts: 1 });
+  const catalog = fakeCatalog();
+  const realUpsert = catalog.upsertMoments;
+  catalog.upsertMoments = async (id, data) => {
+    const res = await realUpsert(id, data);
+    catalog.moments.delete(id); // "saved", but nothing kept
+    return res;
+  };
+  enqueueMoments(queue, { sourceId: SRC });
+  const ai = scorer({ ok: false, code: 'provider_error', error: 'Anthropic refused the request (429): rate limited' });
+  const report = await pass(queue, catalog, { score: ai.score, now: c.now, ...alarms() });
+  assert.equal(report.failed.length, 1, JSON.stringify(report, null, 2));
+  assert.match(report.failed[0].rowNotWritten, /read back as "nothing"/);
+});
+
+test('retries running out when the existing moments cannot be READ writes nothing over them', async (t) => {
+  const c = clock();
+  const queue = tmpQueue(t, { clock: c.now, maxAttempts: 1 });
+  const catalog = fakeCatalog();
+  catalog.getMomentsBySource = async () => ({ ok: false, status: 503, error: 'fetch failed' });
+  enqueueMoments(queue, { sourceId: SRC });
+  const ai = scorer({ ok: false, code: 'provider_error', error: 'Anthropic refused the request (429): rate limited' });
+  const report = await pass(queue, catalog, { score: ai.score, now: c.now, ...alarms() });
+  assert.equal(catalog.writes.length, 0);
+  assert.match(report.failed[0].rowNotWritten, /could not be read \(fetch failed\)/);
+});
+
 // ── Verdicts: a failed row with the reason ──────────────────────────────────
 
 test('an answer the rules refuse writes a FAILED row with the reason, and the job is done with it', async (t) => {
@@ -483,12 +551,29 @@ test('backfill: the dry run lists the recording, --apply queues it once, a secon
   assert.match(report(after), /^moments: 1 done · 0 failed · 0 still to do/);
 });
 
+test('backfill: a BLOCKED job is not "waiting" — it is listed on its own with its reason, and not re-queued', async (t) => {
+  const queue = tmpQueue(t);
+  const catalog = fakeCatalog();
+  const scope = { projectId: PROJECT };
+  queue.block({ stage: STAGE_MOMENTS, subjectKind: 'video_source', subjectId: SRC, reason: 'Anthropic refused the request (429): rate limited' });
+
+  const dry = await runBackfill({ queue, catalog, scope, apply: true });
+  assert.equal(dry.enqueued.length, 0, 'each job is a paid call, and what blocked it is still there');
+  assert.equal(dry.plan.blocked.length, 1);
+  const { report } = require('../studio_backfill_moments.cjs');
+  const said = report(dry);
+  assert.doesNotMatch(said, /has a job waiting/);
+  assert.doesNotMatch(said, /already waiting on the queue/);
+  assert.match(said, /1 BLOCKED — these will not be scored until somebody acts/);
+  assert.match(said, /rate limited/);
+});
+
 test('backfill plan: a failed row is a row (skipped with its state); recordings without finished cut marks are ignored', () => {
   const plan = planBackfill({
     sources: [{ id: 'a' }, { id: 'b' }, { id: 'c' }],
     cuts: new Map([['a', 'done'], ['b', 'done'], ['c', 'failed']]),
     scored: new Map([['b', 'failed']]),
-    queued: new Set(),
+    queued: new Map(),
   });
   assert.deepEqual(plan.enqueue.map((e) => e.id), ['a']);
   assert.deepEqual(plan.skipped.map((s) => s.id), ['b']);

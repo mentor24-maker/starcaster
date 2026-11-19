@@ -57,10 +57,16 @@ function text(value) {
  *   sources — catalog rows (videoSourcesStore shape)
  *   cuts    — source id (lower-cased) → cut-marks state
  *   scored  — source id (lower-cased) → moments status, for those that have a row
- *   queued  — the set of source ids with a moments job pending, running or blocked
+ *   queued  — source id → { state, jobId, lastError } for each moments job that
+ *             is pending, running or BLOCKED on this queue
+ *
+ * A blocked job is NOT waiting: it will never run until somebody acts, so it
+ * is its own list with its reason (landmine 17), never "already waiting". It is
+ * not re-queued either — each job is one paid AI call, and whatever blocked it
+ * (no cut marks, a refused write, retries run out) is still there.
  */
 function planBackfill({ sources, cuts, scored, queued }) {
-  const plan = { enqueue: [], skipped: [] };
+  const plan = { enqueue: [], skipped: [], blocked: [] };
   for (const row of sources) {
     const id = text(row.id);
     const key = id.toLowerCase();
@@ -69,6 +75,9 @@ function planBackfill({ sources, cuts, scored, queued }) {
     if (cuts.get(key) !== 'done') continue; // a moment must not start inside a cut nobody has found
     if (scored.has(key)) {
       plan.skipped.push({ ...entry, why: `already has a moments row (${scored.get(key)})` });
+    } else if (queued.has(id) && queued.get(id).state === STATES.BLOCKED) {
+      const job = queued.get(id);
+      plan.blocked.push({ ...entry, jobId: job.jobId, why: text(job.lastError) || 'no reason was recorded' });
     } else if (queued.has(id)) {
       plan.skipped.push({ ...entry, why: 'a moments job is already on the queue' });
     } else {
@@ -78,12 +87,18 @@ function planBackfill({ sources, cuts, scored, queued }) {
   return plan;
 }
 
-/** Ids with a moments job that is still live or blocked on this queue. */
+/** Source id → its moments job, for each one still live or blocked on this queue. */
 function queuedSourceIds(queue) {
-  const live = new Set([STATES.PENDING, STATES.RUNNING, STATES.BLOCKED]);
-  return new Set(queue.listJobs({ stage: STAGE_MOMENTS })
-    .filter((job) => live.has(job.state))
-    .map((job) => text(job.subjectId)));
+  const kept = new Set([STATES.PENDING, STATES.RUNNING, STATES.BLOCKED]);
+  const out = new Map();
+  for (const job of queue.listJobs({ stage: STAGE_MOMENTS })) {
+    if (!kept.has(job.state)) continue;
+    const id = text(job.subjectId);
+    // A live job outranks a blocked one for the same source: that one will run.
+    if (out.has(id) && out.get(id).state !== STATES.BLOCKED) continue;
+    out.set(id, { state: job.state, jobId: job.id, lastError: job.lastError });
+  }
+  return out;
 }
 
 async function statesOf(list, ids, scope, what, field) {
@@ -157,9 +172,19 @@ function report(result) {
   for (const e of result.apply ? result.enqueued : plan.enqueue) {
     lines.push(`  ${e.name} (${e.id})${e.jobId ? ` — job ${e.jobId}${e.created ? '' : ', already there'}` : ''}`);
   }
-  if (!plan.enqueue.length) lines.push('  (none — every recording with cut marks is scored or has a job waiting)');
+  const blocked = plan.blocked || [];
+  if (!plan.enqueue.length && !blocked.length) {
+    lines.push('  (none — every recording with cut marks is scored or has a job waiting)');
+  } else if (!plan.enqueue.length) {
+    lines.push('  (none)');
+  }
   const waiting = plan.skipped.filter((s) => /on the queue/.test(s.why));
   if (waiting.length) lines.push(`${waiting.length} already waiting on the queue.`);
+  if (blocked.length) {
+    lines.push(`${blocked.length} BLOCKED — these will not be scored until somebody acts on the reason, `
+      + 'then deletes the blocked job:');
+    for (const b of blocked) lines.push(`  ${b.name} (${b.id}) — job ${b.jobId}: ${b.why}`);
+  }
   if (result.truncated) {
     lines.push(`CANNOT TELL about the rest: the catalog returned its ceiling of ${SOURCE_LIMIT} sources, `
       + 'so older ones were not looked at. Raise the limit or page the read before trusting "none".');
