@@ -82,7 +82,8 @@ test('a request writes one row naming its job, with the tokens OpenClaw reported
   assert.equal(row.metadata.job, 'starcaster:openclaw-smoke');
   assert.equal(row.metadata.ok, true);
   assert.equal(row.metadata.tokens_known, true);
-  assert.equal(row.metadata.model, 'claude-sonnet-5-5');
+  // The committed primary, not a hard-coded Claude (SC-873).
+  assert.equal(row.metadata.model, require('../../lib/aiJobs').OPENCLAW_MODEL);
   // input_tokens already holds the cache reads and writes — not counted twice.
   assert.equal(row.metadata.prompt_tokens, 100);
   assert.equal(row.metadata.cached_tokens, 1200);

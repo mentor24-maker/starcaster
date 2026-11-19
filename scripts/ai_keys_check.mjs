@@ -22,15 +22,18 @@
  *     A machine with no prd access reports those rows CANNOT TELL — never a pass.
  *     A Settings › APIs override lives in the deployment, not here, so the
  *     panel under Settings › APIs is where that one is checked.
- *   The Mini's OpenClaw key: ~/.openclaw/.env, which OpenClaw reads itself.
+ *   The Mini's OpenClaw keys: every provider key in ~/.openclaw/.env, which
+ *     OpenClaw reads itself, plus the model it is set to from
+ *     ~/.openclaw/openclaw.json, compared with lib/openclawModels.json (SC-873).
  *
  * WHO POSTS. The keys are the same wherever this runs, so two machines posting
  * would say everything twice. Only the machine that owns `bus-relay` posts;
  * the other prints its reading and stops. That machine going dark is the
  * heartbeat's to report.
  *
- * Exit: 0 every key works, 1 a key is OUT OF CREDIT or INVALID, 2 a reading
- * could not be taken. run_bus_relay.sh guards the call with `|| true` — a
+ * Exit: 0 every key works, 1 a key is OUT OF CREDIT or INVALID, or the Mini's
+ * OpenClaw has drifted from the repo or lacks a key its model list needs,
+ * 2 a reading could not be taken. 1 outranks 2. run_bus_relay.sh guards the call with `|| true` — a
  * finding about a key is not this script's failure.
  */
 import fs from 'node:fs';
@@ -44,9 +47,13 @@ const aiKeys = require('../lib/aiKeys.js');
 const providerStore = require('../lib/aiProviderSettingsStore.js');
 const heartbeat = require('../lib/nodeHeartbeat.js');
 const nodeRoles = require('../lib/nodeRoles.js');
+const openclawModels = require('../lib/openclawModels.js');
+const openclawKeys = require('../lib/openclawKeys.js');
 
 const STATE_FILE = path.join(heartbeat.heartbeatDir(), 'ai-keys-alarms.json');
-const OPENCLAW_ENV = path.join(os.homedir(), '.openclaw', '.env');
+const OPENCLAW_DIR = process.env.AI_KEYS_OPENCLAW_DIR || path.join(os.homedir(), '.openclaw');
+const OPENCLAW_ENV = path.join(OPENCLAW_DIR, '.env');
+const OPENCLAW_CONFIG = path.join(OPENCLAW_DIR, 'openclaw.json');
 const PRD_SCOPE = process.env.AI_KEYS_DOPPLER_SCOPE || path.join(os.homedir(), 'Studio');
 
 const argv = process.argv.slice(2);
@@ -70,13 +77,22 @@ function readPrd(name) {
   }
 }
 
-/** ANTHROPIC_API_KEY out of ~/.openclaw/.env, never printed. */
-function readOpenclawKey() {
-  let text;
-  try { text = fs.readFileSync(OPENCLAW_ENV, 'utf8'); } catch { return null; }
-  const line = text.split('\n').find((l) => /^\s*(export\s+)?ANTHROPIC_API_KEY\s*=/.test(l));
-  if (!line) return { key: '' };
-  return { key: line.replace(/^\s*(export\s+)?ANTHROPIC_API_KEY\s*=\s*/, '').trim().replace(/^(['"])(.*)\1$/, '$2') };
+/** A file's text, or { error } saying why it could not be read. Never printed. */
+function readText(file) {
+  try { return { text: fs.readFileSync(file, 'utf8') }; } catch (err) {
+    return { error: `${file} could not be read (${err?.code || 'error'})`, missing: err?.code === 'ENOENT' };
+  }
+}
+
+/** The committed model list (SC-871), or { unreadable }. */
+function readCommittedModels() {
+  try {
+    const list = openclawModels.load();
+    const raw = JSON.parse(fs.readFileSync(openclawModels.FILE, 'utf8'));
+    return { list, keys: raw.keys || {} };
+  } catch (err) {
+    return { list: { unreadable: String(err?.message || err).slice(0, 160) }, keys: {} };
+  }
 }
 
 /**
@@ -145,38 +161,44 @@ const entries = aiKeys.switchEntries(order, {
   place: 'the website (Doppler prd)',
 });
 
+// The Mini's OpenClaw (SC-873): every provider key it holds, and the model it
+// is set to. On a machine that does not run OpenClaw and has neither file, it
+// is skipped with a note; on the machine that does, an unreadable file is
+// CANNOT TELL, never a pass.
 const openclawRole = nodeRoles.checkRole('openclaw');
-const openclaw = readOpenclawKey();
-if (openclaw) {
-  entries.push({
-    id: 'openclaw-anthropic',
-    provider: 'anthropic',
-    place: "the Mini's OpenClaw (~/.openclaw/.env)",
-    job: 'the Mini — OpenClaw: outreach posting, sign-in checks, Reddit and Substack passes',
-    source: '~/.openclaw/.env ANTHROPIC_API_KEY',
-    ...openclaw,
+const envFile = readText(OPENCLAW_ENV);
+const configFile = readText(OPENCLAW_CONFIG);
+const openclawHere = openclawRole.owned || !envFile.missing || !configFile.missing;
+let openclaw = null;
+if (openclawHere) {
+  const committed = readCommittedModels();
+  openclaw = openclawKeys.openclawReport({
+    envText: envFile.text ?? null,
+    envError: envFile.error,
+    configText: configFile.text ?? null,
+    configError: configFile.error,
+    committed: committed.list,
+    committedKeys: committed.keys,
   });
-} else if (openclawRole.owned) {
-  entries.push({
-    id: 'openclaw-anthropic',
-    provider: 'anthropic',
-    place: "the Mini's OpenClaw (~/.openclaw/.env)",
-    job: 'the Mini — OpenClaw',
-    unreadable: `this machine owns OpenClaw but ${OPENCLAW_ENV} could not be read`,
-  });
+  entries.push(...openclaw.entries);
 }
 
 const rows = await aiKeys.checkKeys(entries);
-const comparisons = aiKeys.compareKeys(rows);
+const comparisons = aiKeys.compareKeys(rows, { pairs: openclaw ? openclawKeys.comparePairs(openclaw.entries) : [] });
 
 console.log('ai-keys: every AI provider on the switch, the account each bills, and whether it works (values never shown).');
 console.log(`  Order: ${aiKeys.orderSourceText(order)}.`);
 for (const id of order.ignored) console.log(`  (left out: "${id}" is in the saved order but is not a provider this check knows)`);
 for (const row of rows) console.log(`  ${aiKeys.rowLine(row)}`);
-if (!openclaw && !openclawRole.owned) {
-  console.log(`  (the Mini's OpenClaw key is not on this machine — ${openclawRole.owner || 'another machine'} runs OpenClaw; run this there to see it)`);
+if (openclaw) {
+  if (openclaw.model) console.log(`  ${openclaw.model}`);
+  for (const line of openclaw.blind) console.log(`  ${line}`);
+  for (const line of openclaw.findings) console.log(`  ${line}`);
+} else {
+  console.log(`  (the Mini's OpenClaw keys and model are not on this machine — ${openclawRole.owner || 'another machine'} runs OpenClaw; run this there to see them)`);
 }
-for (const c of comparisons) console.log(`  ${c.text}`);
+const labelOf = new Map(rows.map((r) => [r.id, r.label || r.provider]));
+for (const c of comparisons) console.log(`  ${labelOf.get(c.b) || ''}: ${c.text}`);
 const sw = aiKeys.switchState(rows);
 if (sw.serving) console.log(`  AI calls are using: ${sw.serving.label}.`);
 else if (sw.outage) console.log('  ALARM: no switched-on provider can answer, so every AI feature has stopped.');
@@ -218,4 +240,4 @@ if (CHECK) {
   }
 }
 
-process.exit(aiKeys.exitCode(rows));
+process.exit(openclawKeys.exitCode(aiKeys.exitCode(rows), openclaw));
