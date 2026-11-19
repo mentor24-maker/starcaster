@@ -363,6 +363,18 @@ test('the failure post carries the exit status and the log tail', () => {
   assert.match(text, /somewhere\/relay\.log/);
 });
 
+test('a stopped job leads with its reason in plain words, not an exit status', () => {
+  const text = hb.renderFailurePost({
+    job: 'reel-spinner-scoring',
+    node: 'mac-mini',
+    status: 'stopped',
+    reason: 'Reel Spinner scoring is stopped: no AI provider can pay. Anthropic: out of credit. OpenAI: no key',
+  });
+  assert.match(text, /reel-spinner-scoring STOPPED on mac-mini/);
+  assert.match(text, /no AI provider can pay\. Anthropic: out of credit\. OpenAI: no key/);
+  assert.doesNotMatch(text, /exit status/);
+});
+
 test('the failure post omits the log block entirely when there is no tail', () => {
   const text = hb.renderFailurePost({ job: 'bus-relay', node: 'mac-mini', status: 1 });
   assert.ok(!text.includes('Last lines:'), 'an empty code fence tells the reader nothing');

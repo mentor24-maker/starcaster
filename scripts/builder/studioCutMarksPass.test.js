@@ -35,6 +35,7 @@ const {
 const { VERBATIM_PROMPT, RULES_VERSION } = require('../../workers/studio/cutMarks.js');
 const { marksOrError } = require('../../lib/videoCutMarksStore.js');
 const { STAGE_RUNNERS } = require('../../workers/studio/daemon.js');
+const { STAGE_MOMENTS } = require('../../workers/studio/momentsPass.js');
 const { runBackfill, planBackfill } = require('../studio_backfill_cuts.cjs');
 
 const PROJECT = 'proj_studio';
@@ -109,6 +110,7 @@ function fakeCatalog({ transcript = { state: 'done', words: CLEAN_WORDS } } = {}
       return { ok: true, status: 200, data: { ...row } };
     },
     getCutMarksBySource: async (id) => ({ ok: true, status: 200, data: cuts.has(id) ? { ...cuts.get(id) } : null }),
+    getMomentsBySource: async () => ({ ok: true, status: 200, data: null }),
     listSources: async () => ({ ok: true, status: 200, data: sources.map((s) => ({ ...s })) }),
     listTranscriptStates: async (ids) => {
       const out = {};
@@ -237,6 +239,59 @@ test('real speech: the verbatim whisper and silencedetect run, and 1b\'s marks a
   assert.match(report.done[0].reason, /mark\(s\) \(.*filler.*\), [\d.]+ s to cut/);
 
   assert.deepEqual(fs.readdirSync(tmpRoot), [], 'whisper\'s temporary JSON is deleted');
+});
+
+test('a DONE cut-marks row queues ONE moments job for the same source (Reel Spinner 2d)', async (t) => {
+  const { env, tmpRoot } = machine(t);
+  const queue = tmpQueue(t);
+  const catalog = fakeCatalog();
+  enqueueCutMarks(queue, { sourceId: 'src_1' });
+  const report = await runCutMarks({ queue, owner: OWNER, catalog, env, run: fakeTools().run, stat: STAT_300S, options: { tmpRoot } });
+  assert.equal(report.done.length, 1, JSON.stringify(report, null, 2));
+  const scoring = queue.listJobs({ stage: STAGE_MOMENTS });
+  assert.equal(scoring.length, 1);
+  assert.equal(scoring[0].subjectId, 'src_1');
+  assert.equal(scoring[0].state, 'pending');
+  assert.equal(report.done[0].momentsJobId, scoring[0].id);
+
+  // The same recording's cut marks found again: still one scoring job.
+  enqueueCutMarks(queue, { sourceId: 'src_1' });
+  await runCutMarks({ queue, owner: OWNER, catalog, env, run: fakeTools().run, stat: STAT_300S, options: { tmpRoot } });
+  assert.equal(queue.listJobs({ stage: STAGE_MOMENTS }).length, 1, 'keyed by source: one live job');
+});
+
+test('cut marks found again for a recording that is already SCORED queue no paid rescore', async (t) => {
+  const { env, tmpRoot } = machine(t);
+  const queue = tmpQueue(t);
+  const catalog = fakeCatalog();
+  catalog.getMomentsBySource = async () => ({ ok: true, status: 200, data: { status: 'done', moments: [{ start_s: 1, end_s: 9, score: 8 }] } });
+  enqueueCutMarks(queue, { sourceId: 'src_1' });
+  const report = await runCutMarks({ queue, owner: OWNER, catalog, env, run: fakeTools().run, stat: STAT_300S, options: { tmpRoot } });
+  assert.equal(report.done.length, 1, JSON.stringify(report, null, 2));
+  assert.equal(queue.listJobs({ stage: STAGE_MOMENTS }).length, 0, 'rescoring is Dane\'s call, not a side effect');
+  assert.match(report.done[0].momentsNotQueued, /already has done moments row/);
+});
+
+test('cut marks done but the moments cannot be read: nothing paid is queued, and it says so', async (t) => {
+  const { env, tmpRoot } = machine(t);
+  const queue = tmpQueue(t);
+  const catalog = fakeCatalog();
+  catalog.getMomentsBySource = async () => ({ ok: false, status: 503, error: 'fetch failed' });
+  enqueueCutMarks(queue, { sourceId: 'src_1' });
+  const report = await runCutMarks({ queue, owner: OWNER, catalog, env, run: fakeTools().run, stat: STAT_300S, options: { tmpRoot } });
+  assert.equal(queue.listJobs({ stage: STAGE_MOMENTS }).length, 0);
+  assert.match(report.done[0].momentsNotQueued, /could not be read \(fetch failed\).*backfill-moments/);
+});
+
+test('a FAILED cut-marks row queues no scoring: a moment could start inside an "um"', async (t) => {
+  const { env, tmpRoot } = machine(t);
+  const queue = tmpQueue(t);
+  const catalog = fakeCatalog();
+  enqueueCutMarks(queue, { sourceId: 'src_1' });
+  const tools = fakeTools({ whisper: () => ({ status: 3, stdout: '', stderr: 'error: failed to read audio data as wav' }) });
+  await runCutMarks({ queue, owner: OWNER, catalog, env, run: tools.run, stat: STAT_300S, options: { tmpRoot } });
+  assert.equal(catalog.cuts.get('src_1').state, 'failed');
+  assert.equal(queue.listJobs({ stage: STAGE_MOMENTS }).length, 0);
 });
 
 test('a transcript with no words is marked done with nothing cut, and neither tool runs', async (t) => {

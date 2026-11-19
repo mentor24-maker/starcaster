@@ -153,7 +153,7 @@ objects:
     host: mac-mini
     detail:
       why_not_docker_desktop: Docker Desktop is an app that wants a logged-in desktop; wrong shape for a headless box
-      resources: 4 CPU, 8 GB RAM, 60 GB disk
+      resources: 4 CPU, 6 GB RAM, 60 GB disk  # 8 -> 6 GB 2026-11-14 (SC-716): containers use ~4 GB of the Mini's 16, and 8 pushed it into 19 GB of swap
       autostart: com.starcaster.colima LaunchAgent
     probe: command
 

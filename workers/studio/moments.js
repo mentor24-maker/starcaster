@@ -7,8 +7,8 @@
  * Reel Spinner 2c (SC-828). Pure apart from ONE injected model call: given a
  * recording's transcript words, its cut marks (Reel Spinner 1b) and the
  * channel notes Dane switched on for Reel Spinner (2a's `readContextFor`), it
- * asks Claude for moments of 20 to 60 seconds and then checks every one of
- * them itself. The Mini pass that runs it on the queue and writes
+ * asks the AI door (whichever provider can pay) for moments of 20 to 60
+ * seconds and then checks every one of them itself. The Mini pass that runs it on the queue and writes
  * `video_moments` is 2d; nothing here touches a database, a file or the queue.
  *
  * WHAT "WORTH SHARING" MEANS IS DANE'S, NOT OURS. The rubric is his channel
@@ -36,7 +36,7 @@
  * on half an "uh" or on a second of silence.
  */
 
-const { queryAnthropic } = require('../../lib/aiClient.js');
+const { generate } = require('../../lib/aiClient.js');
 
 /**
  * Bump when any rule below changes (the prompt, the checks, the limits), so
@@ -45,8 +45,13 @@ const { queryAnthropic } = require('../../lib/aiClient.js');
  */
 const RULES_VERSION = '1';
 
-/** The current Sonnet; overridable with STUDIO_MOMENTS_MODEL. */
-const DEFAULT_MODEL = 'claude-sonnet-5-5';
+/**
+ * Which of the AI door's two tiers scores a recording. The door (lib/aiClient.js
+ * `generate`, SC-843) picks the provider and its model for the tier, so this
+ * file never names one: Dane switches between Anthropic, OpenAI or any other
+ * provider's credit on Settings › APIs, and scoring follows.
+ */
+const DEFAULT_TIER = 'strong';
 
 /**
  * Output budget. Ten moments with reasons and quotes plus the summary is about
@@ -108,14 +113,55 @@ PROJECT_BY_KEY.set('deomovement', 'DEO');
 const MOOD_BY_KEY = new Map(MOODS.map((m) => [keyOf(m), m]));
 
 /**
- * Model and output budget from the environment, falling back to the defaults.
- * A budget that is not a positive whole number is ignored, not obeyed.
+ * Tier and output budget from the environment, falling back to the defaults.
+ * A budget that is not a positive whole number is ignored, not obeyed, and a
+ * tier the door does not have is ignored the same way.
  */
 function momentsConfig(env = process.env) {
-  const model = String(env.STUDIO_MOMENTS_MODEL || '').trim() || DEFAULT_MODEL;
+  const tier = ['fast', 'strong'].includes(String(env.STUDIO_MOMENTS_TIER || '').trim())
+    ? String(env.STUDIO_MOMENTS_TIER).trim() : DEFAULT_TIER;
   const asked = Number(env.STUDIO_MOMENTS_MAX_TOKENS);
   const maxTokens = Number.isInteger(asked) && asked > 0 ? asked : DEFAULT_MAX_TOKENS;
-  return { model, maxTokens, timeoutMs: DEFAULT_TIMEOUT_MS };
+  return { tier, maxTokens, timeoutMs: DEFAULT_TIMEOUT_MS };
+}
+
+/** Every provider's way of saying "the answer hit the token limit". */
+const CUT_OFF = new Set(['max_tokens', 'length', 'MAX_TOKENS']);
+
+/**
+ * The default model call: one request through the AI door, in the shape
+ * `scoreMoments` reads. The door's failure `code` comes back with it, because
+ * the Mini pass treats "no provider can pay" (`no_provider`) as the machine's
+ * fault and everything else as this recording's.
+ */
+async function queryThroughDoor(system, user, options = {}, door = generate) {
+  const res = await door({
+    feature: options.feature || FEATURE,
+    scope: options.scope || null,
+    system,
+    messages: user,
+    tier: options.tier || DEFAULT_TIER,
+    maxTokens: options.maxTokens,
+    timeoutMs: options.timeoutMs,
+  });
+  if (!res || !res.ok) {
+    return {
+      ok: false,
+      error: (res && res.error) || 'the AI door gave no answer',
+      code: (res && res.code) || 'no_answer',
+      skipped: (res && res.skipped) || [],
+    };
+  }
+  return {
+    ok: true,
+    text: res.text,
+    provider: res.provider,
+    providerLabel: res.providerLabel,
+    model: res.provider ? `${res.provider}/${res.model}` : res.model,
+    usage: res.usage || null,
+    stopReason: res.stopReason,
+    skipped: res.skipped || [],
+  };
 }
 
 /** Words with usable times, in order. whisper's words carry `{ start, end, word }`. */
@@ -421,12 +467,17 @@ function checkAnswer(answer, { words, marks, durationS }) {
 /**
  * Score one recording. Never throws. The result is the row 2d writes:
  *
- *   { state: 'done', summary, moments, dropped, briefFingerprint, model, rulesVersion, usage }
- *   { state: 'failed', reason, retryable, briefFingerprint, model, rulesVersion, usage? }
+ *   { state: 'done', summary, moments, dropped, briefFingerprint, model, provider, rulesVersion, usage }
+ *   { state: 'failed', reason, retryable, callCode?, skipped?, briefFingerprint, model, rulesVersion, usage? }
+ *
+ * `model` is `<provider>/<model>` as the AI door reports the one that ANSWERED
+ * (provider id, a slash, then the model id), or '' when no call was made.
  *
  * `retryable` is true only when the CALL failed (network, credit, rate limit,
- * timeout) — the same recording may well succeed later. A refused brief or an
- * unusable answer is not retryable as-is.
+ * timeout) — the same recording may well succeed later; `callCode` is then the
+ * door's code (`no_provider`, `no_answer`, `provider_error`, ...) and
+ * `skipped` the providers it could not use and why. A refused
+ * brief or an unusable answer is not retryable as-is.
  *
  * @param {object} input
  * @param {object[]} input.words     transcript words `{ start, end, word }`
@@ -434,18 +485,18 @@ function checkAnswer(answer, { words, marks, durationS }) {
  * @param {number}   input.durationS the recording's length
  * @param {{ text: string, fingerprint: string }} input.brief  2a's readContextFor result
  * @param {object} [deps]
- * @param {Function} [deps.query]  `(system, user, options) → { ok, text, usage, model, error }`; queryAnthropic by default
- * @param {object}   [deps.config] `{ model, maxTokens, timeoutMs }`; momentsConfig() by default
+ * @param {Function} [deps.query]  `(system, user, options) → { ok, text, usage, model, provider, error, code }`; the AI door by default
+ * @param {object}   [deps.config] `{ tier, maxTokens, timeoutMs }`; momentsConfig() by default
  * @param {object}   [deps.scope]  project scope for usage metering
  */
 async function scoreMoments(input, deps = {}) {
   const config = deps.config || momentsConfig();
-  const query = deps.query || queryAnthropic;
+  const query = deps.query || queryThroughDoor;
   const brief = (input && input.brief) || {};
   const briefText = typeof brief.text === 'string' ? brief.text.trim() : '';
   const briefFingerprint = typeof brief.fingerprint === 'string' && brief.fingerprint.trim()
     ? brief.fingerprint.trim() : null;
-  const base = { briefFingerprint, model: config.model, rulesVersion: RULES_VERSION };
+  const base = { briefFingerprint, model: '', rulesVersion: RULES_VERSION };
   const failed = (reason, retryable, extra = {}) => ({ state: 'failed', reason, retryable, ...base, ...extra });
 
   if (!briefText) return failed(NO_BRIEF_REASON, false);
@@ -456,27 +507,29 @@ async function scoreMoments(input, deps = {}) {
   let res;
   try {
     res = await query(system, user, {
-      anthropicModel: config.model,
+      tier: config.tier,
       maxTokens: config.maxTokens,
       timeoutMs: config.timeoutMs,
       feature: FEATURE,
       scope: deps.scope || null,
     });
   } catch (err) {
-    return failed(`the call to ${config.model} failed: ${err && err.message ? err.message : err}`, true);
+    return failed(`the call to the AI door failed: ${err && err.message ? err.message : err}`, true, { callCode: 'no_answer' });
   }
   if (!res || !res.ok) {
-    return failed(`the call to ${config.model} failed: ${(res && res.error) || 'no answer'}`, true);
+    return failed(`the call to the AI door failed: ${(res && res.error) || 'no answer'}`, true,
+      { callCode: (res && res.code) || 'no_answer', skipped: (res && res.skipped) || [] });
   }
   const usage = res.usage || null;
-  if (res.stopReason === 'max_tokens') {
-    return failed(`the answer was cut off at the ${config.maxTokens}-token limit`, false, { usage });
+  const answered = { model: res.model || '', provider: res.provider || '' };
+  if (CUT_OFF.has(res.stopReason)) {
+    return failed(`the answer was cut off at the ${config.maxTokens}-token limit`, false, { usage, ...answered });
   }
 
   const parsed = parseAnswer(res.text);
-  if (!parsed.ok) return failed(parsed.reason, false, { usage });
+  if (!parsed.ok) return failed(parsed.reason, false, { usage, ...answered });
   const checked = checkAnswer(parsed.value, input);
-  if (!checked.ok) return failed(checked.reason, false, { usage, dropped: checked.dropped || [] });
+  if (!checked.ok) return failed(checked.reason, false, { usage, ...answered, dropped: checked.dropped || [] });
 
   return {
     state: 'done',
@@ -485,14 +538,15 @@ async function scoreMoments(input, deps = {}) {
     dropped: checked.dropped,
     noneReason: checked.noneReason,
     ...base,
-    model: res.model || config.model,
+    ...answered,
     usage,
   };
 }
 
 module.exports = {
   RULES_VERSION,
-  DEFAULT_MODEL,
+  DEFAULT_TIER,
+  FEATURE,
   DEFAULT_MAX_TOKENS,
   MIN_S,
   MAX_S,
@@ -501,6 +555,7 @@ module.exports = {
   MOODS,
   NO_BRIEF_REASON,
   momentsConfig,
+  queryThroughDoor,
   buildPrompt,
   transcriptLines,
   parseAnswer,
