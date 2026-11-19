@@ -1,0 +1,44 @@
+<!doctype html>
+<!--
+  Reel Spinner title and end cards (SC-838). workers/studio/cards.js fills the
+  kind and blocks slots and the browser draws this at exactly 1920 × 1080.
+
+  The lines arrive ALREADY WRAPPED by cards.js `fitText`, each one a
+  nowrap span, so the browser never decides where a line breaks. After
+  drawing, cards.js measures every [data-fit] box and refuses the card if
+  anything spills past its edge; the wrap estimate is the first lock and
+  that measurement is the second.
+
+  Plain and legible first: the look is Dane's to approve from the pictures.
+-->
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  html, body { margin: 0; padding: 0; }
+  body {
+    width: 1920px; height: 1080px; overflow: hidden;
+    background: #10151c; color: #f4f1ea;
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  }
+  .card {
+    box-sizing: border-box; width: 1920px; height: 1080px;
+    padding: 140px 160px;
+    display: flex; flex-direction: column; justify-content: center;
+    gap: 48px;
+  }
+  .block { overflow: hidden; }
+  .line { display: block; white-space: nowrap; }
+  .title { font-weight: 700; line-height: 1.15; }
+  .name { font-weight: 700; line-height: 1.1; color: #ffffff; }
+  .invitation { font-weight: 400; line-height: 1.25; color: #e6e1d6; }
+  .address { font-weight: 700; line-height: 1.2; color: #f2c14e; }
+  .rule { width: 160px; height: 8px; background: #f2c14e; }
+</style>
+</head>
+<body>
+  <div class="card {{kind}}">
+{{blocks}}
+  </div>
+</body>
+</html>
