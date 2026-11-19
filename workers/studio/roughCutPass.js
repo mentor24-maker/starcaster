@@ -127,7 +127,7 @@ function realDrive() {
     getAccessToken: () => googleDrive.getAccessToken(),
     findFolderByName: (token, parentId, name) => googleDrive.findFolderByName(token, parentId, name),
     createFolder: (token, parentId, name) => googleDrive.createFolder(token, parentId, name),
-    findFileByName: (token, parentId, name) => googleDrive.findFileByName(token, parentId, name),
+    findFileByName: (token, parentId, name, options) => googleDrive.findFileByName(token, parentId, name, options),
     upload: (args) => googleDrive.uploadFileResumable(args),
   };
 }
@@ -373,7 +373,9 @@ async function uploadRender({ drive, queue, env, file, bytes, name }) {
   const folder = await roughCutsFolder({ drive, token, queue, env });
   if (!folder.ok) return { ok: false, error: folder.error };
   const started = Date.now();
-  const already = await drive.findFileByName(token, folder.id, name);
+  // `withSize`: Drive leaves `size` out unless asked, and without it this
+  // check never matches and every retry uploads a second copy (SC-834 review).
+  const already = await drive.findFileByName(token, folder.id, name, { withSize: true });
   if (already.ok && already.data && Number(already.data.size) === bytes) {
     return { ok: true, id: text(already.data.id), folderId: folder.id, reused: true, ms: Date.now() - started };
   }
@@ -535,7 +537,10 @@ async function roughCutJob({
   if (pair && pair.status === 'done') {
     const otherId = text(pair.sourceAId).toLowerCase() === sourceId.toLowerCase() ? pair.sourceBId : pair.sourceAId;
     const other = await catalog.getSourceById(otherId, scope);
-    if (other.ok && other.data) otherDurationS = other.data.durationS;
+    // The edit rows are permanent once made, so they are never planned
+    // without the partner's length just because the catalog blinked.
+    if (!other.ok) return releaseIt(`the lined-up partner recording ${otherId} of source ${sourceId} could not be read: ${other.error}`);
+    if (other.data) otherDurationS = other.data.durationS;
   }
 
   const momentList = Array.isArray(moments.data.moments) ? moments.data.moments : [];
@@ -628,8 +633,9 @@ async function roughCutJob({
     const rendered = renderToDisk({ paths, ranges, shiftS: shift.shiftS, picturePath, soundPath, ffmpeg, probeDuration, io, keptS });
     if (!rendered.ok) {
       if (rendered.machine) {
-        await catalog.moveEdit(edit.id, 'failed', { error: 'ffmpeg went missing mid-run; it will be rendered again' }, scope);
-        return releaseIt('ffmpeg is not installed or not on PATH on this machine. Fix: brew install ffmpeg.');
+        const marked = await catalog.moveEdit(edit.id, 'failed', { error: 'ffmpeg went missing mid-run; it will be rendered again' }, scope);
+        const note = marked.ok ? '' : ` (and edit ${edit.id} could not be marked failed: ${marked.error})`;
+        return releaseIt(`ffmpeg is not installed or not on PATH on this machine. Fix: brew install ffmpeg.${note}`);
       }
       await failEdit(`ffmpeg could not render it: ${rendered.why}`);
       continue;

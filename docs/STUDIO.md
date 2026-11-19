@@ -568,6 +568,16 @@ from the working copy already on the Mini (the 720p proxy, or the Zoom
 file itself), uploaded, marked **review** with its Drive file id, read back,
 and only then is the copy on the Mini deleted.
 
+**It does not wait for a line-up.** The rough cut is queued when the moments
+finish, whether or not the recording has been lined up with a Zoom partner. If
+the partner is lined up later, the edit rows already made keep the phone's
+sound, and nothing redoes them; delete that recording's `video_edits` rows and
+run `npm run studio:backfill-roughcuts -- --apply` to make them again.
+
+**A retry never uploads twice.** If an upload worked but the edit could not be
+marked **review**, the next try finds its own file in Rough cuts by name and
+byte count and reuses it rather than sending a second copy.
+
 **Measured on 2026-11-18** (the Mac Mini, two real recordings):
 
 | Recording | Edit | Length | Size | Render | Upload |

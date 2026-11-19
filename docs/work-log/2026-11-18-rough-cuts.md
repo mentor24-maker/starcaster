@@ -19,3 +19,10 @@ rough cut takes about 2 to 4 MB per minute of video on Drive.
 When something goes wrong it says why. A full disk waits and tries again. A
 video that will not render is marked failed with the reason. A Drive upload
 that fails keeps the finished video on the Mini so it is not made twice.
+
+**After review (round 2).** Review found that a retry would put a second copy
+of a rough cut on Drive. The check "is it already uploaded?" compared file
+sizes, but the lookup never asked Drive for the size, so the answer was always
+"no". It asks now, and a real lookup on the Mini returned the size it was
+missing. A retry also now waits, rather than guessing, when the catalog cannot
+read a lined-up Zoom partner, because the edit rows it makes are permanent.

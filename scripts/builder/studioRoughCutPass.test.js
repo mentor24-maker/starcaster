@@ -100,7 +100,12 @@ function setup(t, { pair = null, momentsStatus = 'done' } = {}) {
       edits.push(edit);
       return { ok: true, status: 200, data: { ...edit } };
     },
+    refuseMoveTo: '',
     moveEdit: async (id, to, patch = {}) => {
+      if (catalog.refuseMoveTo === to) {
+        catalog.refuseMoveTo = '';
+        return { ok: false, status: 503, error: 'the catalog did not answer' };
+      }
       const edit = edits.find((e) => e.id === id);
       if (!edit) return { ok: false, status: 404, error: 'That edit does not exist in this project' };
       const refused = stepError(edit.status, to);
@@ -126,7 +131,14 @@ function setup(t, { pair = null, momentsStatus = 'done' } = {}) {
       drive.folders.set(`${parent}/${name}`, made);
       return { ok: true, data: made };
     },
-    findFileByName: async (token, parent, name) => ({ ok: true, data: drive.files.find((f) => f.parent === parent && f.name === name) || null }),
+    // Like real Drive: `size` comes back only when the caller asks for it
+    // (lib/googleDrive.js findFileByName's `withSize`). The fake once always
+    // returned it, which hid a retry that re-uploaded every time (SC-834 review).
+    findFileByName: async (token, parent, name, opts = {}) => {
+      const found = drive.files.find((f) => f.parent === parent && f.name === name);
+      if (!found) return { ok: true, data: null };
+      return { ok: true, data: opts.withSize ? { id: found.id, name: found.name, size: found.size } : { id: found.id, name: found.name } };
+    },
     upload: async ({ folderId, fileName, filePath }) => {
       drive.uploads += 1;
       if (drive.refuseUpload) return { ok: false, status: 403, error: drive.refuseUpload };
@@ -247,6 +259,58 @@ test('a failed upload keeps the local render, and the retry uploads it without r
   assert.deepEqual(s.catalog.edits.map((e) => e.status), ['review', 'review']);
   assert.equal(renders(s.ffmpegCalls).length, 2, 'the full edit was NOT rendered again — only the short was rendered');
   assert.ok(!fs.existsSync(paths.video), 'and once it was confirmed on Drive, the kept render was deleted');
+});
+
+test('an upload whose move to review failed is found on the retry, not uploaded a second time', async (t) => {
+  const s = setup(t);
+  s.catalog.refuseMoveTo = 'review';
+  enqueueRoughCut(s.queue, { sourceId: SRC });
+  const r = await s.run();
+  assert.equal(r.failed.length, 1, JSON.stringify(r));
+  assert.match(r.failed[0].reason, /uploaded to Drive as drive-1, but the edit could not be marked for review/);
+  assert.equal(s.drive.uploads, 2, 'the full edit and the short each uploaded once');
+  const full = s.catalog.edits.find((e) => e.kind === 'full');
+  assert.ok(fs.existsSync(localPathsFor(s.derivedDir, full.id).video), 'the render is kept until the row says review');
+
+  s.advance(24 * 3600 * 1000);
+  const again = await s.run();
+  assert.equal(again.done.length, 1, JSON.stringify(again));
+  assert.equal(s.drive.uploads, 2, 'the retry found its own upload on Drive and sent nothing');
+  assert.equal(s.drive.files.length, 2, 'one file per edit in Rough cuts — no second copy');
+  assert.equal(full.status, 'review');
+  assert.equal(full.roughCutDriveFileId, 'drive-1', 'pointing at the first, and only, upload');
+  assert.ok(!fs.existsSync(localPathsFor(s.derivedDir, full.id).video), 'and the kept render went once it was confirmed');
+});
+
+test('a partner recording the catalog cannot read releases the job before any edit row is made', async (t) => {
+  const pair = {
+    sourceAId: SRC, sourceBId: ZOOM, offsetS: -2.5, status: 'done', audioSourceId: ZOOM, chosenBy: 'measured',
+  };
+  const s = setup(t, { pair });
+  const real = s.catalog.getSourceById;
+  s.catalog.getSourceById = async (id) => (id === ZOOM ? { ok: false, status: 503, error: 'the catalog did not answer' } : real(id));
+  enqueueRoughCut(s.queue, { sourceId: SRC });
+  const r = await s.run();
+  assert.equal(r.released.length, 1, JSON.stringify(r));
+  assert.match(r.released[0].reason, /partner recording .* could not be read: the catalog did not answer/);
+  assert.equal(s.catalog.creates, 0, 'no permanent edit row was planned without the partner\'s length');
+  assert.equal(renders(s.ffmpegCalls).length, 0);
+});
+
+test('findFileByName asks Drive for the size only when told to, so the weekly report\'s request is unchanged', async (t) => {
+  const { findFileByName } = require('../../lib/googleDrive.js');
+  const seen = [];
+  const realFetch = global.fetch;
+  global.fetch = async (url) => {
+    seen.push(new URL(url).searchParams.get('fields'));
+    return { ok: true, status: 200, text: async () => JSON.stringify({ files: [{ id: 'f1', name: 'a.mp4', size: '1234' }] }) };
+  };
+  t.after(() => { global.fetch = realFetch; });
+  const plain = await findFileByName('tok', 'folder', 'a.mp4');
+  const sized = await findFileByName('tok', 'folder', 'a.mp4', { withSize: true });
+  assert.deepEqual(seen, ['files(id,name)', 'files(id,name,size)']);
+  assert.equal(plain.ok, true);
+  assert.equal(sized.data.size, '1234');
 });
 
 test('a disk too full to render into stops the job without spending an attempt, and leaves the edits as they were', async (t) => {
