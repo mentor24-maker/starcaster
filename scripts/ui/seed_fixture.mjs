@@ -42,6 +42,7 @@ const videoSourcesStore = require(path.join(ROOT, 'lib/videoSourcesStore.js'));
 const videoTranscriptsStore = require(path.join(ROOT, 'lib/videoTranscriptsStore.js'));
 const videoMomentsStore = require(path.join(ROOT, 'lib/videoMomentsStore.js'));
 const videoAudioPairsStore = require(path.join(ROOT, 'lib/videoAudioPairsStore.js'));
+const videoEditsStore = require(path.join(ROOT, 'lib/videoEditsStore.js'));
 const youtubeOutreachStore = require(path.join(ROOT, 'lib/youtubeOutreachStore.js'));
 const substackNotesStore = require(path.join(ROOT, 'lib/substackNotesStore.js'));
 const substackMinerStore = require(path.join(ROOT, 'lib/substackMinerStore.js'));
@@ -1872,8 +1873,48 @@ async function seedStudioFootage(scope) {
     const pairData = typeof data === 'function' ? data(idByHash) : data;
     must(await videoAudioPairsStore.upsertAudioPair(idByHash[a], idByHash[b], pairData, scope), 'pair footage files');
   }
+  // Reel Spinner 4c (SC-835): rough cuts for Footage › Rough cuts — a full
+  // edit and a short waiting (the long file name, a moment with reasons),
+  // and one already sent back with a long note, so the screen measures every
+  // line it can draw. Found by kind and moment, so a re-seed changes nothing.
+  for (const [hash, plans] of FIXTURE_EDITS) {
+    if (!idByHash[hash]) continue;
+    const have = lookup(await videoEditsStore.listEditsForSource(idByHash[hash], scope), 'list rough cuts') || [];
+    for (const plan of plans) {
+      if (have.some((e) => e.kind === plan.kind && (plan.kind === 'full' || e.momentIndex === plan.momentIndex))) continue;
+      const created = must(await videoEditsStore.createEdit(idByHash[hash], {
+        kind: plan.kind,
+        keepRanges: plan.keepRanges,
+        ...(plan.kind === 'short' ? { momentIndex: plan.momentIndex } : {}),
+      }, scope), 'create rough cut');
+      must(await videoEditsStore.moveEdit(created.id, 'rendering', {}, scope), 'render rough cut');
+      must(await videoEditsStore.moveEdit(created.id, 'review', {
+        roughCutDriveFileId: `fixture-rough-cut-${plan.kind}-${plan.momentIndex ?? 'full'}`,
+        // The full edit carries a track so the card's music line has words to
+        // show; the short has none, so "No music picked" is drawn too.
+        ...(plan.kind === 'full' ? { musicTrack: 'inspired' } : {}),
+      }, scope), 'review rough cut');
+      if (plan.sendBack) {
+        must(await videoEditsStore.reviewEdit(created.id, { status: 'sent_back', daneNote: plan.sendBack }, scope), 'send back rough cut');
+      }
+    }
+  }
   return { made, found };
 }
+
+const FIXTURE_EDITS = [
+  ['fixture-footage-01', [
+    { kind: 'full', keepRanges: [{ start_s: 0, end_s: 1800 }, { start_s: 1812.5, end_s: 3600 }] },
+    { kind: 'short', momentIndex: 0, keepRanges: [{ start_s: 40, end_s: 70 }, { start_s: 71.5, end_s: 80 }] },
+  ]],
+  ['fixture-footage-05', [
+    {
+      kind: 'full',
+      keepRanges: [{ start_s: 0, end_s: 40 }],
+      sendBack: 'Start at the second sentence, take out the part about the weather, and keep the last laugh in — it is the best bit of the whole clip.',
+    },
+  ]],
+];
 
 const FIXTURE_PAIRS = [
   ['fixture-footage-01', 'fixture-footage-02', (ids) => ({
