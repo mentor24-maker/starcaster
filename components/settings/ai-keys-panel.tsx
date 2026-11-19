@@ -31,11 +31,46 @@ export type AiKeyRow = {
   reason: string;
   account: string;
   accountLabel: string;
+  /** The provider's own name; set for every row on the switch (SC-848). */
+  label?: string;
+  keyEnv?: string;
+  /** True for a provider on the AI switch; `position` is its place in the order. */
+  inSwitch?: boolean;
+  position?: number;
+  enabled?: boolean;
 };
 
-type Reading = { checkedAt: string; keys: AiKeyRow[] };
+export type SwitchSummary = { serving: string; outage: boolean; blind: boolean };
 
-const PROVIDER_LABEL: Record<string, string> = { anthropic: 'Anthropic (Claude)', openai: 'OpenAI', gemini: 'Google Gemini' };
+type Reading = {
+  checkedAt: string;
+  keys: AiKeyRow[];
+  order?: { source: string; text: string; ignored?: string[] };
+  switch?: SwitchSummary;
+};
+
+const PROVIDER_LABEL: Record<string, string> = { anthropic: 'Anthropic (Claude)', openai: 'OpenAI', gemini: 'Google Gemini', kimi: 'Kimi' };
+
+/** A provider's name as Dane reads it: the familiar one, else the name it was added under. */
+export function providerName(row: AiKeyRow): string {
+  return PROVIDER_LABEL[row.provider] || row.label || row.provider;
+}
+
+/**
+ * The one sentence above the table: what AI calls are using right now, or
+ * that nothing can answer. Empty for a reading from before SC-848.
+ */
+export function switchSentence(summary: SwitchSummary | undefined): { text: string; color: string } | null {
+  if (!summary) return null;
+  if (summary.serving) return { text: `AI calls are using ${summary.serving}.`, color: '#2e7d32' };
+  if (summary.outage) {
+    return {
+      text: 'No switched-on provider can answer, so every AI feature has stopped. Add credit or a key to one of them, or switch on one that works.',
+      color: '#d32f2f',
+    };
+  }
+  return { text: 'No switched-on provider answered, and at least one could not be read, so it cannot be told whether AI features work.', color: '#b26a00' };
+}
 
 const VERDICT_COLOR: Record<string, string> = {
   WORKS: '#2e7d32',
@@ -66,6 +101,9 @@ function getAppApi(): AppApi | null {
 export function accountText(row: AiKeyRow): string {
   if (row.accountLabel) return row.accountLabel;
   if (row.verdict === 'NOT SET') return '—';
+  if (row.provider !== 'anthropic' && row.provider !== 'openai' && row.provider !== 'gemini') {
+    return `${providerName(row)} does not say which account a key bills`;
+  }
   if (row.provider === 'gemini') return 'Google does not say which project a key bills';
   return `${PROVIDER_LABEL[row.provider] || row.provider} did not name the account in its reply`;
 }
@@ -85,7 +123,13 @@ export function AiKeysTable({ keys }: { keys: AiKeyRow[] }): React.ReactElement 
         {keys.map((row) => (
           <tr key={row.id} style={{ borderBottom: '1px solid var(--border)', verticalAlign: 'top' }} data-ai-key={row.id}>
             <td style={{ padding: '0.5rem 0.5rem 0.5rem 0', overflowWrap: 'anywhere' }}>
-              <strong>{PROVIDER_LABEL[row.provider] || row.provider}</strong>
+              <strong>
+                {row.inSwitch && row.position ? `${row.position}. ` : ''}
+                {providerName(row)}
+              </strong>
+              {row.inSwitch && row.enabled === false && (
+                <span style={{ marginLeft: '0.4rem', fontSize: '0.8rem', color: 'var(--muted)' }}>(switched off)</span>
+              )}
               <div style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>
                 {row.fingerprint ? `key ${row.fingerprint}` : 'no key'}
                 {row.source ? ` · from ${row.source}` : ''}
@@ -162,9 +206,18 @@ export default function AiKeysPanel(): React.ReactElement {
         </button>
       </div>
       <p style={{ fontSize: '0.85rem', color: 'var(--muted)', margin: '0.4rem 0 0.75rem' }}>
-        Each key the website uses, the account it bills, and whether that account will serve a request right now.
-        Credit only helps if it is added to the account shown here.
+        Every AI provider on the switch below, in the order it is tried, with the account each key bills and
+        whether that account will serve a request right now. Credit only helps if it is added to the account shown here.
       </p>
+
+      {reading?.order?.text && (
+        <p style={{ fontSize: '0.8rem', color: 'var(--muted)', margin: '0 0 0.5rem' }}>Order: {reading.order.text}.</p>
+      )}
+
+      {(() => {
+        const line = switchSentence(reading?.switch);
+        return line ? <p data-ai-switch-state style={{ margin: '0 0 0.75rem', color: line.color }}><strong>{line.text}</strong></p> : null;
+      })()}
 
       {error && (
         <p style={{ color: '#d32f2f' }}>

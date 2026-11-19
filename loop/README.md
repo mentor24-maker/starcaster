@@ -33,6 +33,16 @@ hours after Spirality had the check. Only six files differed from `d538a7f`
 `scripts/lib/expectedSecrets.mjs`, `lib/relayLane.js` and its test); every
 other file here was already identical, so the whole door is now that commit.
 
+**Something now watches this copy** (SC-868). `npm run loop:drift` compares
+every file here except this README with the same file on Spirality's `main`,
+by git file id, and answers IN STEP, BEHIND (naming each file that differs or
+that Spirality has deleted, and Spirality's commit) or CANNOT TELL. The relay
+runs it on its wake (`scripts/run_bus_relay.sh`) and posts BEHIND and CANNOT
+TELL to StarCaster's bus once a day each, with one all-clear when the copy
+matches again. It only says so; bringing the copy up to date is still a pull
+request that copies from Spirality's commit and passes `npm run test:loop`.
+The runner scripts below are not watched: they are behind on purpose.
+
 ## The runner scripts
 
 **The runner scripts below are still from `e5d86e4`**, deliberately: the door

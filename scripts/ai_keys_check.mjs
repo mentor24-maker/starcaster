@@ -1,14 +1,18 @@
 #!/usr/bin/env node
 /**
  * `npm run ai-keys` — every AI key Starcaster and the Mini use, which account
- * each one bills, and whether it works right now (ticket 86bcvhfht).
+ * each one bills, and whether it works right now (ticket 86bcvhfht). Since
+ * SC-848 the website's keys are every provider on the AI switch, in the order
+ * Settings › APIs saved, Kimi and any added service included. One provider
+ * dry while another works is a notice; none able to answer is an `ALARM:`.
  *
  * The why, the readings and the alarm rule are in lib/aiKeys.js; this file
  * only gathers the keys, keeps the alarm state and posts.
  *
  *   npm run ai-keys                        check and print, write nothing
  *   npm run ai-keys -- --check             the same, and post to the bus when a key is OUT OF CREDIT or INVALID,
- *                                          or has read CANNOT TELL for over an hour
+ *                                          or has read CANNOT TELL for over an hour; an ALARM (texted) when
+ *                                          no switched-on provider can answer
  *   npm run ai-keys -- --check --dry-run   say what it WOULD post, send nothing, stamp nothing
  *
  * WHERE THE KEYS COME FROM. No value is ever printed — fingerprints only.
@@ -37,6 +41,7 @@ import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
 const aiKeys = require('../lib/aiKeys.js');
+const providerStore = require('../lib/aiProviderSettingsStore.js');
 const heartbeat = require('../lib/nodeHeartbeat.js');
 const nodeRoles = require('../lib/nodeRoles.js');
 
@@ -74,22 +79,54 @@ function readOpenclawKey() {
   return { key: line.replace(/^\s*(export\s+)?ANTHROPIC_API_KEY\s*=\s*/, '').trim().replace(/^(['"])(.*)\1$/, '$2') };
 }
 
-const WEBSITE_JOBS = {
-  anthropic: 'the website — Write with AI, outreach reply drafts, alt text, tagging and every other Claude feature',
-  openai: 'the website — the features that call OpenAI',
-  gemini: 'the website — the features that call Google Gemini',
-};
+/**
+ * The switch's order as production has it (SC-848). The Settings › APIs row
+ * lives in the production database, and this machine's own settings point at
+ * its local copy, so the row is read from Doppler prd's database address with
+ * prd's key, held in memory only. When that cannot be read, the order falls
+ * back to prd's AI_PROVIDER_ORDER exactly as the door does, and says so.
+ */
+async function readProductionOrder() {
+  const url = readPrd('SUPABASE_URL');
+  const key = readPrd('SUPABASE_SERVICE_KEY');
+  let settings = null;
+  let fallbackReason = '';
+  if (url.unreadable || key.unreadable) {
+    fallbackReason = url.unreadable || key.unreadable;
+  } else if (!url.key || !key.key) {
+    fallbackReason = 'Doppler prd has no database address or key to read the saved order with';
+  } else {
+    try {
+      const table = process.env.SUPABASE_AI_PROVIDER_SETTINGS_TABLE || 'ai_provider_settings';
+      const res = await fetch(`${url.key.replace(/\/+$/, '')}/rest/v1/${table}?select=*&id=eq.platform&limit=1`, {
+        headers: { apikey: key.key, Authorization: `Bearer ${key.key}` },
+        signal: AbortSignal.timeout(20000),
+      });
+      if (!res.ok) {
+        fallbackReason = `the saved order could not be read from production (HTTP ${res.status})`;
+      } else {
+        const rows = await res.json();
+        settings = providerStore.normaliseRow(Array.isArray(rows) ? rows[0] : null);
+        if (!settings.exists) { settings = null; fallbackReason = 'nothing has been saved on Settings › APIs yet'; }
+      }
+    } catch (err) {
+      fallbackReason = `the saved order could not be read from production (${String(err?.message || err).slice(0, 120)})`;
+    }
+  }
+  const env = {};
+  if (!settings) {
+    const order = readPrd('AI_PROVIDER_ORDER');
+    if (order.key) env.AI_PROVIDER_ORDER = order.key;
+  }
+  return aiKeys.switchProviders({ settings, env, fallbackReason });
+}
 
-// Each provider's variable names in the order lib/apiSettings.js reads them;
-// the first one that is set is the one the website uses.
-const WEBSITE_KEYS = [
-  ['anthropic', ['ANTHROPIC_API_KEY']],
-  ['openai', ['OPENAI_API_KEY']],
-  ['gemini', ['GEMINI_API_KEY', 'GOOGLE_GEMINI_API_KEY']],
-];
-
-const entries = [];
-for (const [provider, names] of WEBSITE_KEYS) {
+// A provider's key in Doppler prd, by the setting the door reads. Gemini's
+// second name is the alias lib/apiSettings.js also accepts.
+const KEY_ALIASES = { GEMINI_API_KEY: ['GEMINI_API_KEY', 'GOOGLE_GEMINI_API_KEY'] };
+const keySource = new Map();
+function prdKeyFor(def) {
+  const names = KEY_ALIASES[def.keyEnv] || [def.keyEnv];
   let read = { key: '' };
   let used = names[0];
   for (const name of names) {
@@ -97,15 +134,16 @@ for (const [provider, names] of WEBSITE_KEYS) {
     used = name;
     if (read.key || read.unreadable) break;
   }
-  entries.push({
-    id: `website-${provider}`,
-    provider,
-    place: 'the website (Doppler prd)',
-    job: WEBSITE_JOBS[provider],
-    source: `Doppler prd ${used}`,
-    ...read,
-  });
+  keySource.set(def.id, `Doppler prd ${used}`);
+  return read;
 }
+
+const order = await readProductionOrder();
+const entries = aiKeys.switchEntries(order, {
+  keyFor: prdKeyFor,
+  sourceFor: (def) => keySource.get(def.id) || '',
+  place: 'the website (Doppler prd)',
+});
 
 const openclawRole = nodeRoles.checkRole('openclaw');
 const openclaw = readOpenclawKey();
@@ -131,12 +169,18 @@ if (openclaw) {
 const rows = await aiKeys.checkKeys(entries);
 const comparisons = aiKeys.compareKeys(rows);
 
-console.log('ai-keys: every AI key in use, the account it bills, and whether it works (values never shown):');
+console.log('ai-keys: every AI provider on the switch, the account each bills, and whether it works (values never shown).');
+console.log(`  Order: ${aiKeys.orderSourceText(order)}.`);
+for (const id of order.ignored) console.log(`  (left out: "${id}" is in the saved order but is not a provider this check knows)`);
 for (const row of rows) console.log(`  ${aiKeys.rowLine(row)}`);
 if (!openclaw && !openclawRole.owned) {
   console.log(`  (the Mini's OpenClaw key is not on this machine — ${openclawRole.owner || 'another machine'} runs OpenClaw; run this there to see it)`);
 }
 for (const c of comparisons) console.log(`  ${c.text}`);
+const sw = aiKeys.switchState(rows);
+if (sw.serving) console.log(`  AI calls are using: ${sw.serving.label}.`);
+else if (sw.outage) console.log('  ALARM: no switched-on provider can answer, so every AI feature has stopped.');
+else console.log('  No switched-on provider answered, and at least one could not be read, so whether AI features work cannot be told.');
 
 if (CHECK) {
   const relay = nodeRoles.checkRole('bus-relay');
@@ -150,7 +194,7 @@ if (CHECK) {
       fs.mkdirSync(path.dirname(STATE_FILE), { recursive: true });
       fs.writeFileSync(STATE_FILE, `${JSON.stringify(decided.next, null, 2)}\n`);
     };
-    if (!decided.post.length && !decided.clear.length && !decided.blind.length && !decided.sighted.length) {
+    if (!decided.post.length && !decided.clear.length && !decided.blind.length && !decided.sighted.length && !decided.outage && !decided.restored) {
       console.log('ai-keys: nothing to post (no key newly down or recovered, none blind for over an hour, open alarms posted under 6h ago).');
       // Still save: a first CANNOT TELL records when the blindness started, and
       // without that record a blind check could never reach its one-hour mark.
