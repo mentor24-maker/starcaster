@@ -14,8 +14,10 @@ const path = require('path');
  * stand-in Reddit. Nothing reaches the network.
  *
  * The rules each test pins, from the ticket: posted with matching words →
- * `posted`; no link → `failed`; different words → `failed`; unreadable →
- * stays `posting` and is never retried. Plus the pace (3 a day, 20 minutes
+ * `posted`; OpenClaw saying it did not post → `failed`; anything else short
+ * of proof (no link, a bad link, different words, another author, removed,
+ * unreadable) → stays `posting` for a hand check and is never retried, because
+ * `failed` offers Try again and that posts twice (SC-892). Plus the pace (3 a day, 20 minutes
  * apart), and that nothing posts while no Reddit account is named.
  */
 
@@ -39,6 +41,11 @@ const POST_URL = `https://www.reddit.com/r/Meditation/comments/${POST_ID}/`;
 const WORDS = 'I lost the thread for most of a year and came back by sitting for two minutes, not twenty. The length mattered less than not skipping a day.';
 
 const MINUTE = 60 * 1000;
+
+/** SC-892: the post and the link OpenClaw returned on 2026-11-18, verbatim. */
+const NOV_18_POST_ID = '1xyn9b7';
+const NOV_18_URL = 'https://www.reddit.com/r/Polymath/comments/1xyn9b7/comment/19suoxdhc0q3n/';
+const PARENT_ID = 'kx9yz12';
 
 /** A setup file minus its trailing grant to the read-only login, which is not schema. */
 function schemaOf(file) {
@@ -84,7 +91,7 @@ function withDb() {
 let approvedSeq = 0;
 
 /** One approved comment, written the way approveItem leaves it. */
-async function approved(env, { words = WORDS, parentCommentId = '', minutesAgo = 60 } = {}) {
+async function approved(env, { words = WORDS, parentCommentId = '', minutesAgo = 60, postId = POST_ID } = {}) {
   approvedSeq += 1;
   const at = new Date(Date.now() - minutesAgo * MINUTE + approvedSeq * 1000).toISOString();
   const res = await env.db.sbQuery({
@@ -96,7 +103,7 @@ async function approved(env, { words = WORDS, parentCommentId = '', minutesAgo =
       project_id: PROJECT,
       owner_user_id: 'user_dane',
       target_url: parentCommentId ? `${POST_URL}_/${parentCommentId}/` : POST_URL,
-      post_id: POST_ID,
+      post_id: postId,
       parent_comment_id: parentCommentId,
       subreddit: 'Meditation',
       post_title: 'How do you keep going?',
@@ -145,6 +152,17 @@ function standIns({ behave = 'ok', author = ACCOUNT } = {}) {
       case 'post-link':
         put(words);
         return answer({ posted: true, commentUrl: POST_URL, screenshotPath: null, problem: null });
+      case 'nov-18':
+        // OpenClaw's exact answer on 2026-11-18 (SC-892): the comment went up,
+        // the link it gave has a 13-character id nobody can read.
+        put(words);
+        return answer({ posted: true, commentUrl: NOV_18_URL, screenshotPath: null, problem: null });
+      case 'other-post':
+        put(words);
+        return answer({ posted: true, commentUrl: `https://www.reddit.com/r/Meditation/comments/9zz9zz9/comment/${id}/`, screenshotPath: null, problem: null });
+      case 'parent-link':
+        put(words);
+        return answer({ posted: true, commentUrl: `https://www.reddit.com/r/Meditation/comments/${POST_ID}/comment/${PARENT_ID}/`, screenshotPath: null, problem: null });
       case 'link-to-nothing':
         return answer({ posted: true, commentUrl: url, screenshotPath: null, problem: null });
       case 'wrong-words':
@@ -242,7 +260,7 @@ test('the browser is told the exact words, the account, the profile, and to clic
   assert.ok(plain.includes(`<comment>${WORDS}</comment>`));
   assert.match(plain, /Click the "Comment" button once\. Never click it twice\./);
   assert.match(plain, /"Join the conversation"/);
-  const reply = reddit.buildPostInstructions({ item: { text: WORDS, targetUrl: `${POST_URL}_/kx9yz12/`, parentCommentId: 'kx9yz12' }, profile: 'dane-of-earth', accountName: ACCOUNT });
+  const reply = reddit.buildPostInstructions({ item: { text: WORDS, targetUrl: `${POST_URL}_/${PARENT_ID}/`, parentCommentId: PARENT_ID }, profile: 'dane-of-earth', accountName: ACCOUNT });
   assert.match(reply, /Click "Reply" under that comment/);
 });
 
@@ -285,56 +303,105 @@ test('Reddit\'s escaped markdown is the same words, not different ones', async (
   }
 });
 
-test('NO LINK MEANS FAILED: the browser says it posted but returns no link (or the post\'s link)', async () => {
+/**
+ * SC-892: OpenClaw said it posted, and nothing it returned proves it. Each of
+ * these must stay `posting` with a hand-check reason naming the account, and
+ * must never reach markFailed — `failed` offers Try again, which posts twice.
+ */
+async function expectHandCheck(env, item, ins, adapter = adapterFor(env, ins)) {
+  const failedCalls = [];
+  const markFailed = adapter.markFailed;
+  adapter.markFailed = (...args) => { failedCalls.push(args); return markFailed(...args); };
+  const report = await onePass(adapter);
+  assert.equal(report.posted.outcome, 'hand-check', report.posted.why);
+  assert.equal(failedCalls.length, 0, 'markFailed is never called for an unproven "I posted it"');
+  const row = await readRow(env, item.id);
+  assert.equal(row.status, 'posting');
+  assert.equal(row.needsHandCheck, true);
+  assert.match(row.error, /will not be tried again/);
+  assert.match(row.error, /Open the post on Reddit/);
+  // Never offered again on a later pass.
+  const again = await onePass(adapter, Date.now() + 60 * MINUTE);
+  assert.equal(again.posted, null);
+  return row;
+}
+
+test('2026-11-18: OpenClaw posted and returned a link with a 13-character id — a hand check, never failed', async () => {
+  const env = withDb();
+  try {
+    const item = await approved(env, { postId: NOV_18_POST_ID });
+    const ins = standIns({ behave: 'nov-18' });
+    const row = await expectHandCheck(env, item, ins);
+    assert.match(row.error, /not a link to a Reddit comment/);
+    assert.match(row.error, /under u\/DaneOfEarthTest\./);
+    assert.equal(row.postedUrl, NOV_18_URL, 'the link it returned is kept for the hand check');
+    assert.equal(ins.calls.length, 1, 'the browser was asked exactly once');
+  } finally {
+    env.restore();
+  }
+});
+
+test('NO LINK IS A HAND CHECK: OpenClaw says it posted but returns no link, or only the post\'s link', async () => {
   const env = withDb();
   try {
     const item = await approved(env);
-    await onePass(adapterFor(env, standIns({ behave: 'success-no-link' })));
-    const row = await readRow(env, item.id);
-    assert.equal(row.status, 'failed');
+    const row = await expectHandCheck(env, item, standIns({ behave: 'success-no-link' }));
     assert.match(row.error, /returned no link to the comment/);
 
     const second = await approved(env);
-    await onePass(adapterFor(env, standIns({ behave: 'post-link' })));
-    const row2 = await readRow(env, second.id);
-    assert.equal(row2.status, 'failed');
+    const row2 = await expectHandCheck(env, second, standIns({ behave: 'post-link' }));
     assert.match(row2.error, /not to one comment on it/);
   } finally {
     env.restore();
   }
 });
 
-test('WORDS DIFFER MEANS FAILED: the comment at the link says something else', async () => {
+test('A LINK TO THE WRONG PLACE IS A HAND CHECK: a different post, or the comment being replied to', async () => {
   const env = withDb();
   try {
-    const item = await approved(env);
-    const report = await onePass(adapterFor(env, standIns({ behave: 'wrong-words' })));
-    assert.equal(report.posted.outcome, 'failed');
-    const row = await readRow(env, item.id);
-    assert.equal(row.status, 'failed');
-    assert.match(row.error, /does not say what was approved\. Reddit shows: "Something else entirely/);
-    assert.match(row.postedUrl, /\/comment\/nw1x\/$/, 'the link is kept so Dane can see what went up');
+    const other = await approved(env);
+    assert.match((await expectHandCheck(env, other, standIns({ behave: 'other-post' }))).error, /a comment on a different post \(9zz9zz9\)/);
+
+    const reply = await approved(env, { parentCommentId: PARENT_ID });
+    assert.match((await expectHandCheck(env, reply, standIns({ behave: 'parent-link' }))).error, /the comment being replied to, not the reply/);
   } finally {
     env.restore();
   }
 });
 
-test('a link to nothing, a removed comment, or another author is failed, never posted', async () => {
+test('WHAT IS AT THE LINK IS NOT PROOF EITHER WAY: no comment, other words, another author or removed is a hand check', async () => {
   const env = withDb();
   try {
     const nothing = await approved(env);
-    await onePass(adapterFor(env, standIns({ behave: 'link-to-nothing' })));
-    assert.match((await readRow(env, nothing.id)).error, /Reddit has no comment at it/);
+    assert.match((await expectHandCheck(env, nothing, standIns({ behave: 'link-to-nothing' }))).error, /Reddit has no comment at the link/);
+
+    const words = await approved(env);
+    const row = await expectHandCheck(env, words, standIns({ behave: 'wrong-words' }));
+    assert.match(row.error, /does not say what was approved\. Reddit shows: "Something else entirely/);
+    assert.match(row.postedUrl, /\/comment\/nw1x\/$/, 'the link is kept so Dane can see what went up');
 
     const removed = await approved(env);
-    await onePass(adapterFor(env, standIns({ behave: 'removed' })));
-    assert.match((await readRow(env, removed.id)).error, /\[removed\] — the subreddit's moderators or Reddit's spam filter/);
+    assert.match((await expectHandCheck(env, removed, standIns({ behave: 'removed' }))).error, /\[removed\] — the subreddit's moderators or Reddit's spam filter/);
 
     const someoneElse = await approved(env);
-    await onePass(adapterFor(env, standIns({ author: 'SomebodyElse' })));
-    const row = await readRow(env, someoneElse.id);
-    assert.equal(row.status, 'failed');
-    assert.match(row.error, /written by "SomebodyElse", not DaneOfEarthTest/);
+    assert.match((await expectHandCheck(env, someoneElse, standIns({ author: 'SomebodyElse' }))).error, /written by "SomebodyElse", not DaneOfEarthTest/);
+  } finally {
+    env.restore();
+  }
+});
+
+test('A HAND CHECK COUNTS TOWARD THE PACE: with 1 a day, a hand-checked comment holds the next one for tomorrow', async () => {
+  const env = withDb();
+  try {
+    const first = await approved(env, { postId: NOV_18_POST_ID });
+    const second = await approved(env, { words: `${WORDS} Again.` });
+    const adapter = adapterFor(env, standIns({ behave: 'nov-18' }), { pace: { ...OPEN, maxCommentsPerDay: 1 } });
+    await onePass(adapter);
+    await onePass(adapter);
+    assert.equal((await readRow(env, first.id)).status, 'posting');
+    const waiting = await readRow(env, second.id);
+    assert.equal(waiting.status, 'approved');
+    assert.match(waiting.waitReason, /Waiting for tomorrow's allowance — 1 of 1 comment a day already posted today/);
   } finally {
     env.restore();
   }

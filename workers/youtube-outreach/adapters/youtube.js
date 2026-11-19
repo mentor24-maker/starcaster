@@ -11,6 +11,8 @@
  *   name, label                      'youtube', 'YouTube'
  *   handCheckWords                   the sentence ending a "check this by hand"
  *                                    error: 'Check the video by hand.'
+ *   noLinkIsHandCheck                optional, true on Reddit: "posted, but no link"
+ *                                    is a hand check, not failed (SC-892)
  *   beginPass()                      forget anything cached from the last pass
  *   listApproved()                   envelope: approved items, oldest first
  *   checkLimits(item, now)           { ok } | { ok: false, scope, reason }
