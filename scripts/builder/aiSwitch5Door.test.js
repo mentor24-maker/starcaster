@@ -136,6 +136,21 @@ const FEATURES = [
     },
   },
   {
+    // SC-847 review: the long-form target parses strict JSON, so it asks the
+    // door for JSON mode the way the suggestions do.
+    feature: 'messaging_format_transform',
+    tier: 'strong',
+    json: true,
+    reply: '{"title":"Junior camp opens Monday","content":"Our junior camp opens Monday at Delray."}',
+    run: () => transformContent('Our junior camp opens Monday.', getFormatSpec('tweet'), getFormatSpec('article')),
+    sent: ['Our junior camp opens Monday.', 'strict JSON only'],
+    usable: (out) => {
+      assert.equal(out.ok, true, out.error);
+      assert.equal(out.title, 'Junior camp opens Monday');
+      assert.equal(out.content, 'Our junior camp opens Monday at Delray.');
+    },
+  },
+  {
     feature: 'webpage_keyword_import',
     tier: 'strong',
     reply: 'junior tennis\ntennis coaching\n1. delray beach',
@@ -245,7 +260,7 @@ test('the contact persona synthesis asks the door, never a provider by name', ()
 
 // ── npm run check:ai-door ──────────────────────────────────────────────────
 
-const { findViolations, ALLOWED, WAITING } = require('../check_ai_door.cjs');
+const { findViolations, ALLOWED, WAITING, SKIP_FILES } = require('../check_ai_door.cjs');
 
 function tempRepo(files) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-door-'));
@@ -287,25 +302,39 @@ test('check:ai-door names a one-provider helper used outside the door, import or
   assert.deepEqual(found, ['lib/a.js:1', 'lib/a.js:2', 'lib/b.js:2', 'lib/d.js:1', 'routes/c.js:2']);
 });
 
-test('check:ai-door fails the command on a one-provider helper in a real lib file', () => {
-  // Break test, in the real repository: the old helper, no address in sight.
-  const planted = path.join(ROOT, 'lib', '__ai_door_helper_break_test.js');
-  fs.writeFileSync(planted, "const { queryAnthropic } = require('./aiClient');\n");
+// Runs the real command against a temporary tree. Break-test files are planted
+// there, never in this repository's lib/: node --test runs test files in
+// parallel, and another repo-scanning test could list a planted file mid-run
+// (SC-847 review, 2026-11-19).
+function runCheck(root) {
   try {
-    let failed = null;
-    try {
-      execFileSync(process.execPath, [path.join(ROOT, 'scripts/check_ai_door.cjs')], { cwd: ROOT, stdio: 'pipe' });
-    } catch (err) {
-      failed = err;
-    }
-    assert.ok(failed, 'the check must fail');
-    assert.equal(failed.status, 1);
-    const said = String(failed.stderr);
-    assert.match(said, /lib\/__ai_door_helper_break_test\.js:1 {2}names the one-provider helper queryAnthropic/);
-    assert.match(said, /generate\(\)/);
-  } finally {
-    fs.unlinkSync(planted);
+    const out = execFileSync(process.execPath, [path.join(ROOT, 'scripts/check_ai_door.cjs'), '--root', root], { stdio: 'pipe' });
+    return { status: 0, stdout: String(out), stderr: '' };
+  } catch (err) {
+    return { status: err.status, stdout: String(err.stdout), stderr: String(err.stderr) };
   }
+}
+
+test('check:ai-door fails the command on a one-provider helper in a lib file', () => {
+  // Break test: the old helper, no address in sight.
+  const dir = tempRepo({ 'lib/planted.js': "const { queryAnthropic } = require('./aiClient');\n" });
+  const run = runCheck(dir);
+  assert.equal(run.status, 1, 'the check must fail');
+  assert.match(run.stderr, /lib\/planted\.js:1 {2}names the one-provider helper queryAnthropic/);
+  assert.match(run.stderr, /generate\(\)/);
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('check:ai-door passes the same tree once the planted call is gone', () => {
+  const dir = tempRepo({ 'lib/planted.js': "const aiClient = require('./aiClient');\n" });
+  assert.equal(runCheck(dir).status, 0);
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('check:ai-door says it could not read a --root that does not exist, exit 2', () => {
+  const run = runCheck(path.join(os.tmpdir(), 'ai-door-no-such-folder-' + process.pid));
+  assert.equal(run.status, 2);
+  assert.match(run.stderr, /cannot read --root/);
 });
 
 test('the passing line never claims every call goes through the door while files still wait', () => {
@@ -326,30 +355,45 @@ test('check:ai-door lets the door, the key checks and model listing through', ()
     'lib/aiKeys.js': "fetch('https://api.openai.com/v1/chat/completions');\n",
     'lib/other.js': "fetch('https://api.anthropic.com/v1/models');\nfetch('https://api.openai.com/v1/embeddings');\n",
     'lib/x.test.js': "fetch('https://api.anthropic.com/v1/messages');\n",
-    'lib/builder/generated.js': "fetch('https://api.anthropic.com/v1/messages');\n",
+    'lib/builder/template.js': "fetch('https://api.anthropic.com/v1/messages');\n",
+    'lib/builder/email-render.js': "fetch('https://api.anthropic.com/v1/messages');\n",
+    'lib/site-import/dist/run.js': "fetch('https://api.anthropic.com/v1/messages');\n",
   });
   assert.deepEqual(findViolations(dir), []);
 });
 
-test('check:ai-door fails the command, naming the file and saying to use generate()', () => {
-  // Break test, in the real repository: a hand-written call in a lib file.
-  const planted = path.join(ROOT, 'lib', '__ai_door_break_test.js');
-  fs.writeFileSync(planted, "fetch('https://api.anthropic.com/v1/messages', {});\n");
-  try {
-    let failed = null;
+test('check:ai-door reads the hand-written files in lib/builder, skipping only the generated ones', () => {
+  // SC-847 review: the whole folder was skipped, so a direct call in the
+  // committed lib/builder/document.js passed unread.
+  const dir = tempRepo({
+    'lib/builder/document.js': "fetch('https://api.anthropic.com/v1/messages');\n",
+    'lib/builder/index.js': "const { queryOpenAI } = require('../aiClient');\n",
+    'lib/builder/template.js': "fetch('https://api.anthropic.com/v1/messages');\n",
+  });
+  const found = findViolations(dir).map((f) => `${f.rel}:${f.line}`).sort();
+  assert.deepEqual(found, ['lib/builder/document.js:1', 'lib/builder/index.js:1']);
+});
+
+test('every generated file the check skips is gitignored, so nothing hand-written hides behind the list', () => {
+  for (const rel of SKIP_FILES) {
+    let ignored = true;
     try {
-      execFileSync(process.execPath, [path.join(ROOT, 'scripts/check_ai_door.cjs')], { cwd: ROOT, stdio: 'pipe' });
-    } catch (err) {
-      failed = err;
+      execFileSync('git', ['check-ignore', '-q', rel], { cwd: ROOT, stdio: 'pipe' });
+    } catch {
+      ignored = false;
     }
-    assert.ok(failed, 'the check must fail');
-    assert.equal(failed.status, 1);
-    const said = String(failed.stderr);
-    assert.match(said, /lib\/__ai_door_break_test\.js:1/);
-    assert.match(said, /generate\(\)/);
-  } finally {
-    fs.unlinkSync(planted);
+    assert.ok(ignored, `${rel} is on the skip list but is not a gitignored build artifact`);
   }
+});
+
+test('check:ai-door fails the command, naming the file and saying to use generate()', () => {
+  // Break test: a hand-written call in a lib file.
+  const dir = tempRepo({ 'lib/planted.js': "fetch('https://api.anthropic.com/v1/messages', {});\n" });
+  const run = runCheck(dir);
+  assert.equal(run.status, 1, 'the check must fail');
+  assert.match(run.stderr, /lib\/planted\.js:1/);
+  assert.match(run.stderr, /generate\(\)/);
+  fs.rmSync(dir, { recursive: true, force: true });
 });
 
 test('every exception on the list says why and still exists', () => {

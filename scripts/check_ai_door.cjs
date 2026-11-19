@@ -22,7 +22,9 @@
  * calling one by name is going round the door (SC-847 review, 2026-11-18:
  * lib/wyrTweetOcr.js called queryGemini and this check said all was well).
  *
- * Usage: node scripts/check_ai_door.cjs [--report]
+ * Usage: node scripts/check_ai_door.cjs [--report] [--root <dir>]
+ * (--root scans another tree; the tests use it so a planted break-test file
+ * never lands in the real lib/, where a parallel test could read it.)
  */
 
 const fs = require('fs');
@@ -30,8 +32,18 @@ const path = require('path');
 
 const ROOT = path.resolve(__dirname, '..');
 const SCAN_DIRS = ['lib', 'routes', 'api'];
-// Generated server bundles: built from sources that are scanned themselves.
-const SKIP_DIRS = new Set(['lib/builder', 'lib/site-import/dist']);
+// Generated server bundles: built from sources that are scanned themselves
+// (the CLAUDE.md generated-files table). Skipped BY NAME, never by folder:
+// lib/builder also holds hand-written, committed files (document.js, index.js,
+// migrate-from-legacy.js, the two stubs), and skipping the whole folder let a
+// direct provider call there pass unread (SC-847 review, 2026-11-19).
+const SKIP_DIRS = new Set(['lib/site-import/dist']);
+const SKIP_FILES = new Set([
+  'lib/builder/template.js',
+  'lib/builder/email-template.js',
+  'lib/builder/template-frame.js',
+  'lib/builder/email-render.js',
+]);
 
 // The addresses (and SDKs) that GENERATE, and therefore spend. Listing models
 // or checking a key is not here: it spends nothing and needs no door.
@@ -92,6 +104,8 @@ function walk(dir, root = ROOT, out = []) {
     const rel = path.relative(root, full).split(path.sep).join('/');
     if (entry.isDirectory()) {
       if (!SKIP_DIRS.has(rel)) walk(full, root, out);
+    } else if (SKIP_FILES.has(rel)) {
+      continue;
     } else if (/\.(?:c|m)?[jt]s$/.test(entry.name) && !/\.test\.[cm]?[jt]s$/.test(entry.name)) {
       out.push({ full, rel });
     }
@@ -123,9 +137,15 @@ function findViolations(root = ROOT) {
   return found;
 }
 
-function main() {
-  const report = process.argv.includes('--report');
-  const found = findViolations();
+function main(argv = process.argv.slice(2)) {
+  const report = argv.includes('--report');
+  const rootAt = argv.indexOf('--root');
+  const root = rootAt === -1 ? ROOT : path.resolve(argv[rootAt + 1] || '');
+  if (rootAt !== -1 && !(argv[rootAt + 1] && fs.existsSync(root))) {
+    console.error(`AI door: cannot read --root ${argv[rootAt + 1] || '(missing)'}`);
+    return 2;
+  }
+  const found = findViolations(root);
   if (!found.length) {
     console.log(WAITING.size
       ? `AI door: every AI generation call goes through generate() in lib/aiClient.js, except the ${WAITING.size} file(s) still waiting below`
@@ -157,4 +177,4 @@ provider its own way stopped at once (docs/DOCTRINE.md, "AI calls go through the
 
 if (require.main === module) process.exit(main());
 
-module.exports = { findViolations, GENERATE_PATTERNS, HELPER_PATTERNS, ALLOWED, WAITING };
+module.exports = { findViolations, main, SKIP_FILES, GENERATE_PATTERNS, HELPER_PATTERNS, ALLOWED, WAITING };
