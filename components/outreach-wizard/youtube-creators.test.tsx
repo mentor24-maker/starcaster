@@ -2,7 +2,7 @@
 import { act } from "react-dom/test-utils";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import YoutubeCreators, { CREATORS_PATH, DEFAULT_FILTERS, emptyFilterText, filterCreators, findSummaryText, subscriberText, type YoutubeCreator } from "./youtube-creators";
+import YoutubeCreators, { CREATORS_PATH, DEFAULT_FILTERS, KEYWORDS_PATH, emptyFilterText, filterCreators, findSummaryText, keywordFilterOptions, subscriberText, type YoutubeCreator } from "./youtube-creators";
 
 /**
  * Outreach wizard 15/19 (86bcrmbrf). Driven against a fake App.api that keeps
@@ -54,6 +54,7 @@ beforeEach(() => {
       const body = options.body ? JSON.parse(String(options.body)) : null;
       calls.push({ path, method, body });
       if (path === CREATORS_PATH) return { data: { creators: list, keywords: { keywords: ["consciousness"], source: "substack_miner" } } };
+      if (path === KEYWORDS_PATH && method === "PUT") return { data: { keywords: body.keywords, source: "saved" } };
       if (path.endsWith("/find")) return { data: findAnswer };
       if (path.endsWith("/suggest")) return { data: { suggested: [{}], undecided: 2, fromCanonOnly: true } };
       const m = path.match(/creators\/([^/]+)\/decide$/);
@@ -205,10 +206,10 @@ describe("YouTube creators — the table (SC-887)", () => {
     choose("Status", "all");
     const heading = host.querySelector('th[data-sort-key="subscribers"]') as HTMLElement;
     expect(heading.getAttribute("aria-sort")).toBe("none");
-    act(() => (heading.querySelector("button") as HTMLButtonElement).click());
+    act(() => heading.click());
     expect(heading.getAttribute("aria-sort")).toBe("descending");
     expect(rowNames()).toEqual(["Big Channel", "Mid Channel", "Small Channel", "Hidden Channel"]);
-    act(() => (heading.querySelector("button") as HTMLButtonElement).click());
+    act(() => heading.click());
     expect(heading.getAttribute("aria-sort")).toBe("ascending");
     expect(rowNames()).toEqual(["Small Channel", "Mid Channel", "Big Channel", "Hidden Channel"]);
   });
@@ -250,7 +251,52 @@ describe("YouTube creators — the table (SC-887)", () => {
     expect(host.querySelector('[aria-label="Approve Small Channel"]')).toBeNull(); // already decided
   });
 
+  it("a sortable heading is a plain <th> — no button or link inside — and sorts from the keyboard too", async () => {
+    act(() => root.render(<YoutubeCreators />));
+    await flush();
+    choose("Status", "all");
+    const headings = Array.from(host.querySelectorAll("thead th"));
+    for (const th of headings) expect(th.querySelector("button, a")).toBeNull();
+    const heading = host.querySelector('th[data-sort-key="subscribers"]') as HTMLElement;
+    expect(heading.tabIndex).toBe(0);
+    act(() => { heading.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })); });
+    expect(heading.getAttribute("aria-sort")).toBe("descending");
+    act(() => { heading.dispatchEvent(new KeyboardEvent("keydown", { key: " ", bubbles: true })); });
+    expect(heading.getAttribute("aria-sort")).toBe("ascending");
+  });
+
+  it("the Keyword list names each keyword once whatever its case, and a choice that leaves the list is cleared", async () => {
+    list = [
+      creator("1", { name: "Upper", keywordsHit: ["Tennis"] }),
+      creator("2", { name: "Lower", keywordsHit: ["tennis", "yoga"] }),
+    ];
+    act(() => root.render(<YoutubeCreators />));
+    await flush();
+    const options = () => Array.from((host.querySelector('select[aria-label="Keyword"]') as HTMLSelectElement).options).map((o) => o.value);
+    expect(options()).toEqual(["", "consciousness", "Tennis", "yoga"]);
+    choose("Keyword", "consciousness"); // a saved keyword no channel here matched
+    expect(rowNames()).toEqual([]);
+    // He saves new keywords and "consciousness" is no longer one of them.
+    type(host.querySelector("#yt-creators-keywords") as HTMLInputElement, "tennis");
+    await act(async () => { button("Save keywords").click(); });
+    await flush();
+    const select = host.querySelector('select[aria-label="Keyword"]') as HTMLSelectElement;
+    expect(options()).toEqual(["", "tennis", "yoga"]);
+    expect(select.value).toBe("");
+    expect(rowNames()).toEqual(["Upper", "Lower"]);
+  });
+
+  it("a decided channel's note is visible text, not only a tooltip", async () => {
+    list = [creator("1", { name: "Noted", status: "rejected", decisionReasons: ["off topic"], note: "Sells crystals." })];
+    act(() => root.render(<YoutubeCreators />));
+    await flush();
+    choose("Status", "all");
+    const cell = host.querySelector("tbody td.yt-creator-status") as HTMLElement;
+    expect(cell.textContent).toBe("Rejected — off topic. Sells crystals.");
+  });
+
   it("the pure helpers say the same as the screen", () => {
+    expect(keywordFilterOptions(["Tennis", " yoga "], [creator("9", { keywordsHit: ["tennis", "YOGA", "chess"] })])).toEqual(["Tennis", "yoga", "chess"]);
     expect(filterCreators(list, DEFAULT_FILTERS).map((c) => c.id)).toEqual(["1", "2", "3"]);
     expect(filterCreators(list, { ...DEFAULT_FILTERS, status: "all", keyword: "YOGA" }).map((c) => c.id)).toEqual(["2", "3", "4"]);
     expect(emptyFilterText({ ...DEFAULT_FILTERS, status: "rejected", search: "yoga" })).toBe("No rejected channels match 'yoga'.");

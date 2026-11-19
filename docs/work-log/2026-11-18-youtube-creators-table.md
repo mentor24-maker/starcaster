@@ -22,3 +22,14 @@ tabs can use the same ones when their tickets are built.
 The screen-width check now covers this table too. It fails if the action
 icons would slide off the right edge on a 1280-wide laptop, which is what
 the first version did before it was fixed.
+
+**After review (2026-11-19).** Review sent it back for one rule and two
+small things. Column headings no longer hide a button inside them: the
+heading itself is what you click (or Tab to and press Enter), which is how
+every other admin table is built and what the shared heading has to be
+before the other Outreach tables copy it. The Keyword list now shows
+"Tennis" and "tennis" once, since they pick the same channels, and if a
+keyword he was filtering by disappears (because he saved new keywords), the
+filter resets instead of quietly hiding rows behind a list that reads "Any".
+And the note he wrote when approving or rejecting a channel is visible text
+in the Status column again, not only a tooltip.

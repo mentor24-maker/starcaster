@@ -506,19 +506,10 @@
   margin-top: 0;
 }
 
-/* The heading's own button carries the click, so it must look like the
-   heading text, not a button: white on black, hover handled by the th. */
-.outreach-sort-btn {
-  all: unset;
-  cursor: pointer;
-  font: inherit;
-  color: inherit;
-  white-space: nowrap;
-}
-
-.outreach-sort-btn:focus-visible {
+/* A sortable heading takes keyboard focus itself (the click is on the <th>). */
+.yt-creators-table-wrap th[data-sort-key]:focus-visible {
   outline: 2px solid var(--focus-ring-color);
-  outline-offset: 2px;
+  outline-offset: -2px;
 }
 
 .yt-creator-head {

@@ -91,6 +91,25 @@ export type CreatorFilters = { search: string; keyword: string; status: StatusFi
 
 export const DEFAULT_FILTERS: CreatorFilters = { search: '', keyword: '', status: 'undecided', suggestion: '' };
 
+/**
+ * The Keyword filter's choices: the saved keywords, then any a channel
+ * matched, each once. Repeats are dropped ignoring case ("Tennis" and
+ * "tennis" filter the same rows, and the keyword store also folds case), and
+ * the first spelling seen is the one shown.
+ */
+export function keywordFilterOptions(saved: string[], creators: YoutubeCreator[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of [...saved, ...creators.flatMap((c) => c.keywordsHit)]) {
+    const k = String(raw || '').trim();
+    const folded = k.toLowerCase();
+    if (!k || seen.has(folded)) continue;
+    seen.add(folded);
+    out.push(k);
+  }
+  return out;
+}
+
 const CONFIDENCE_RANK: Record<Suggestion['confidence'], number> = { high: 3, medium: 2, low: 1 };
 
 /**
@@ -169,9 +188,10 @@ function CreatorRow({ creator, busy, onDecide, onAgree }: {
       <td className="yt-creator-suggestion" data-suggestion={s?.action || ''} title={s ? suggestionHover(s) : undefined}>
         {s ? `${ACTION_WORD[s.action]} (${s.confidence})` : <span className="outreach-wizard-muted">No suggestion yet</span>}
       </td>
-      <td className="yt-creator-status" title={creator.note || undefined}>
+      <td className="yt-creator-status">
         <span className="yt-creator-status-word">{statusWord}</span>
         {creator.decisionReasons.length ? <span className="yt-creator-status-reasons"> — {creator.decisionReasons.join(', ')}</span> : null}
+        {creator.note ? <span className="yt-creator-status-note">. {creator.note}</span> : null}
       </td>
       <td className="actions-col">
         <div className="table-actions-row">
@@ -282,7 +302,17 @@ export default function YoutubeCreators({ onChanged }: { onChanged?: () => void 
   const undecided = list.filter((c) => c.status === 'candidate');
   const decided = list.filter((c) => c.status !== 'candidate');
   const finding = busy === 'find' || busy === 'suggest';
-  const keywordOptions = Array.from(new Set([...(keywords?.keywords || []), ...list.flatMap((c) => c.keywordsHit)]));
+  const keywordOptions = keywordFilterOptions(keywords?.keywords || [], list);
+  // A keyword filter whose choice has left the list (he saved new keywords,
+  // say) would show "Any" while still hiding rows, so it is cleared; one
+  // that is still there under another spelling takes the listed spelling so
+  // the select shows it.
+  const keywordChoice = filters.keyword
+    ? keywordOptions.find((k) => k.toLowerCase() === filters.keyword.toLowerCase()) ?? ''
+    : '';
+  useEffect(() => {
+    if (filters.keyword && keywordChoice !== filters.keyword) setFilters((f) => ({ ...f, keyword: keywordChoice }));
+  }, [filters.keyword, keywordChoice]);
   const rows = sortRows(filterCreators(list, filters), sort, creatorSortValue);
 
   return (

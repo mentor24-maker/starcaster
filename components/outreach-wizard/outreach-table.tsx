@@ -56,7 +56,7 @@ export function nextSort<K extends string>(current: SortState<K>, key: K, firstD
   return { key, dir: firstDir };
 }
 
-/** A <th> that sorts its column on click and says so to a screen reader. */
+/** A <th> that sorts its column on click (or Enter/Space) and says so to a screen reader. */
 export function SortHeader<K extends string>({ label, sortKey, sort, onSort, firstDir = 'asc', className }: {
   label: string;
   sortKey: K;
@@ -67,12 +67,27 @@ export function SortHeader<K extends string>({ label, sortKey, sort, onSort, fir
 }): React.ReactElement {
   const active = sort?.key === sortKey;
   const ariaSort = active ? (sort!.dir === 'asc' ? 'ascending' : 'descending') : 'none';
+  const toggle = () => onSort(nextSort(sort, sortKey, firstDir));
+  // The click lives on the <th> itself: src/css/CLAUDE.md (Tables) forbids a
+  // <button> or <a> inside a heading cell. tabIndex + Enter/Space keep it
+  // reachable from the keyboard, the same way builder-gallery-modal.tsx does.
   return (
-    <th scope="col" aria-sort={ariaSort} className={className} data-sort-key={sortKey}>
-      <button type="button" className="outreach-sort-btn" onClick={() => onSort(nextSort(sort, sortKey, firstDir))}>
-        {label}
-        <span className="outreach-sort-mark" aria-hidden="true">{active ? (sort!.dir === 'asc' ? ' ▲' : ' ▼') : ''}</span>
-      </button>
+    <th
+      scope="col"
+      aria-sort={ariaSort}
+      className={className}
+      data-sort-key={sortKey}
+      tabIndex={0}
+      onClick={toggle}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          toggle();
+        }
+      }}
+    >
+      {label}
+      <span className="outreach-sort-mark" aria-hidden="true">{active ? (sort!.dir === 'asc' ? ' ▲' : ' ▼') : ''}</span>
     </th>
   );
 }
