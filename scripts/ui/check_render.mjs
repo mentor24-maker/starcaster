@@ -568,6 +568,9 @@ function sample(page, selector, read, settleMs, series, probes, dispatch) {
             ...(series.luma ? { luma: readCanvasLuma(node) } : {}),
             ...(series.shape ? { shape: readCanvasShape(node) } : {}),
             top: box.top,
+            // `left` so two fixed elements can be tested for overlap (Back to
+            // top beside a floating Bug Report button, SC-864).
+            left: box.left,
             height: box.height,
             width: box.width,
           };

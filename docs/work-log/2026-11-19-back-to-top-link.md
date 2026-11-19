@@ -17,10 +17,19 @@ glides back to the top. A screen reader announces it as "Back to top".
 background and theme, so it needed no database change. The save paths that
 rewrite a page's layout without naming it (module saves, shared-section
 pushes) keep whatever the page already had, and with the setting off the
-stored page is byte-for-byte what it was before.
+stored page is byte-for-byte what it was before. Copying a page copies the
+setting too. Restoring an older version from Page History leaves it as it is
+now: a restore undoes a layout change, not the page's settings.
 
-**How it is checked:** two new browser checks (`npm run check:render`): one
+**Sharing the corner with Bug Report:** both buttons live in the bottom-right
+corner by default. When a site also shows the floating Bug Report button
+there, Back to top moves up to sit just above it, so neither covers the other.
+The arrow is dark on a pale accent colour and white on a dark one, so it can
+always be seen.
+
+**How it is checked:** three new browser checks (`npm run check:render`): one
 proves the button is hidden at the top, appears after scrolling, and returns
-the page to the top when pressed; the other proves a page with it off has no
-button in its markup at all. Unit tests cover every save step the setting has
+the page to the top when pressed; one proves a page with it off has no
+button in its markup at all; and one turns on Bug Report in the same corner
+and measures that the two buttons do not overlap. Unit tests cover every save step the setting has
 to survive.

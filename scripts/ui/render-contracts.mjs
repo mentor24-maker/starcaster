@@ -1487,6 +1487,54 @@ export const RENDER_CONTRACTS = [
     },
   },
   {
+    id: 'back-to-top-clears-a-bug-report-button-in-the-same-corner',
+    why:
+      'Back to top and the floating Bug Report button both default to the bottom-right corner, and ' +
+      'review of PR #1067 found the new button sitting on top of Bug Report and taking its clicks ' +
+      '(SC-864). This turns both on, scrolls 3000px down so Back to top shows, and measures the two ' +
+      'boxes: they must not overlap, and Back to top must be the one above.',
+    section: {
+      layout: 'single',
+      spacers: 4,
+      pageOptions: { backToTop: true },
+      modules: [{ type: 'text', text: '<p>A long page with a Bug Report button.</p>' }],
+    },
+    emulate: { liveSite: true, reducedMotion: 'reduce' },
+    siteWideBugReport: {
+      moduleId: 'site-wide-module',
+      pageId: '1',
+      pageSlug: '',
+      pageName: 'Home',
+      settings: { iconBlock: 'true', blockColor: '#c0392b', iconColor: '#ffffff', iconSize: '50', corner: 'bottom-right', showOn: 'site' },
+    },
+    selector: 'a.site-back-to-top',
+    read: ['visibility'],
+    series: {
+      count: 3,
+      everyMs: 300,
+      scrollTo: [3000, 3000, 3000],
+      read: ['visibility'],
+      selectors: { top: 'a.site-back-to-top', bug: '.builder-bug-report-trigger.is-floating' },
+    },
+    expect(sample) {
+      if (!sample.found) return 'no Back to top button rendered on a page that turned it on.';
+      const last = (sample.series || []).at(-1);
+      if (!last?.top) return 'the Back to top button was not found after scrolling, so the overlap could not be measured.';
+      if (!last.bug) return 'no floating Bug Report button rendered, so this check measured nothing — the site-wide module did not reach the page.';
+      if (last.top.visibility !== 'visible') return `${last.scrollY}px down Back to top is visibility: ${last.top.visibility}; it never appeared, so the overlap was not tested.`;
+      const a = last.top;
+      const b = last.bug;
+      const overlapX = a.left < b.left + b.width && b.left < a.left + a.width;
+      const overlapY = a.top < b.top + b.height && b.top < a.top + a.height;
+      if (overlapX && overlapY) {
+        return `Back to top (top ${a.top}, left ${a.left}, ${a.width}×${a.height}) overlaps the Bug Report button ` +
+          `(top ${b.top}, left ${b.left}, ${b.width}×${b.height}) — one covers the other and takes its clicks.`;
+      }
+      if (!(a.top + a.height <= b.top)) return `Back to top (top ${a.top}) is not above the Bug Report button (top ${b.top}).`;
+      return null;
+    },
+  },
+  {
     id: 'back-to-top-off-renders-nothing',
     why:
       'Back to top is off by default, and off must change NOTHING on an existing page — no hidden ' +

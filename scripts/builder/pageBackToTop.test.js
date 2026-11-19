@@ -73,3 +73,74 @@ test('a legacy-shaped save (rowSettings on sections) still carries the switch', 
   assert.deepEqual(doc.pageOptions, { backToTop: true });
   assert.deepEqual(normalizeBuilderDocument(doc).pageOptions, { backToTop: true });
 });
+
+// ---------------------------------------------------------------------------
+// A save naming ONLY the switch (review of PR #1067, note 3). These drive the
+// real updatePage against a stubbed database, so removing the carry's call
+// site fails here even if the helpers above stay correct.
+// ---------------------------------------------------------------------------
+
+const path = require('node:path');
+const LIB = path.join(__dirname, '..', '..', 'lib');
+
+function loadPagesStoreWithStubs({ storedRow, readFails = false }) {
+  for (const mod of ['supabase.js', 'projectScope.js', 'builderPageRevisionsStore.js', 'builderPagesStore.js']) {
+    delete require.cache[require.resolve(path.join(LIB, mod))];
+  }
+  const supa = require(path.join(LIB, 'supabase.js'));
+  const scope = require(path.join(LIB, 'projectScope.js'));
+  const calls = { patchBody: null, inserts: 0 };
+  supa.sbQuery = async (opts) => {
+    // Only the PAGE write counts: a save also syncs a content item afterwards.
+    if (opts.method === 'PATCH' && opts.table === 'builder_landing_pages') {
+      calls.patchBody = opts.body;
+      return { ok: true, status: 200, data: [{ ...storedRow, ...opts.body }] };
+    }
+    if (opts.method === 'POST' && opts.table === 'builder_page_revisions') {
+      calls.inserts += 1;
+      return { ok: true, status: 201, data: [] };
+    }
+    if (readFails) return { ok: false, status: 503, error: 'database unavailable' };
+    return { ok: true, status: 200, data: [{ ...storedRow }] };
+  };
+  supa.tableConfig = () => ({ builderPages: 'builder_landing_pages', builderPageRevisions: 'builder_page_revisions' });
+  scope.scopedPatchRow = async (_table, row) => row;
+  scope.scopedIdQuery = async (_table, query) => query;
+  scope.scopedListQuery = async (_table, query) => query;
+  scope.scopedInsertRow = async (_table, row) => row;
+  const store = require(path.join(LIB, 'builderPagesStore.js'));
+  return { store, calls };
+}
+
+const STORED_SECTIONS = [
+  { id: 'section_a', layout: 'single', modules: [{ id: 'm1', type: 'text', settings: { text: '<p>Keep me</p>' } }] },
+];
+
+function storedPageRow() {
+  return {
+    id: 7,
+    name: 'Long page',
+    slug: 'long-page',
+    template_kind: 'modular',
+    layout_sections: serializeBuilderDocument({ layoutSections: STORED_SECTIONS }),
+    updated_at: '2026-11-19T00:00:00Z',
+  };
+}
+
+test('PATCH { pageOptions } alone writes the switch AND keeps the sections', async () => {
+  const { store, calls } = loadPagesStoreWithStubs({ storedRow: storedPageRow() });
+  const res = await store.updatePage(7, { pageOptions: { backToTop: true } });
+  assert.equal(res.ok, true, res.error);
+  assert.ok(calls.patchBody && calls.patchBody.layout_sections, 'the layout column was not written at all');
+  assert.deepEqual(calls.patchBody.layout_sections.pageOptions, { backToTop: true });
+  assert.equal(calls.patchBody.layout_sections.sections.length, 1, 'the sections were not carried forward');
+  assert.equal(calls.patchBody.layout_sections.sections[0].id, 'section_a');
+  assert.equal(calls.inserts, 0, 'a switch-only save banked a revision although the layout did not change');
+});
+
+test('a switch-only save refuses, rather than writing an empty page, when the page cannot be read', async () => {
+  const { store, calls } = loadPagesStoreWithStubs({ storedRow: storedPageRow(), readFails: true });
+  const res = await store.updatePage(7, { pageOptions: { backToTop: true } });
+  assert.equal(res.ok, false);
+  assert.equal(calls.patchBody, null, 'it wrote to the page anyway');
+});

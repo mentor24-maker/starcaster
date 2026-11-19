@@ -4695,8 +4695,14 @@ export function rowToBuilderPage(row: Record<string, unknown>): BuilderPageRecor
 /**
  * Page-level switches that are not a background, a theme or a section — stored
  * in the layout document beside those three (task SC-864), so they need no
- * database column and travel with every save, revision and published snapshot
- * that already carries the document.
+ * database column and travel with every save and published snapshot that
+ * already carries the document.
+ *
+ * NOT with a revision: Page History banks sections, background and theme in
+ * columns of their own, so restoring an older version (or undoing a shared-
+ * section push) keeps the page's CURRENT switches. That is deliberate — a
+ * restore undoes a layout mistake, the way it leaves the slug and visibility
+ * alone — and a restore never turns Back to top on or off.
  *
  * Every switch is OFF by default, and a document whose switches are all off
  * carries no `pageOptions` key at all — so every page saved before this

@@ -2527,6 +2527,9 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage, 
         // the server dropped still reads as set until a reload -- which is how
         // the create path lost pageTemplateId for as long as it did.
         setPageTemplateId(data.page.pageTemplateId ?? "");
+        // And the Back to top switch (SC-864): Page Details shows what the
+        // server KEPT, so a dropped write reads as off at once, not after a reload.
+        setPageBackToTop(data.page.pageOptions?.backToTop === true);
         // Move our idea of "the version I am editing" forward, or the next save
         // in this session collides with the one we just made.
         loadedUpdatedAtRef.current = data.page.updatedAt ?? "";

@@ -3,7 +3,7 @@ import { act } from "react-dom/test-utils";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { normalizeBuilderDocument, normalizePageOptions, serializeBuilderDocument } from "@/lib/builder-template";
-import { SiteBackToTop, backToTopShouldShow } from "./site-back-to-top";
+import { SiteBackToTop, backToTopInk, backToTopLiftBottom, backToTopShouldShow } from "./site-back-to-top";
 
 /**
  * The page-level "Back to top" button (task SC-864). Where it appears on a
@@ -94,5 +94,38 @@ describe("pageOptions in the layout document", () => {
     const off = serializeBuilderDocument({ layoutSections: [] });
     expect("pageOptions" in off).toBe(false);
     expect("pageOptions" in normalizeBuilderDocument(off)).toBe(false);
+  });
+});
+
+describe("backToTopLiftBottom (sharing the corner with Bug Report)", () => {
+  it("needs no lift when no Bug Report button floats bottom-right", () => {
+    expect(backToTopLiftBottom(null, 800)).toBeNull();
+  });
+
+  it("sits 12px above a Bug Report button in the corner", () => {
+    // An 50px trigger 18px off the bottom of an 800px window: its top is 732.
+    expect(backToTopLiftBottom(732, 800)).toBe(80);
+  });
+
+  it("ignores a reading it cannot use", () => {
+    expect(backToTopLiftBottom(Number.NaN, 800)).toBeNull();
+  });
+});
+
+describe("backToTopInk (the arrow stays visible on any accent)", () => {
+  it("uses a dark arrow on a pale accent", () => {
+    expect(backToTopInk("#ffe066")).toBe("#111111");
+    expect(backToTopInk("#fff")).toBe("#111111");
+    expect(backToTopInk("rgb(240, 240, 200)")).toBe("#111111");
+  });
+
+  it("uses a white arrow on a dark accent", () => {
+    expect(backToTopInk("#18324a")).toBe("#ffffff");
+    expect(backToTopInk("rgba(10, 20, 30, 0.9)")).toBe("#ffffff");
+  });
+
+  it("leaves the default alone for a colour it cannot read", () => {
+    expect(backToTopInk("var(--brand)")).toBeNull();
+    expect(backToTopInk("")).toBeNull();
   });
 });

@@ -362,7 +362,10 @@ export function BuilderPreviewPage() {
     </BuilderViewportShellLayout>
     <SiteBackToTop
       enabled={draft.pageOptions?.backToTop === true}
-      accentColor={(themePalette ?? draft.themePalette)?.accentColor}
+      // Same fallback order as the live page: the palette's accent, then the
+      // theme's own (the live page reads it off themeShell, which carries the
+      // theme's styles), so preview and live draw the same colour.
+      accentColor={(themePalette ?? draft.themePalette)?.accentColor || (themeStyles ?? draft.themeStyles)?.accentColor}
     />
     </>
   ) : null;
