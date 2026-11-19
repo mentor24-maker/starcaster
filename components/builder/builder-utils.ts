@@ -927,7 +927,10 @@ export function buildClonedPageCreatePayload(source: BuilderPageRecord, existing
     themeId: source.themeId ?? undefined,
     pageBackground: { ...source.pageBackground },
     theme: source.theme ? JSON.parse(JSON.stringify(source.theme)) : undefined,
-    layoutSections: cloneBuilderLayoutSections(source.layoutSections)
+    layoutSections: cloneBuilderLayoutSections(source.layoutSections),
+    // Page-level switches (Back to top, SC-864) are part of the page, so the
+    // copy keeps them; leaving them out turned them off on every clone.
+    ...(source.pageOptions ? { pageOptions: { ...source.pageOptions } } : {})
   };
 }
 
