@@ -92,7 +92,7 @@ export function SortHeader<K extends string>({ label, sortKey, sort, onSort, fir
   );
 }
 
-export type RowIconGlyph = 'approve' | 'reject' | 'agree' | 'write' | 'skip' | 'contact' | 'open' | 'comment';
+export type RowIconGlyph = 'approve' | 'reject' | 'agree' | 'write' | 'skip' | 'contact' | 'open' | 'comment' | 'unwatch';
 
 const GLYPHS: Record<RowIconGlyph, React.ReactElement> = {
   approve: <polyline points="4 12 10 18 20 6" />,
@@ -103,6 +103,8 @@ const GLYPHS: Record<RowIconGlyph, React.ReactElement> = {
   contact: <><circle cx="9" cy="8" r="3.5" /><path d="M3 20c0-3.5 2.7-6 6-6s6 2.5 6 6" /><line x1="19" y1="8" x2="19" y2="14" /><line x1="16" y1="11" x2="22" y2="11" /></>,
   open: <><path d="M14 4h6v6" /><line x1="20" y1="4" x2="11" y2="13" /><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" /></>,
   comment: <path d="M4 5h16v11H9l-5 4z" />,
+  // An eye struck through: stop watching something already approved (Reddit's subreddits, SC-890).
+  unwatch: <><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" /><circle cx="12" cy="12" r="3" /><line x1="4" y1="4" x2="20" y2="20" /></>,
 };
 
 function Glyph({ glyph }: { glyph: RowIconGlyph }): React.ReactElement {

@@ -47,6 +47,7 @@ const youtubeOutreachStore = require(path.join(ROOT, 'lib/youtubeOutreachStore.j
 const substackNotesStore = require(path.join(ROOT, 'lib/substackNotesStore.js'));
 const substackMinerStore = require(path.join(ROOT, 'lib/substackMinerStore.js'));
 const youtubeCreatorsStore = require(path.join(ROOT, 'lib/youtubeCreatorsStore.js'));
+const redditWatchStore = require(path.join(ROOT, 'lib/redditWatchStore.js'));
 const assetsStore = require(path.join(ROOT, 'lib/assetsStore.js'));
 const substackContactCapture = require(path.join(ROOT, 'lib/acquire/SubstackContactCapture.js'));
 const youtubeOutreachCommentsStore = require(path.join(ROOT, 'lib/youtubeOutreachCommentsStore.js'));
@@ -2238,6 +2239,25 @@ async function seedYoutubeCreators(scope) {
   const seen = new Set(listed.map((c) => c.channelId));
   const missing = channels.filter((c) => !seen.has(c.channelId)).length;
   if (missing) throw new Error(`${missing} YouTube creator(s) were written but do not read back in this project`);
+  // Comments on the approved channel's videos, for Find conversations
+  // (SC-888), so its table has rows to measure at 1280/1440/1920: a long
+  // comment (cut between words, full text on hover), an unbroken run with no
+  // space in it, a long video title, and a video with no comments (its row
+  // keeps Comment on the video reachable). Dated hours ago on EVERY run,
+  // because the list drops a comment older than 14 days.
+  const approved = listed.find((c) => c.channelId === id(4));
+  if (approved) {
+    const ago = (h) => new Date(Date.now() - h * 3600 * 1000).toISOString();
+    const author = (n, name) => ({ authorName: name, authorChannelUrl: `https://www.youtube.com/channel/UCfixtureAuthor${n}`, authorChannelId: `UCfixtureAuthor${n}` });
+    must(await youtubeCreatorsStore.recordCommentsRead(approved.id, { videos: [
+      { videoId: 'fixtureCnv1', title: `${LONG}: what junior players ask about their first tournament, answered #JuniorTennisTournamentPrep`, publishedAt: ago(30), comments: [
+        { commentId: 'UgxFixture1', text: `Where does a nervous twelve-year-old put their attention between points? ${'My daughter freezes every time she loses a long rally and I never know what to tell her afterwards. '.repeat(3)}`, likes: 41, replies: 0, publishedAt: ago(5), ...author(1, `${LONG} Parent`) },
+        { commentId: 'UgxFixture2', text: '#consciousness/nonduality/awakening/self-inquiry/presence-in-sport-and-everyday-life', likes: 2, replies: 1, publishedAt: ago(9), ...author(2, 'Unbroken/Text/Viewer') },
+        { commentId: 'UgxFixture3', text: 'Great drills, thank you.', likes: 7, replies: 0, publishedAt: ago(20), ...author(3, 'Short Comment') },
+      ] },
+      { videoId: 'fixtureCnv2', title: 'Serve practice', publishedAt: ago(50), comments: [] },
+    ] }, scope), 'save YouTube conversations');
+  }
   return { total: channels.length };
 }
 
@@ -2246,6 +2266,42 @@ try {
   creatorsSeeded = await seedYoutubeCreators({ projectId: project.id, userId });
 } catch (err) {
   console.error(`  failed to seed YouTube creators: ${err.message}`);
+}
+
+/**
+ * Subreddits for Engage › Outreach › Reddit › Find creators (SC-890), so its
+ * table has rows to measure at 1280/1440/1920: the longest name a subreddit
+ * can have (21 characters), a long reason and a long self-promotion rule
+ * (both cut at three lines), one watched with a good read, one whose read
+ * failed, one signed out, and one rejected. Idempotent by name — the store
+ * keeps a subreddit already on the list, decision included.
+ */
+async function seedRedditSubreddits(scope) {
+  const rows = [
+    { name: 'abcdefghijklmnopqrstu', why: `${LONG} — generalists and polymaths compare notes on learning many fields at once, and long-form self-posts do well here.` },
+    { name: 'polymath', why: 'Generalists talk here.', decide: 'approved',
+      read: { state: 'read', seen: 25, kept: 4, promotionRule: 'No self-promotion outside the weekly Share Your Work thread; links to your own blog, newsletter or channel are removed and repeat posters are banned without warning.' } },
+    { name: 'philosophy', why: 'Long discussions about consciousness.', decide: 'approved', read: { state: 'failed', error: 'Reddit answered 429 Too Many Requests; the Mini tries again on its next pass.' } },
+    { name: 'nonduality', why: 'Exactly the topic.', decide: 'approved', read: { state: 'signed_out' } },
+    { name: 'getrichquick', why: 'Mostly spam.', decide: 'rejected' },
+  ];
+  must(await redditWatchStore.addSubreddits(rows.map(({ name, why }) => ({ name, why })), scope, { suggestedBy: 'ai' }), 'add subreddits');
+  const listed = must(await redditWatchStore.listSubreddits(1000, scope), 'list subreddits');
+  const byName = new Map(listed.map((r) => [r.name, r]));
+  for (const r of rows) {
+    const saved = byName.get(r.name);
+    if (!saved) throw new Error(`r/${r.name} was written but does not read back in this project`);
+    if (r.decide && saved.status === 'candidate') must(await redditWatchStore.decideSubreddit(saved.id, r.decide, scope), `decide r/${r.name}`);
+    if (r.read && !saved.lastReadState) must(await redditWatchStore.recordRead(saved.id, r.read, scope), `record a read of r/${r.name}`);
+  }
+  return { total: rows.length };
+}
+
+let subredditsSeeded = null;
+try {
+  subredditsSeeded = await seedRedditSubreddits({ projectId: project.id, userId });
+} catch (err) {
+  console.error(`  failed to seed Reddit subreddits: ${err.message}`);
 }
 
 let minerSeeded = null;
@@ -2297,5 +2353,10 @@ console.log(
   creatorsSeeded
     ? `YouTube creators seeded — ${creatorsSeeded.total} channel(s): undecided with each kind of suggestion, one approved, two rejected, one with no space to break at.`
     : 'WARNING: YouTube creators were NOT seeded; Engage › Outreach › Find creators will be empty and check:screens proves nothing there.'
+);
+console.log(
+  subredditsSeeded
+    ? `Reddit subreddits seeded — ${subredditsSeeded.total}: one suggested with the longest name, three watched (read, failed, signed out), one rejected.`
+    : 'WARNING: Reddit subreddits were NOT seeded; Engage › Outreach › Reddit › Find creators will be empty and check:screens proves nothing there.'
 );
 console.log(`export UI_HARNESS_PROJECT_ID=${project.id}`);

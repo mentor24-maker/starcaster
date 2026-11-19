@@ -128,11 +128,35 @@ const SCREENS = [
   {
     id: 'engageOutreachPage',
     label: 'Engage: Outreach, YouTube Find creators table',
+    // The Outreach screen remembers the last channel tab, so each entry picks its own.
+    tab: { pick: '.outreach-wizard-tabs [role="tab"]:has-text("YouTube")' },
     open: '[data-channel="youtube"] [data-stage="creators"] .outreach-wizard-stage-toggle',
     ready: '[data-channel="youtube"] .yt-creators-table tbody tr',
     // Approve / Reject live in the last column; at 1280 they were first off
     // the right edge, behind a sideways scroll in the table's own box.
     inReach: ['.yt-creators-table thead th.actions-col', '.yt-creators-table tbody td.actions-col'],
+    inReachFrom: 1280,
+  },
+  {
+    id: 'engageOutreachPage',
+    label: 'Engage: Outreach, Reddit subreddits table',
+    tab: { pick: '.outreach-wizard-tabs [role="tab"]:has-text("Reddit")', back: '.outreach-wizard-tabs [role="tab"]:has-text("YouTube")' },
+    open: '[data-channel="reddit"] [data-stage="creators"] .outreach-wizard-stage-toggle',
+    ready: '[data-channel="reddit"] .reddit-subs-table tbody tr',
+    shot: 'reddit-subreddits',
+    // SC-890: the row icons are the last column, the first thing a too-wide
+    // table pushes out of the card.
+    inReach: ['.reddit-subs-table thead th.actions-col', '.reddit-subs-table tbody td.actions-col'],
+    inReachFrom: 1280,
+  },
+  {
+    id: 'engageOutreachPage',
+    label: 'Engage: Outreach, YouTube Find conversations table',
+    shot: 'yt-conversations',
+    open: '[data-channel="youtube"] [data-stage="conversations"] .outreach-wizard-stage-toggle',
+    ready: '[data-channel="youtube"] .yt-conversations-table tbody tr',
+    // Write replies / Skip / Save as contact / Open are the last column (SC-888).
+    inReach: ['.yt-conversations-table thead th.actions-col', '.yt-conversations-table tbody td.actions-col'],
     inReachFrom: 1280,
   },
   {
