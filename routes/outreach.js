@@ -67,6 +67,9 @@
  *   POST /api/outreach/youtube/conversations/skip     { commentId, reasons, note }
  *   POST /api/outreach/youtube/conversations/contact  { commentId } — save the
  *                                                commenter as a contact
+ *   POST /api/outreach/youtube/conversations/read-now  Read now: read THIS project's
+ *                                                approved channels straight away, with
+ *                                                the scheduled read's own code (SC-880)
  *   GET  /api/outreach/youtube/conversations/read-due  Vercel Cron only, every 3
  *                                                hours: read every project's approved
  *                                                channels' comments
@@ -266,6 +269,26 @@ async function handleYoutubeConversations(req, res, pathname, method, yt) {
   if (pathname === base) {
     if (method !== 'GET') return sendErr(res, 405, 'Method not allowed'), true;
     return reply(res, await yt.finder().listYoutubeConversations(scope)), true;
+  }
+  // Read now (SC-880): the scheduled read, for the session's own project only.
+  // The scope comes from the session, never the body, so it cannot name another
+  // project; it spends YouTube quota, so a quick repeat is refused politely.
+  if (pathname === `${base}/read-now`) {
+    if (method !== 'POST') return sendErr(res, 405, 'Method not allowed'), true;
+    if (!scope.projectId) {
+      return sendErr(res, 400, 'No project is selected, so there are no approved channels to read. Pick a project in the project menu.', { code: 'VALIDATION_ERROR' }), true;
+    }
+    if (checkEndpointLimit(req, res, 'outreach.youtubeConversations.readNow')) return true;
+    const due = yt.readDue();
+    const result = await due.readProjectComments(scope);
+    if (result.ok) {
+      for (const line of due.formatCommentsReadLog(result.data)) {
+        const tagged = line.replace('read-due', 'read-now');
+        if (/ (FAILED|NOT REACHED|QUOTA) /.test(tagged)) console.error(tagged);
+        else console.log(tagged);
+      }
+    }
+    return reply(res, result), true;
   }
   const verb = pathname.match(/^\/api\/outreach\/youtube\/conversations\/(reply|video|skip|contact)$/);
   if (!verb) return sendErr(res, 404, 'Unknown outreach endpoint', { code: 'NOT_FOUND' }), true;

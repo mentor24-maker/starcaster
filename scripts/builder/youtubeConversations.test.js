@@ -361,3 +361,110 @@ test('the read runs only on the schedule, which is every three hours', async () 
   assert.match(cron.schedule, /^\d+ \*\/3 \* \* \*$/);
   assert.match(fs.readFileSync(path.join(root, 'routes', 'index.js'), 'utf8'), /'\/api\/outreach\/youtube\/conversations\/read-due'/, 'and routes/index.js lets the cron in');
 });
+
+// ── Read now (SC-880) ───────────────────────────────────────────────────────
+
+test('Read now reads only the scoped project, with the scheduled read\'s own code', async () => {
+  const listedFor = [];
+  const store = readStore([
+    { id: 'mine', name: 'Mine', channelId: CH_A, lastCommentsReadAt: null },
+  ]);
+  const list = store.listCreators;
+  store.listCreators = async (limit, sc, options) => { listedFor.push(sc.projectId); return list(limit, sc, options); };
+  const res = await due.readProjectComments(scope, {
+    store, apiKey: 'k', now: () => NOW,
+    ytFetch: async (endpoint) => (endpoint === 'playlistItems'
+      ? ok({ items: [upload(V1, ago(DAY))] })
+      : ok({ items: [thread('c1'), thread('c2'), thread('c3')] })),
+  });
+  assert.equal(res.ok, true);
+  assert.deepEqual(listedFor, ['p1'], 'only the session\'s project is listed — nothing is discovered');
+  assert.deepEqual(store.recorded.map((r) => [r.id, r.projectId]), [['mine', 'p1']]);
+  assert.deepEqual({ projects: res.data.projects, channels: res.data.channels, read: res.data.read, comments: res.data.comments },
+    { projects: 1, channels: 1, read: 1, comments: 3 });
+});
+
+test('Read now refuses with no project, with no key, and while a read of the project is running', async () => {
+  const none = await due.readProjectComments({ projectId: '', userId: 'u1' }, { apiKey: 'k', store: readStore([]) });
+  assert.equal(none.status, 400);
+  const noKey = await due.readProjectComments(scope, { apiKey: '', store: readStore([]) });
+  assert.equal(noKey.status, 503);
+
+  let release;
+  const gate = new Promise((r) => { release = r; });
+  const store = readStore([{ id: 'slow', name: 'Slow', channelId: CH_A, lastCommentsReadAt: null }]);
+  const ytFetch = async () => { await gate; return ok({ items: [] }); };
+  const first = due.readProjectComments(scope, { store, apiKey: 'k', now: () => NOW, ytFetch });
+  const second = await due.readProjectComments(scope, { store, apiKey: 'k', now: () => NOW, ytFetch });
+  assert.equal(second.status, 409, 'a second press while the first runs is refused');
+  assert.match(second.error, /already running/);
+  release();
+  assert.equal((await first).ok, true);
+  const third = await due.readProjectComments(scope, { store, apiKey: 'k', now: () => NOW, ytFetch: async () => ok({ items: [] }) });
+  assert.equal(third.ok, true, 'once it finishes, the next press reads again');
+});
+
+test('the read-now route uses the session\'s project, never one named in the body, and refuses without one', async () => {
+  const seen = [];
+  const yt = {
+    readDue: () => ({
+      readProjectComments: async (sc) => { seen.push(sc); return ok({ projects: 1, channels: 0, read: 0, comments: 0, failed: [], notReached: [], quota: null }); },
+      formatCommentsReadLog: () => [],
+    }),
+    finder: () => ({}),
+  };
+  const req = (projectId, body) => ({
+    method: 'POST', headers: { 'x-forwarded-for': `10.0.0.${seen.length + 1}` }, socket: { remoteAddress: '127.0.0.1' },
+    projectContext: { project: { id: projectId } }, authUser: { id: 'u1' },
+    on(ev, fn) { if (ev === 'data') fn(Buffer.from(JSON.stringify(body))); if (ev === 'end') fn(); return this; },
+  });
+  const noProject = fakeRes();
+  await route.handle(req('', {}), noProject, '/api/outreach/youtube/conversations/read-now', 'POST', { youtubeConversations: yt });
+  assert.equal(noProject.statusCode, 400);
+  assert.equal(seen.length, 0, 'nothing is read without a project');
+
+  const res = fakeRes();
+  await route.handle(req('p1', { projectId: 'p2' }), res, '/api/outreach/youtube/conversations/read-now', 'POST', { youtubeConversations: yt });
+  assert.equal(res.statusCode, 200);
+  assert.deepEqual(seen, [{ projectId: 'p1', userId: 'u1' }]);
+
+  const wrongVerb = fakeRes();
+  await route.handle(req('p1', {}), wrongVerb, '/api/outreach/youtube/conversations/read-now', 'GET', { youtubeConversations: yt });
+  assert.equal(wrongVerb.statusCode, 405);
+});
+
+test('just-approved, never-read channels are a calm wait naming the next read in Mountain time', () => {
+  // 20:30 UTC = 1:30pm Mountain, the time Dane hit this; the next run is 21:23 UTC = 2:23pm.
+  const at = Date.parse('2026-11-18T20:30:00Z');
+  const fresh = (name) => ({ name, channelId: CH_A, lastCommentsReadAt: null, commentsReadError: '', updatedAt: new Date(at - 10 * 60 * 1000).toISOString() });
+  const v = finder.readingVerdict([fresh('A'), fresh('B'), { name: 'C', lastCommentsReadAt: new Date(at - HOUR).toISOString() }], at);
+  assert.equal(v.state, 'not_read_yet');
+  assert.equal(v.sentence, '2 approved channels have not been read yet (A and B). The next scheduled read is at 2:23pm, or press Read now.');
+  assert.doesNotMatch(v.sentence, /Cannot tell|refused|not running/);
+});
+
+test('the fault wording stays for a failed read, a read over 12 hours old, and an approval over 12 hours old never read', () => {
+  const at = Date.parse('2026-11-18T20:30:00Z');
+  const freshUnread = { name: 'Fresh', lastCommentsReadAt: null, updatedAt: new Date(at - HOUR).toISOString() };
+  const cases = [
+    [{ name: 'Refused', lastCommentsReadAt: null, commentsReadError: 'YouTube said no.', updatedAt: new Date(at - HOUR).toISOString() }, /Refused did not come back/],
+    [{ name: 'Old', lastCommentsReadAt: new Date(at - 13 * HOUR).toISOString() }, /not been read for over 12 hours \(Old\)/],
+    [{ name: 'Forgotten', lastCommentsReadAt: null, updatedAt: new Date(at - 13 * HOUR).toISOString() }, /not been read yet \(Forgotten/],
+    [{ name: 'Unknown', lastCommentsReadAt: null }, /not been read yet \(Unknown/],
+  ];
+  for (const [creator, named] of cases) {
+    const v = finder.readingVerdict([creator, freshUnread], at);
+    assert.equal(v.state, 'cannot_tell', `${creator.name} keeps the fault wording`);
+    assert.match(v.sentence, named);
+    assert.match(v.sentence, /YouTube refused it or the schedule is not running/);
+  }
+});
+
+test('the next-read time follows the schedule vercel.json actually runs', () => {
+  const vercel = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'vercel.json'), 'utf8'));
+  const cron = vercel.crons.find((c) => c.path === '/api/outreach/youtube/conversations/read-due');
+  assert.equal(cron.schedule, `${finder.READ_SCHEDULE.minute} */${finder.READ_SCHEDULE.everyHours} * * *`);
+  assert.equal(new Date(finder.nextScheduledRead(Date.parse('2026-11-18T20:30:00Z'))).toISOString(), '2026-11-18T21:23:00.000Z');
+  assert.equal(new Date(finder.nextScheduledRead(Date.parse('2026-11-18T21:23:00Z'))).toISOString(), '2026-11-19T00:23:00.000Z', 'a run exactly now is not the next one');
+  assert.equal(new Date(finder.nextScheduledRead(Date.parse('2026-11-18T23:50:00Z'))).toISOString(), '2026-11-19T00:23:00.000Z', 'across midnight UTC');
+});

@@ -19,6 +19,11 @@ import ReasonPicker, { type RejectReason } from './reason-picker';
  * video whose reply is already waiting says so and holds its other buttons
  * until that one is finished or rejected.
  *
+ * **Read now** (SC-880) reads this project's approved channels straight away,
+ * with the scheduled read's own code, instead of waiting up to three hours for
+ * it. It holds itself while the read runs, then reloads the list and says what
+ * came back.
+ *
  * The count above the list is the stage's sentence, which the wizard reads from
  * the overview, so every change calls `onChanged` and the wizard hands the new
  * overview's time back as `version` — the same contract as the Substack list.
@@ -59,7 +64,7 @@ export type YtVideo = {
 export type YtConversationsReply = {
   videos: YtVideo[];
   newCount: number;
-  reading: { state: 'current' | 'cannot_tell' | 'no_creators'; sentence: string };
+  reading: { state: 'current' | 'not_read_yet' | 'cannot_tell' | 'no_creators'; sentence: string };
   canon?: { ok: boolean; words?: number; error?: string };
   skippedCount: number;
   commentedCount: number;
@@ -94,6 +99,39 @@ export function replyNotice(who: string, reply: Record<string, any> | null | und
   return `Three replies written ${who} — choose one on the YouTube outreach screen.`;
 }
 
+export type ReadNowReport = {
+  channels: number;
+  read: number;
+  comments: number;
+  failed: Array<{ channel?: string; error: string }>;
+  notReached: Array<{ channel?: string; reason: string }>;
+  quota: { resetsAt: string } | null;
+};
+
+function plural(n: number, one: string, many = `${one}s`): string {
+  return `${n} ${n === 1 ? one : many}`;
+}
+
+/** "Nov 19, 1:00am" in Mountain time — Dane's clock. */
+function mountain(iso: string): string {
+  const at = Date.parse(iso);
+  if (!Number.isFinite(at)) return iso;
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Denver', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
+  }).format(new Date(at)).replace(/\s?([AP])M$/i, (_, m: string) => `${m.toLowerCase()}m`);
+}
+
+/** The one line Read now leaves behind: what was read, and each failure by channel name. */
+export function readNowNotice(r: ReadNowReport | null | undefined): string {
+  if (!r) return 'The read finished but did not say what it read. Reload the list to see.';
+  if (!r.channels) return 'There are no approved channels to read. Approve channels in Find creators first.';
+  const bits = [`Read ${plural(r.read, 'channel')}: ${plural(r.comments, 'comment')}.`];
+  for (const f of r.failed || []) bits.push(`${f.channel || 'The channel list'} was not read: ${f.error}`);
+  if (r.quota) bits.push(`YouTube's quota is used up until ${mountain(r.quota.resetsAt)}, so ${plural((r.notReached || []).length, 'channel')} could not be read.`);
+  else if ((r.notReached || []).length) bits.push(`${plural(r.notReached.length, 'channel')} ran out of time and will be read next time.`);
+  return bits.join(' ');
+}
+
 function excerpt(text: string): string {
   const t = String(text || '').replace(/\s+/g, ' ').trim();
   return t.length > 280 ? `${t.slice(0, 277)}…` : t;
@@ -116,6 +154,8 @@ export default function YoutubeConversations({ onChanged, version }: Props = {})
   const [rowError, setRowError] = useState<{ key: string; message: string } | null>(null);
   const [notice, setNotice] = useState('');
   const [skipping, setSkipping] = useState<YtComment | null>(null);
+  const [readingNow, setReadingNow] = useState(false);
+  const [readError, setReadError] = useState('');
   const seq = useRef(0);
 
   const load = useCallback(async () => {
@@ -146,6 +186,23 @@ export default function YoutubeConversations({ onChanged, version }: Props = {})
     const api = getApp()?.api;
     if (typeof api !== 'function') throw new Error('the admin app is still loading');
     return api(`${YT_CONVERSATIONS_PATH}/${verb}`, { method: 'POST', body: JSON.stringify(body) });
+  };
+
+  const readNow = async () => {
+    if (readingNow) return;
+    setReadingNow(true);
+    setReadError('');
+    setNotice('');
+    try {
+      const reply = await post('read-now', {});
+      setNotice(readNowNotice(reply?.data as ReadNowReport));
+      await load();
+      onChanged?.();
+    } catch (err) {
+      setReadError(`Not read: ${errorText(err, 'unknown error')}`);
+    } finally {
+      setReadingNow(false);
+    }
   };
 
   const write = async (key: string, verb: 'reply' | 'video', body: Record<string, string>, who: string) => {
@@ -209,6 +266,14 @@ export default function YoutubeConversations({ onChanged, version }: Props = {})
       {/* No headline of its own: the stage's sentence above IS the headline
           (lib/outreachOverview.js youtubeConversationsStage), so the two can
           never disagree. */}
+      {data.reading.state !== 'no_creators' ? (
+        <div className="outreach-wizard-stage-actions">
+          <button type="button" className="btn" disabled={readingNow} aria-busy={readingNow} onClick={() => void readNow()}>
+            {readingNow ? 'Reading…' : 'Read now'}
+          </button>
+        </div>
+      ) : null}
+      {readError ? <p className="outreach-wizard-error" role="alert">{readError}</p> : null}
       {data.canon && !data.canon.ok ? (
         <p className="outreach-wizard-muted">{`Ranked without your canon, so no comment scores for fitting it: ${data.canon.error}`}</p>
       ) : null}
