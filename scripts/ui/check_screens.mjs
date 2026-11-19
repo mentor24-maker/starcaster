@@ -168,6 +168,16 @@ try {
     if (String(how).startsWith('failed')) {
       console.log(`  (could not activate ${projectId}: ${how} — screens may render empty)`);
       blind.push(`the fixture project ${projectId} would not activate (${how}), so screens render empty`);
+    } else {
+      // Then reload, so every React island mounts under the fixture project.
+      // Without it Engage › Outreach kept the project it loaded with, and its
+      // Find creators table never appeared, so SC-887's width check skipped
+      // at every size (exit 2) on every run.
+      await page.evaluate((id) => {
+        window.localStorage.setItem(window.App?.CURRENT_PROJECT_ID_STORAGE_KEY || 'alphire.currentProjectId', id);
+      }, projectId);
+      await page.reload();
+      await page.waitForTimeout(4000);
     }
   } else {
     // An inactive project renders empty tables, which measure as "fits" and

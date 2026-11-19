@@ -342,6 +342,19 @@ export default function YoutubeCreators({ onChanged }: { onChanged?: () => void 
       {list.length ? (
         <div className="table-wrap yt-creators-table-wrap">
           <table className="yt-creators-table">
+            {/* Fixed column widths (src/css/_outreach-wizard.css): content
+                wraps inside its column and can never widen the table, so
+                the Actions icons stay in the card at 1280 whatever a
+                channel's name, keywords or titles say (SC-887). */}
+            <colgroup>
+              <col className="yt-creators-col-channel" />
+              <col className="yt-creators-col-subs" />
+              <col className="yt-creators-col-keywords" />
+              <col className="yt-creators-col-videos" />
+              <col className="yt-creators-col-suggestion" />
+              <col className="yt-creators-col-status" />
+              <col className="yt-creators-col-actions" />
+            </colgroup>
             <thead>
               <tr className="table-filter-row">
                 <th>

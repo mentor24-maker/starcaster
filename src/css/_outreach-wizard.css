@@ -528,30 +528,46 @@
   background: rgba(0, 0, 0, 0.08);
 }
 
-/* A channel name is never truncated (T-1): it wraps, between words where it
-   can, and the column keeps room for a real name rather than a letter stack. */
-.yt-creator-channel {
-  min-width: 9rem;
+/* The columns have fixed widths and the content wraps inside them, so no
+   name, keyword, title or note can make the table wider than its card.
+   Content-sized columns could: a word with nowhere to break (a #hashtag in a
+   title, "self-help/men's" in a note) held its column open, and at 1280 the
+   table needed 1148px of a 1090px card, which put Open channel and half of
+   Reject behind a sideways scroll (SC-887, review round 2). The percentages,
+   the Actions column's fixed width and Newest videos (the rest) come to
+   the card's width at 1280, the
+   narrowest screen this table is checked at; below the floor it scrolls in
+   its own box. */
+.yt-creators-table {
+  table-layout: fixed;
+  width: 100%;
+  min-width: 68rem;
+}
+
+.yt-creators-col-channel { width: 16%; }
+.yt-creators-col-subs { width: 11%; }
+.yt-creators-col-keywords { width: 11%; }
+/* Newest videos has no width: it takes whatever room is left, so a wide
+   screen widens the titles and not the Actions icons' column. */
+.yt-creators-col-suggestion { width: 11%; }
+.yt-creators-col-status { width: 13%; }
+/* Four 36px icons, three 4px gaps, and the cell's own padding. */
+.yt-creators-col-actions { width: 11.75rem; }
+
+/* "anywhere", not "break-word": only "anywhere" lets a long word break when
+   the column is too narrow for it, instead of spilling into the next cell.
+   A channel name still wraps rather than truncating (T-1). */
+.yt-creators-table td {
+  overflow-wrap: anywhere;
 }
 
 .yt-creator-name {
   font-weight: 600;
-  overflow-wrap: break-word;
-}
-
-.yt-creator-videos {
-  min-width: 10rem;
 }
 
 .yt-creator-subs {
   white-space: nowrap;
   text-align: right;
-}
-
-.yt-creator-keywords,
-.yt-creator-videos,
-.yt-creator-status-reasons {
-  overflow-wrap: break-word;
 }
 
 /* Four 36px icons side by side. Tighter gaps than the shared row so the
@@ -570,8 +586,6 @@
   white-space: nowrap;
 }
 
-/* May wrap ("Approve" over "(high)"): at 1280 the table has no room to
-   spare, and the Actions icons must stay in reach without sliding it. */
 .yt-creator-suggestion {
   white-space: normal;
 }
@@ -584,26 +598,13 @@
   color: var(--btn-danger-flat-hover);
 }
 
-/* The filter dropdowns fill their column with a floor, so they are never
-   squeezed to "Und"; their default option says just "Any" (the heading
-   under it and aria-label name the column), which fits that floor. */
-.yt-creators-table .table-filter-row select {
-  width: 100%;
-  min-width: 6.5rem;
-}
-
-/* "Undecided", the Status filter's default, needs a little more. Not
-   max-content: a select's natural width is its LONGEST option, so the
-   Keyword filter would grow to its longest keyword and push the table past
-   the screen at 1280. */
-.yt-creators-table .table-filter-row select.yt-creators-filter-status {
-  min-width: 7.75rem;
-}
-
+/* A filter fills its column and never sets the column's width: the column
+   widths above do that. Their default options ("Any", "Undecided") fit the
+   column at 1280. */
+.yt-creators-table .table-filter-row select,
 .yt-creators-table .table-filter-row input[type="search"] {
   width: 100%;
-  min-width: 6.5rem;
-  max-width: 12rem;
+  min-width: 0;
 }
 
 .yt-creator-status-word {

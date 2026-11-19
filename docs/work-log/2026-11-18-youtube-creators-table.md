@@ -33,3 +33,14 @@ keyword he was filtering by disappears (because he saved new keywords), the
 filter resets instead of quietly hiding rows behind a list that reads "Any".
 And the note he wrote when approving or rejecting a channel is visible text
 in the Status column again, not only a tooltip.
+
+**Second review (2026-11-19).** On a 1280-wide laptop, with real channel
+names and video titles, the last two action icons (Reject and Open channel)
+were cut off the right edge. The cause was a "word" with nowhere to break,
+like "self-help/men's" in a rejection note or a #hashtag in a video title:
+the table grew to fit it. The columns now have set widths, and a long word
+breaks inside its own column instead of pushing the table wider, so the
+icons stay on screen whatever the channels say. The test data now includes
+exactly that kind of text, and the screen-width check was fixed so it
+actually loads this table (it had been skipping it every time). It failed
+on the old layout and passes on the new one.

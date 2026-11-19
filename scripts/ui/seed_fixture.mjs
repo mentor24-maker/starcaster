@@ -2137,7 +2137,8 @@ try {
  * table has rows to measure at 1280/1440/1920: the longest name the fixture
  * has (T-1 says it wraps, never truncates), a channel with a hidden
  * subscriber count, one with three videos (the "+2 more"), each kind of
- * suggestion, and one approved and one rejected. Idempotent by channel id —
+ * suggestion, and one approved and two rejected, plus text with no space to break at in
+ * a name, keyword, title and note. Idempotent by channel id —
  * the store merges a second find, and a decided channel is left alone.
  */
 async function seedYoutubeCreators(scope) {
@@ -2151,13 +2152,24 @@ async function seedYoutubeCreators(scope) {
     { channelId: id(3), name: 'No Suggestion Yet', subscriberCount: 950, keywordsHit: ['coaching'], latestVideos: [] },
     { channelId: id(4), name: 'Approved Channel', subscriberCount: 5200, keywordsHit: ['tennis'], latestVideos: [], decide: 'approved' },
     { channelId: id(5), name: 'Rejected Channel', subscriberCount: 40, keywordsHit: ['fitness'], latestVideos: [], decide: 'rejected' },
+    // Text with no spaces to break at, the shape real decisions and titles
+    // take ("self-help/men's advice framing", a #hashtag in a title). Before SC-887's third round a
+    // slash-joined run like this could not wrap, held its column open, and
+    // pushed the Actions icons out of the card at 1280.
+    // One undecided (the table opens on Undecided, so this is the one the
+    // screen check sees) and one rejected whose note lands in Status.
+    { channelId: id(8), name: 'Consciousness/Nonduality/Awakening Collective', subscriberCount: 3100, keywordsHit: ['consciousness/nonduality/awakening'],
+      latestVideos: [{ videoId: 'fixtureVid5', title: 'Nonduality explained #NondualityConsciousnessSelfInquiryAwakening' }],
+      suggestion: { action: 'rejected', reasons: [], confidence: 'medium', why: 'Self-help/men\'s-advice framing.' } },
+    { channelId: id(7), name: 'Rejected With A Note', subscriberCount: 870, keywordsHit: ['fitness'], latestVideos: [], decide: 'rejected',
+      note: "self-help/men's-advice/consciousness/nonduality framing, not a fit" },
   ];
   for (const c of channels) {
-    const { suggestion, decide, ...input } = c;
+    const { suggestion, decide, note, ...input } = c;
     const saved = must(await youtubeCreatorsStore.upsertCreator({ ...input, channelUrl: `https://www.youtube.com/channel/${c.channelId}`, foundVia: 'keyword_search' }, scope), 'save YouTube creator');
     if (saved.status !== 'candidate') continue;
     if (suggestion) must(await youtubeCreatorsStore.recordSuggestion(saved.id, suggestion, scope), 'save YouTube creator suggestion');
-    if (decide) must(await youtubeCreatorsStore.decideCreator(saved.id, { status: decide }, scope), 'decide YouTube creator');
+    if (decide) must(await youtubeCreatorsStore.decideCreator(saved.id, { status: decide, ...(note ? { note } : {}) }, scope), 'decide YouTube creator');
   }
   // Landmine 12: read the rows back through the project scope.
   const listed = must(await youtubeCreatorsStore.listCreators(1000, scope), 'list YouTube creators');
@@ -2221,7 +2233,7 @@ console.log(
 );
 console.log(
   creatorsSeeded
-    ? `YouTube creators seeded — ${creatorsSeeded.total} channel(s): undecided with each kind of suggestion, one approved, one rejected.`
+    ? `YouTube creators seeded — ${creatorsSeeded.total} channel(s): undecided with each kind of suggestion, one approved, two rejected, one with no space to break at.`
     : 'WARNING: YouTube creators were NOT seeded; Engage › Outreach › Find creators will be empty and check:screens proves nothing there.'
 );
 console.log(`export UI_HARNESS_PROJECT_ID=${project.id}`);
