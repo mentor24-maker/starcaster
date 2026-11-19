@@ -286,10 +286,13 @@ function clock(seconds) {
 function driveFileName(source, edit, moment) {
   const id8 = text(edit.id).slice(0, 8);
   const name = recordingName(source);
-  if (edit.kind === 'full') return `${name} — full edit (${id8}).mp4`;
+  // A re-cut (4d) is a different file from the cut he sent back, so it says
+  // which re-cut it is: the same name would read as the old cut on Drive.
+  const recut = Number(edit.recutCount) > 0 ? `, re-cut ${edit.recutCount}` : '';
+  if (edit.kind === 'full') return `${name} — full edit${recut} (${id8}).mp4`;
   const at = moment && typeof moment.start_s === 'number' ? ` from ${clock(moment.start_s)}` : '';
   const score = moment && typeof moment.score === 'number' ? `, score ${moment.score}` : '';
-  return `${name} — short${at}${score} (${id8}).mp4`;
+  return `${name} — short${at}${score}${recut} (${id8}).mp4`;
 }
 
 /** Which entry of video_moments.moments a planned short was cut from. */
@@ -714,6 +717,18 @@ module.exports = {
   runRoughCut,
   roughCutJob,
   enqueueRoughCut,
+  // Reused by the re-cut pass (workers/studio/recutPass.js, Reel Spinner 4d),
+  // so a re-cut renders and uploads exactly the way a first cut does.
+  realCatalog,
+  realDrive,
+  realProbeDuration,
+  renderToDisk,
+  uploadRender,
+  keptRender,
+  renderFingerprint,
+  estimateBytes,
+  keptSeconds,
+  removeQuietly,
   ensureEdits,
   soundShift,
   filterScript,
@@ -723,6 +738,7 @@ module.exports = {
   editsToRender,
   localPathsFor,
   STAGE_ROUGH_CUT,
+  SUBJECT_VIDEO_SOURCE,
   ROUGH_CUTS_FOLDER,
   STUDIO_FOLDER_ID,
   RELEASE_HOLD_MS,

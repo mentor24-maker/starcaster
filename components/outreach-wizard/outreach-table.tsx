@@ -92,7 +92,7 @@ export function SortHeader<K extends string>({ label, sortKey, sort, onSort, fir
   );
 }
 
-export type RowIconGlyph = 'approve' | 'reject' | 'agree' | 'write' | 'skip' | 'contact' | 'open' | 'comment' | 'expand' | 'collapse';
+export type RowIconGlyph = 'approve' | 'reject' | 'agree' | 'write' | 'skip' | 'contact' | 'open' | 'comment' | 'expand' | 'collapse' | 'unwatch';
 
 const GLYPHS: Record<RowIconGlyph, React.ReactElement> = {
   approve: <polyline points="4 12 10 18 20 6" />,
@@ -105,6 +105,8 @@ const GLYPHS: Record<RowIconGlyph, React.ReactElement> = {
   comment: <path d="M4 5h16v11H9l-5 4z" />,
   expand: <polyline points="6 9 12 15 18 9" />,
   collapse: <polyline points="6 15 12 9 18 15" />,
+  // An eye struck through: stop watching something already approved (Reddit's subreddits, SC-890).
+  unwatch: <><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" /><circle cx="12" cy="12" r="3" /><line x1="4" y1="4" x2="20" y2="20" /></>,
 };
 
 function Glyph({ glyph }: { glyph: RowIconGlyph }): React.ReactElement {
