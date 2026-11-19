@@ -130,6 +130,11 @@ function documentForSection({
   modules = [],
   background,
   pageBackground,
+  /*
+   * The page's own switches (`pageOptions`, task SC-864) — Back to top is an
+   * element drawn after the whole page, which no section can ask for.
+   */
+  pageOptions,
   overlayScreen,
   // The section's shape layer (task SC-859) — a real element, like the tint.
   shapeLayer,
@@ -316,6 +321,7 @@ function documentForSection({
      * did not exist until a page could wear a video.
      */
     ...(pageBackground ? { pageBackground } : {}),
+    ...(pageOptions ? { pageOptions } : {}),
     ...(documentTheme ? { theme: documentTheme } : {}),
     ...theme,
   };
@@ -514,7 +520,26 @@ function sample(page, selector, read, settleMs, series, probes, dispatch) {
           // against the new scroll position before anything is read.
           await new Promise((resolve) => requestAnimationFrame(() => resolve()));
         }
-        const frame = { scrollY: scroller ? scroller.scrollTop : 0 };
+        /*
+         * `clickAt` presses an element BEFORE a frame is read — `{ 3: '.x' }`
+         * clicks `.x` ahead of frame 3. For a control that only exists once
+         * the page has scrolled (Back to top, task SC-864), the contract-level
+         * `click` cannot reach it: that runs before any scrolling. A selector
+         * matching nothing records `clickMissing` on the frame, never a quiet
+         * read of the unclicked page.
+         */
+        let clickMissing = null;
+        const clickSel = series.clickAt ? series.clickAt[i] : null;
+        if (clickSel) {
+          const target = document.querySelector(clickSel);
+          if (target) {
+            target.click();
+            await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+          } else {
+            clickMissing = clickSel;
+          }
+        }
+        const frame = { scrollY: scroller ? scroller.scrollTop : 0, ...(clickMissing ? { clickMissing } : {}) };
         for (const [name, sel] of Object.entries(series.selectors)) {
           const node = document.querySelector(sel);
           if (!node) { frame[name] = null; continue; }
@@ -543,6 +568,9 @@ function sample(page, selector, read, settleMs, series, probes, dispatch) {
             ...(series.luma ? { luma: readCanvasLuma(node) } : {}),
             ...(series.shape ? { shape: readCanvasShape(node) } : {}),
             top: box.top,
+            // `left` so two fixed elements can be tested for overlap (Back to
+            // top beside a floating Bug Report button, SC-864).
+            left: box.left,
             height: box.height,
             width: box.width,
           };
@@ -1084,6 +1112,26 @@ try {
             String(err && err.message || err).split('\n')[0];
         }
       }
+    }
+
+    /*
+     * Optional INJECT: markup appended to <body> after the page has rendered,
+     * styled by the real stylesheet. It exists for something the preview page
+     * cannot draw: the floating Bug Report button, which the preview always
+     * renders inline (previewMode, so trying it never files a real report).
+     * Back to top has to clear that button on a live site (SC-864), so the
+     * contract places an element with the trigger's real classes and lets the
+     * site's own CSS put it in the corner. A selector-free string only; the
+     * contract's expect() still has to find it, so a stand-in that failed to
+     * appear is a failure, never a quiet pass.
+     */
+    if (contract.inject?.html) {
+      await target.evaluate((html) => {
+        const host = document.createElement('div');
+        host.setAttribute('data-check-render-inject', '');
+        host.innerHTML = html;
+        document.body.appendChild(host);
+      }, contract.inject.html);
     }
 
     /*
