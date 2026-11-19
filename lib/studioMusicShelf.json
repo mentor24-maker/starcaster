@@ -1,5 +1,5 @@
 {
-  "about": "Reel Spinner music shelf (SC-837). Built by scripts/studio_build_music_shelf.cjs; read by workers/studio/music.js. The audio lives on Drive in Studio › Music, never in git.",
+  "about": "Reel Spinner music shelf (SC-837). Built by scripts/studio_build_music_shelf.cjs; read by lib/studioMusicShelf.js (the website, for the rough-cut card) and workers/studio/music.js (the picker on the Mini). Kept in lib/ because Vercel never uploads workers/. The audio lives on Drive in Studio › Music, never in git.",
   "driveFolderId": "1By_hHjk2hwIXsuZCmTus-PBXriO1aTpH",
   "tracks": [
     {
