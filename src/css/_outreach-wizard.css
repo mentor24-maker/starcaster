@@ -629,35 +629,91 @@
   min-width: 0;
 }
 
-.reddit-sub-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 18rem), 1fr));
-  gap: var(--space-3);
-  min-width: 0;
+/* Since SC-890 the subreddits are a table (reddit-subreddits.tsx), built and
+   sized like YouTube's Find creators above: fixed column widths so no long
+   reason or rule can widen the table past its card at 1280 (T0); below the
+   floor it scrolls in its own .table-wrap. */
+.reddit-subs-table-wrap {
+  margin-top: 0;
 }
 
-.reddit-sub-card {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  min-width: 0;
-  padding: var(--space-3);
-  border: 1px solid var(--border-light);
-  border-radius: 8px;
+.reddit-subs-table-wrap th[data-sort-key]:focus-visible {
+  outline: 2px solid var(--focus-ring-color);
+  outline-offset: -2px;
 }
 
-.reddit-sub-head,
-.reddit-sub-why,
-.reddit-sub-rule {
-  margin: 0;
+.reddit-subs-table {
+  table-layout: fixed;
+  width: 100%;
+  min-width: 64rem;
+}
+
+/* Subreddit names are at most 21 characters (lib/redditWatchStore.js), so
+   r/<name> fits its column on one line and is never truncated (T-1). */
+.reddit-subs-col-name { width: 14%; }
+/* The Status filter spans Status and Suggested by, so "Suggested + Watching"
+   (its longest choice) fits at 1280; Suggested by is sized for its heading. */
+.reddit-subs-col-status { width: 12%; }
+.reddit-subs-col-by { width: 11%; }
+/* Why takes whatever room is left. */
+.reddit-subs-col-rule { width: 17%; }
+.reddit-subs-col-read { width: 16%; }
+/* Three 36px icons, two 4px gaps, and the cell's own padding. */
+.reddit-subs-col-actions { width: 9.5rem; }
+
+.reddit-subs-table td {
   overflow-wrap: anywhere;
+}
+
+.reddit-sub-name a {
+  font-weight: 600;
+}
+
+/* Why and Self-promotion rule are cut after three lines, between words, and
+   read in full on hover (the cell's title). */
+.reddit-sub-clamp {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  overflow: hidden;
+  overflow-wrap: break-word;
+  cursor: help;
 }
 
 .reddit-sub-rule {
   font-size: 0.9em;
+}
+
+/* Find conversations also shows a subreddit's rule, as a paragraph. */
+p.reddit-sub-rule {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.reddit-subs-table td.reddit-sub-read[data-read-state="failed"],
+.reddit-subs-table td.reddit-sub-read[data-read-state="signed_out"] {
+  color: var(--btn-danger-flat-hover);
+}
+
+.reddit-subs-table .table-actions-row {
+  gap: 4px;
+}
+
+.reddit-subs-table .table-filter-row select,
+.reddit-subs-table .table-filter-row input[type="search"] {
+  width: 100%;
+  min-width: 0;
+}
+
+.reddit-subs-empty-row td {
+  text-align: center;
+  opacity: 0.8;
+}
+
+/* A row's own outcome, full width directly under that row. */
+.reddit-sub-message-row td p {
+  margin: 0;
 }
 
 .reddit-comment-list {
