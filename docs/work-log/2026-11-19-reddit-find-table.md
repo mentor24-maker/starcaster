@@ -1,4 +1,4 @@
-## 2026-11-19 — Show Reddit Find conversations as a sortable table with filters (#PR)
+## 2026-11-19 — Show Reddit Find conversations as a sortable table with filters (#1077)
 
 Reddit's **Find conversations** stage on Engage › Outreach used to be a long
 stack of boxes, one per post, each with its comments and a row of text
