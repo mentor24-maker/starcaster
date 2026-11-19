@@ -86,7 +86,7 @@ function button(label: string): HTMLButtonElement {
 }
 
 async function expand() {
-  await act(async () => { button('Show the comments').click(); });
+  await act(async () => { button('Show the Comments').click(); });
 }
 
 function postIds(): string[] {
@@ -112,12 +112,12 @@ describe('RedditConversations', () => {
     act(() => root!.render(<RedditConversations onChanged={onChanged} />));
     await flush();
     await expand();
-    await act(async () => { button('Write replies').click(); });
+    await act(async () => { button('Write Replies').click(); });
     await flush();
     expect(posts[0]).toEqual({ path: '/api/outreach/reddit/conversations/reply', body: { postId: 'abc1' } });
     expect((window as any).App.setActivePage).toHaveBeenCalledWith('engageCommentResponsesPage');
     expect(onChanged).toHaveBeenCalled();
-    await act(async () => { button("Reply to u/dave's comment").click(); });
+    await act(async () => { button("Reply to dave's Comment").click(); });
     await flush();
     expect(posts[1].body).toEqual({ postId: 'abc1', commentId: 'c1' });
   });
@@ -126,7 +126,7 @@ describe('RedditConversations', () => {
     act(() => root!.render(<RedditConversations />));
     await flush();
     await expand();
-    await act(async () => { button('Save u/dave').click(); });
+    await act(async () => { button('Save dave').click(); });
     await flush();
     expect(posts[0]).toEqual({ path: '/api/outreach/reddit/conversations/contact', body: { postId: 'abc1', author: 'dave' } });
     expect(container!.textContent).toContain('u/dave saved as a contact.');
@@ -157,13 +157,13 @@ describe('RedditConversations', () => {
     }
     const labels = buttons.map((b) => b.getAttribute('aria-label'));
     expect(labels).toEqual(expect.arrayContaining([
-      'Hide the comments on "How do generalists learn?"',
-      'Write replies to "How do generalists learn?"',
+      'Hide the Comments on "How do generalists learn?"',
+      'Write Replies to "How do generalists learn?"',
       'Skip "How do generalists learn?"',
-      'Save u/alice as a contact',
+      'Save alice as a Contact',
       'Open "How do generalists learn?" on Reddit',
-      "Reply to u/dave's comment",
-      'Save u/dave as a contact',
+      "Reply to dave's Comment",
+      'Save dave as a Contact',
     ]));
   });
 
@@ -173,11 +173,11 @@ describe('RedditConversations', () => {
     await flush();
     expect(container!.querySelector('tr[data-comment-id]')).toBeNull();
     await expand();
-    expect(button('Hide the comments').getAttribute('aria-expanded')).toBe('true');
+    expect(button('Hide the Comments').getAttribute('aria-expanded')).toBe('true');
     const held = button('Replied');
     expect(held.disabled).toBe(true);
-    expect(held.title).toBe("Replied to u/dave's comment");
-    await act(async () => { button('Hide the comments').click(); });
+    expect(held.title).toBe("Replied to dave's Comment");
+    await act(async () => { button('Hide the Comments').click(); });
     expect(container!.querySelector('tr[data-comment-id]')).toBeNull();
   });
 
@@ -194,7 +194,7 @@ describe('RedditConversations', () => {
     failNext = true;
     act(() => root!.render(<RedditConversations />));
     await flush();
-    await act(async () => { button('Write replies to "How do').click(); });
+    await act(async () => { button('Write Replies to "How do').click(); });
     await flush();
     const message = container!.querySelector('tr[data-row-message]') as HTMLTableRowElement;
     expect(message.textContent).toBe('No replies written: the server said no');

@@ -325,10 +325,10 @@ export default function RedditConversations({ onChanged, version }: Props = {}):
         <td className="reddit-conversation-reply" data-reply={c.replyStatus || 'none'}>{replyWord(c.replyStatus)}</td>
         <td className="actions-col">
           <div className="table-actions-row">
-            <RowIcon glyph={isOpen ? 'collapse' : 'expand'} expanded={isOpen} label={`${isOpen ? 'Hide' : 'Show'} the comments on "${title}"`} onClick={() => toggle(c.postId)} />
-            <RowIcon glyph="write" tone="primary" label={`${c.replyStatus === 'draft' ? 'Open the replies to' : 'Write replies to'} "${title}"`} disabled={anyBusy} onClick={() => void writeReplies(c)} />
+            <RowIcon glyph={isOpen ? 'collapse' : 'expand'} expanded={isOpen} label={`${isOpen ? 'Hide' : 'Show'} the Comments on "${title}"`} onClick={() => toggle(c.postId)} />
+            <RowIcon glyph="write" tone="primary" label={`${c.replyStatus === 'draft' ? 'Open the Replies to' : 'Write Replies to'} "${title}"`} disabled={anyBusy} onClick={() => void writeReplies(c)} />
             <RowIcon glyph="skip" label={`Skip "${title}"`} disabled={anyBusy} onClick={() => { setRowError(null); setSkipping(c); }} />
-            {c.author ? <RowIcon glyph="contact" label={`Save u/${c.author} as a contact`} disabled={anyBusy} onClick={() => void saveContact(c, c.author)} /> : null}
+            {c.author ? <RowIcon glyph="contact" label={`Save ${c.author} as a Contact`} disabled={anyBusy} onClick={() => void saveContact(c, c.author)} /> : null}
             {c.url ? <RowIcon glyph="open" label={`Open "${title}" on Reddit`} href={c.url} /> : null}
           </div>
         </td>
@@ -368,11 +368,11 @@ export default function RedditConversations({ onChanged, version }: Props = {}):
             <div className="table-actions-row">
               <RowIcon
                 glyph="write"
-                label={replied ? `Replied to u/${m.author}'s comment` : `${label === 'Open the replies' ? 'Open the replies' : 'Reply'} to u/${m.author}'s comment`}
+                label={replied ? `Replied to ${m.author}'s Comment` : `${label === 'Open the replies' ? 'Open the Replies' : 'Reply'} to ${m.author}'s Comment`}
                 disabled={Boolean(busy) || replied}
                 onClick={() => void writeReplies(c, m)}
               />
-              <RowIcon glyph="contact" label={`Save u/${m.author} as a contact`} disabled={Boolean(busy)} onClick={() => void saveContact(c, m.author, m)} />
+              <RowIcon glyph="contact" label={`Save ${m.author} as a Contact`} disabled={Boolean(busy)} onClick={() => void saveContact(c, m.author, m)} />
             </div>
           </td>
         </tr>,
