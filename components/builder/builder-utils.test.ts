@@ -390,6 +390,19 @@ describe("buildClonedPageCreatePayload", () => {
     const payload = buildClonedPageCreatePayload(source, [source]);
     expect(payload.themeId).toBeUndefined();
   });
+
+  it("keeps the page's Back to top switch on the copy (SC-864)", () => {
+    const source = { ...makeSource(), pageOptions: { backToTop: true } };
+    const payload = buildClonedPageCreatePayload(source, [source]);
+    expect(payload.pageOptions).toEqual({ backToTop: true });
+    expect(payload.pageOptions).not.toBe(source.pageOptions);
+  });
+
+  it("sends no pageOptions when the source has every switch off", () => {
+    const source = makeSource();
+    const payload = buildClonedPageCreatePayload(source, [source]);
+    expect("pageOptions" in payload).toBe(false);
+  });
 });
 
 describe("getImageOverlayStyle", () => {

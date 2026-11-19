@@ -167,6 +167,8 @@ function buildLandingPageCreateInput(body, name) {
     pageTemplateId: String(body.pageTemplateId ?? body.page_template_id ?? '').trim(),
     pageBackground: body.pageBackground || body.page_background,
     theme: body.theme,
+    // Page-level switches (Back to top, SC-864); the store keeps only those ON.
+    pageOptions: body.pageOptions ?? body.page_options,
     layoutSections: Array.isArray(body.layoutSections || body.layout_sections)
       ? (body.layoutSections || body.layout_sections)
       : [],
@@ -297,6 +299,11 @@ function buildLandingPagePatch(body) {
   }
   if (hasBodyField(body, 'pageBackground', 'page_background')) {
     patch.pageBackground = body.pageBackground ?? body.page_background;
+  }
+  // Back to top and any later page switch (SC-864). Same whitelist hazard as
+  // searchPriority above: leave this out and the checkbox saves nothing.
+  if (hasBodyField(body, 'pageOptions', 'page_options')) {
+    patch.pageOptions = body.pageOptions ?? body.page_options;
   }
   if (hasBodyField(body, 'theme')) patch.theme = body.theme;
   if (hasBodyField(body, 'contentOverrides')) patch.contentOverrides = body.contentOverrides;
