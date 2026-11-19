@@ -99,6 +99,8 @@ import { BuilderBlogPostListModuleSettings } from "./builder-blog-post-list-modu
 import { BuilderBlogPostCardModuleSettings } from "./builder-blog-post-card-module-settings";
 import { BuilderBlogAuthorBioModuleSettings, parseSocialLinks } from "./builder-blog-author-bio-module-settings";
 import { BuilderBlogTocModuleSettings, parseTocItems } from "./builder-blog-toc-module-settings";
+import { BuilderTableOfContentsModuleSettings } from "./builder-table-of-contents-module-settings";
+import { resolveTableOfContentsSettings } from "@/lib/table-of-contents";
 import { BuilderBlogNewsletterSubscribeModuleSettings } from "./builder-blog-newsletter-subscribe-module-settings";
 import { BuilderBlogRelatedPostsModuleSettings, parseRelatedPosts } from "./builder-blog-related-posts-module-settings";
 import { BuilderBlogLatestPostsModuleSettings } from "./builder-blog-latest-posts-module-settings";
@@ -987,6 +989,21 @@ function renderModulePreview(module: BuilderTemplateModule) {
 
   if (module.type === "galaxy") {
     return <GalaxyCardPreview settings={module.settings} />;
+  }
+
+  if (module.type === "table-of-contents") {
+    // A summary, not the list: the collapsed card cannot see the page's
+    // headings. The full preview and the live page read them (SC-863).
+    const toc = resolveTableOfContentsSettings(module.settings);
+    const which = toc.levels === "h2" ? "H2 headings" : toc.levels === "h2-h3" ? "H2 and H3 headings" : "all headings";
+    return (
+      <div className="builder-module-preview-copy" style={{ textAlign: toc.alignment }}>
+        {toc.title ? <div style={{ fontWeight: 700, marginBottom: 6 }}>{toc.title}</div> : null}
+        <div style={{ fontSize: 12, color: "#35526e" }}>
+          Table of Contents · lists this page&apos;s {which}{toc.indent && toc.levels !== "h2" ? ", sub-headings indented" : ""}
+        </div>
+      </div>
+    );
   }
 
   if (module.type === "breadcrumb") {
@@ -3354,6 +3371,7 @@ export function BuilderModuleCard({
     const isSocialModule = module.type === "social";
     const isPollCategoryListModule = module.type === "poll-category-list";
     const isBreadcrumbModule = module.type === "breadcrumb";
+    const isTableOfContentsModule = module.type === "table-of-contents";
     const isBlogPostListModule = module.type === "blog-post-list";
     const isBlogPostCardModule = module.type === "blog-post-card";
     const isBlogAuthorBioModule = module.type === "blog-author-bio";
@@ -3427,6 +3445,7 @@ export function BuilderModuleCard({
      */
     const needsRestoredChrome =
       isBreadcrumbModule ||
+      isTableOfContentsModule ||
       isBlogPostListModule ||
       isBlogPostCardModule ||
       isBlogAuthorBioModule ||
@@ -3672,6 +3691,8 @@ export function BuilderModuleCard({
               <BuilderGalaxyModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
             ) : isBreadcrumbModule ? (
               <BuilderBreadcrumbModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
+            ) : isTableOfContentsModule ? (
+              <BuilderTableOfContentsModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
             ) : isBlogPostListModule ? (
               <BuilderBlogPostListModuleSettings module={module} onUpdateModule={onUpdateModule} />
             ) : isBlogPostCardModule ? (
@@ -4377,6 +4398,8 @@ export function BuilderModuleCard({
           module.type !== "blog-post-list" &&
           // Latest Blog Posts draws from post data alone; nothing reads its text.
           module.type !== "blog-latest-posts" &&
+          // Table of Contents reads the page's headings; nothing reads its text.
+          module.type !== "table-of-contents" &&
           /* Nothing reads `module.text` on a carousel — `CarouselPreview`
              renders from `settings.items` alone — so this was an empty box
              sitting under the Settings column with no effect on anything

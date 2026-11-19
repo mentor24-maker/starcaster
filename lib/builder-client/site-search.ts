@@ -162,6 +162,8 @@ const NEVER_INDEXED_MODULE_TYPES = new Set([
   "galaxy",
   "breadcrumb",
   "blog-toc",
+  // Its words are the page's own headings, already indexed where they sit (SC-863).
+  "table-of-contents",
   "social",
   "social-share",
   "confetti",

@@ -88,3 +88,68 @@ test('a reload on the editor address starts the editor instead of showing a dead
   assert.match(lift('openFormEditor'), /formEditorReady = true;\s*\n\s*setActivePage\('crmFormEditorPage'\);/,
     'the flag must be set BEFORE setActivePage, or its own activation re-enters openFormEditorFromAddress');
 });
+
+/*
+ * SC-866 — Background Color could not be seen to be a control. The shared
+ * picker painted its round button with the bare hex behind a 12%-grey
+ * hairline, so a white, cleared or half-see-through background was a white
+ * circle on a white page. The CRM editor now gives that button a fill that
+ * carries the opacity (painted over a checkerboard in _crm.css), and a saved
+ * opacity of 0 is no longer read as "not given" and turned back into 100.
+ */
+const { crmFormStylesToRenderStyles, normalizeCrmFormStyles } = require('../../lib/crmFormStyles.js');
+
+const hexToRgbForTest = new Function('normalizeHexColor', `${lift('hexToRgb')}; return hexToRgb;`)(
+  (value, fallback) => (/^#[0-9a-f]{3}([0-9a-f]{3})?$/i.test(String(value)) ? String(value) : fallback),
+);
+const clampOpacityForTest = new Function(`${lift('clampOpacity')}; return clampOpacity;`)();
+const swatchFillForSaved = new Function(
+  'pickerColorForSaved', 'clampOpacity', 'hexToRgb',
+  `${lift('swatchFillForSaved')}; return swatchFillForSaved;`,
+)(conversions.pickerColorForSaved, clampOpacityForTest, hexToRgbForTest);
+
+test('the swatch shows the colour WITH its opacity, and nothing at all once cleared (SC-866)', () => {
+  assert.equal(swatchFillForSaved('#3366ff', '50', SWATCHES), 'rgba(51, 102, 255, 0.5)');
+  assert.equal(swatchFillForSaved('theme:primary', '100', SWATCHES), 'rgba(11, 45, 107, 1)');
+  assert.equal(swatchFillForSaved('#ffffff', '0', SWATCHES), 'rgba(255, 255, 255, 0)');
+  assert.equal(swatchFillForSaved('none', '100', SWATCHES), 'transparent');
+});
+
+test('the editor paints that fill onto the swatch every time it renders it', () => {
+  assert.match(lift('renderStandardColorField'), /host\.style\.setProperty\(\s*'--crm-swatch-fill',\s*swatchFillForSaved\(/);
+  const css = fs.readFileSync(path.join(__dirname, '..', '..', 'src', 'css', '_crm.css'), 'utf8');
+  assert.match(css, /\.crm-form-standard-color\[style\*="--crm-swatch-fill"\] \.builder-button-background-swatch \{\s*background:\s*linear-gradient\(var\(--crm-swatch-fill\)/);
+  assert.match(css, /\.crm-form-standard-color \.builder-button-background-swatch \{\s*border: 2px solid/, 'the swatch needs an outline a white fill cannot hide');
+});
+
+test('the background colour and opacity saved in the editor reach the live form', () => {
+  const live = crmFormStylesToRenderStyles({ backgroundColor: '#3366ff', backgroundColorOpacity: '50' });
+  assert.equal(live.form.background, 'rgba(51, 102, 255, 0.5)');
+  assert.equal(live.cssVars['--crm-form-background'], 'rgba(51, 102, 255, 0.5)');
+});
+
+test('opacity 0 means see-through on the live form, whether it arrives as "0" or 0', () => {
+  for (const zero of ['0', 0]) {
+    assert.equal(normalizeCrmFormStyles({ backgroundColorOpacity: zero }).backgroundColorOpacity, '0', `opacity ${JSON.stringify(zero)}`);
+    assert.equal(
+      crmFormStylesToRenderStyles({ backgroundColor: '#3366ff', backgroundColorOpacity: zero }).form.background,
+      'rgba(51, 102, 255, 0)',
+    );
+    assert.equal(normalizeCrmFormStyles({ borderColorOpacity: zero }).borderColorOpacity, '0');
+    assert.equal(normalizeCrmFormStyles({ button_background_color_opacity: zero }).buttonBackgroundColorOpacity, '0');
+  }
+});
+
+test('Clear gives the live form no background, and a form that saved nothing is still white', () => {
+  assert.equal(crmFormStylesToRenderStyles({ backgroundColor: 'none' }).form.background, 'transparent');
+  const untouched = crmFormStylesToRenderStyles({}, '', null);
+  assert.equal(untouched.form.background, 'var(--crm-theme-background, #ffffff)');
+});
+
+test("the editor's own reading of the styles keeps opacity 0 too", () => {
+  assert.match(SRC, /backgroundColorOpacity: clampOpacity\(firstSetOpacity\(source\.backgroundColorOpacity, source\.background_color_opacity\)\)/);
+  const firstSetOpacity = new Function(`${lift('firstSetOpacity')}; return firstSetOpacity;`)();
+  assert.equal(firstSetOpacity(0, '80'), 0);
+  assert.equal(firstSetOpacity(undefined, ''), undefined);
+  assert.equal(firstSetOpacity('', '40'), '40');
+});
