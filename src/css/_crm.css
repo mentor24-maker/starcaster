@@ -363,6 +363,29 @@
   display: none;
 }
 
+/* The swatch must read as a button whatever colour it holds (SC-866).
+ * The shared picker gives it a 12%-grey hairline and paints it with the bare
+ * hex, so a white, cleared or half-see-through Background Color was a white
+ * circle on a white page — Dane found no control there at all. Here it gets a
+ * solid outline, and crm.js's --crm-swatch-fill (colour WITH opacity) is
+ * painted over a checkerboard, so "none" and "50%" look like what they are.
+ * !important outranks the inline background the shared component sets. */
+.crm-form-color-control .crm-form-standard-color .builder-button-background-swatch {
+  border: 2px solid var(--ink-secondary);
+  box-sizing: border-box;
+}
+
+.crm-form-color-control .crm-form-standard-color .builder-button-background-swatch:hover,
+.crm-form-color-control .crm-form-standard-color .builder-button-background-swatch:focus-visible {
+  border-color: var(--ink-primary);
+}
+
+.crm-form-color-control .crm-form-standard-color[style*="--crm-swatch-fill"] .builder-button-background-swatch {
+  background:
+    linear-gradient(var(--crm-swatch-fill), var(--crm-swatch-fill)),
+    repeating-conic-gradient(var(--border-strong) 0 25%, var(--bg-surface) 0 50%) 50% / 12px 12px !important;
+}
+
 .crm-form-color-opacity {
   display: flex;
   align-items: center;

@@ -18,6 +18,10 @@
  *
  * A cut mark is a decision, never an edit: no video file is touched.
  *
+ * A `done` row hands the source on: the pass queues a `moments` job for it
+ * (workers/studio/momentsPass.js, Reel Spinner 2d), which scores its best
+ * moments against Dane's notes.
+ *
  * WHAT IS CHARGED TO THE FILE, AND WHAT IS NOT — the same line transcribePass
  * draws. whisper, ffmpeg or the model missing, or the catalog unreachable, is a
  * fact about the machine: the job is released for 15 minutes with no attempt
@@ -99,6 +103,8 @@ function realCatalog() {
     getTranscriptBySource: videoTranscriptsStore.getTranscriptBySource,
     upsertCutMarks: videoCutMarksStore.upsertCutMarks,
     getCutMarksBySource: videoCutMarksStore.getCutMarksBySource,
+    // Reel Spinner 2d: is this recording already scored? (see settle below)
+    getMomentsBySource: require('../../lib/videoMomentsStore.js').getMomentsBySource,
   };
 }
 
@@ -244,7 +250,40 @@ async function cutMarksJob({
       return { ...base, outcome: 'failed', jobAction: 'failed', reason };
     }
     const completed = queue.complete(job.id, owner);
-    return { ...base, outcome, jobAction: completed ? 'completed' : 'none', reason };
+    // Reel Spinner 2d (SC-829): finished cut marks are what scoring waits on.
+    // Keyed by source, so a second pass over the same recording is one job.
+    //
+    // A recording that ALREADY has a moments row is not scored again here:
+    // scoring is one paid AI call, and a cut-marks rules bump plus
+    // `studio:backfill-cuts` would otherwise rescore every recording without
+    // anyone asking. Rescoring is Dane's call, from the screen (2e). If the
+    // moments cannot be read, nothing is queued either — the cheap mistake —
+    // and `npm run studio:backfill-moments` queues any recording left with no row.
+    let scoring = null;
+    let momentsNotQueued = '';
+    if (completed && typeof catalog.getMomentsBySource === 'function') {
+      const existing = await catalog.getMomentsBySource(sourceId, scope);
+      if (!existing.ok) {
+        momentsNotQueued = `whether source ${sourceId} is already scored could not be read (${existing.error}), `
+          + 'so no paid scoring was queued — npm run studio:backfill-moments queues it if it has no moments';
+      } else if (existing.data) {
+        momentsNotQueued = `source ${sourceId} already has ${text(existing.data.status) || 'a'} moments row, `
+          + 'so it was not rescored at a cost nobody asked for — a rescore is asked for from the screen';
+      }
+    }
+    if (completed && momentsNotQueued) {
+      return { ...base, outcome, jobAction: 'completed', reason, momentsNotQueued };
+    }
+    if (completed) {
+      try {
+        scoring = require('./momentsPass.js').enqueueMoments(queue, { sourceId, why: 'its cut marks are done' });
+      } catch (err) {
+        return { ...base, outcome, jobAction: 'completed', reason,
+          momentsNotQueued: `the scoring job could not be queued: ${err.message} — npm run studio:backfill-moments queues it` };
+      }
+    }
+    return { ...base, outcome, jobAction: completed ? 'completed' : 'none', reason,
+      ...(scoring ? { momentsJobId: scoring.job.id } : {}) };
   };
   const failIt = (reason, extra = {}, keep = false) => settle({ state: CUTS_FAILED, reason, rulesVersion: RULES_VERSION, ...extra },
     'failed', reason, { keep });
