@@ -41,6 +41,7 @@ const {
 } = require('../lib/contactPersonasStore');
 const { logActivity } = require('../lib/activityLog');
 const { validate }    = require('../lib/validate');
+const { doorFailureStatus } = require('../lib/aiDoorStatus');
 const {
   createContactProjectInvitation,
   acceptContactProjectInvitation,
@@ -593,21 +594,23 @@ Output solely the Voice Guidelines overview in highly professional markdown plai
 RAW CONTACT MATRIX:
 ${contextDump}`;
 
-    // queryGemini() directly rather than queryAgentPersona(): the persona wrapper
-    // forces its reply through a JSON envelope, and this endpoint wants markdown
-    // prose. (queryGemini still sets responseMimeType to JSON internally — see
-    // lib/aiClient.js — which is why the prompt above has to ask for plain text.)
-    const { queryGemini } = require('../lib/aiClient');
+    // Through the AI door (lib/aiClient.js generate, SC-847): the first
+    // provider on Settings › APIs › AI provider that can pay answers. Plain
+    // prose, not JSON: this endpoint wants the markdown guidelines themselves.
+    // Until then it asked Gemini by name, which forced a JSON reply.
+    const aiClient = require('../lib/aiClient');
     const systemPrompt = "You are a master communications architect and Voice Synthesizer.";
-    
-    let synthesizedVoice = "";
-    if (typeof queryGemini === 'function') {
-        const aiRes = await queryGemini(systemPrompt, prompt);
-        if (!aiRes.ok) return sendErr(res, 502, `Synthesis Engine Failed Natively: ${aiRes.error}`), true;
-        synthesizedVoice = aiRes.text;
-    } else {
-        synthesizedVoice = `[Backend Notice] Synthesized Voice Engine successfully bypassed. Native QueryGemini missing. Fallback execution complete.`;
-    }
+    const aiRes = await aiClient.generate({
+      feature: 'contact_persona_synthesis',
+      tier: 'strong',
+      system: systemPrompt,
+      messages: prompt,
+      maxTokens: 8192,
+      timeoutMs: 60000,
+      scope: requestScope(req),
+    });
+    if (!aiRes.ok) return sendErr(res, doorFailureStatus(aiRes), `Persona synthesis failed: ${aiRes.error}`), true;
+    const synthesizedVoice = aiRes.text;
 
     // Step 4: Inject Synthesized Persona Securely
     const payload = { persona: personaName, description: synthesizedVoice || 'Synthesis Failed.' };
