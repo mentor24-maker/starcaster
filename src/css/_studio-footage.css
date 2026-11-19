@@ -451,3 +451,99 @@ table.studio-footage-table:not(.builder-module-preview-table):not(.builder-previ
   padding-left: 1.25rem;
   overflow-wrap: anywhere;
 }
+
+/* Recordings | Rough cuts (Reel Spinner 4c) and the Rough cuts screen
+   (components/studio/rough-cuts-view.tsx). */
+
+.studio-footage-screens {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.studio-footage-screens .btn[aria-pressed='true'] {
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.studio-roughcuts {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.studio-roughcuts-counts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.5rem;
+  min-width: 0;
+}
+
+.studio-roughcuts-count {
+  padding: 0.15rem 0.4rem;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.studio-roughcuts-count[aria-pressed='true'] {
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.studio-roughcuts-refresh {
+  margin-left: auto;
+}
+
+.studio-roughcut {
+  min-width: 0;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--border-light);
+  border-radius: 6px;
+}
+
+.studio-roughcut-of {
+  color: var(--muted, #6b7280);
+  overflow-wrap: anywhere;
+}
+
+.studio-roughcut-line,
+.studio-roughcut-verdict {
+  margin: 0.4rem 0 0;
+  overflow-wrap: anywhere;
+}
+
+.studio-roughcut-verdict {
+  font-weight: 600;
+}
+
+.studio-roughcut-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.6rem;
+}
+
+.studio-roughcut-sendback {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-top: 0.6rem;
+  min-width: 0;
+}
+
+.studio-roughcut-sendback textarea {
+  width: 100%;
+  max-width: 40rem;
+  box-sizing: border-box;
+}

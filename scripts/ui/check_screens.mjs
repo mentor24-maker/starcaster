@@ -103,6 +103,11 @@ const SCREENS = [
       clear: '[data-testid="studio-search-clear"]',
     },
   },
+  // Rough cuts is a toggle: a second press goes back to the recordings, which
+  // the `open` step below does after measuring. `shot` names its screenshot,
+  // because "transcript open" is also an `open` entry on this page and the two
+  // would otherwise both write assetsFootagePage-opened-<width>.png.
+  { id: 'assetsFootagePage', label: 'Assets: Footage, rough cuts', open: '[data-testid="studio-screen-roughcuts"]', shot: 'roughcuts' },
   { id: 'contactsPage', label: 'Contacts' },
   { id: 'acquireYoutubePage', label: 'Acquire: YouTube' },
   { id: 'acquireWebPage', label: 'Acquire: Web' },
@@ -254,7 +259,9 @@ try {
           .filter((el) => el.scrollWidth > el.clientWidth + 1)
           .map((el) => `${el.getAttribute('data-ui-no-sideways') || el.className} (${el.scrollWidth}px of text in ${el.clientWidth}px)`);
       });
-      const shot = path.join(SHOT_DIR, `${screen.id}${screen.open ? '-opened' : ''}${screen.search ? '-searched' : ''}${screen.select ? '-selected' : ''}-${width}.png`);
+      const shot = path.join(SHOT_DIR, screen.shot
+        ? `${screen.id}-${screen.shot}-${width}.png`
+        : `${screen.id}${screen.open ? '-opened' : ''}${screen.search ? '-searched' : ''}${screen.select ? '-selected' : ''}-${width}.png`);
       await page.screenshot({ path: shot });
       checked += 1;
       if (screen.open) {
