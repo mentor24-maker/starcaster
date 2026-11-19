@@ -103,6 +103,8 @@ const SCREENS = [
       clear: '[data-testid="studio-search-clear"]',
     },
   },
+  // Last of the Footage entries: the panel stays on Rough cuts once opened.
+  { id: 'assetsFootagePage', label: 'Assets: Footage, rough cuts', open: '[data-testid="studio-screen-roughcuts"]' },
   { id: 'contactsPage', label: 'Contacts' },
   { id: 'acquireYoutubePage', label: 'Acquire: YouTube' },
   { id: 'acquireWebPage', label: 'Acquire: Web' },

@@ -545,6 +545,17 @@ finishing. It has the "um"s, repeats and long pauses taken out and uses the
 chosen sound. It has no music, no title cards and no full-quality picture:
 those come with the finished render (step 5c).
 
+**Where Dane says yes, no or "change this".** Assets › Footage › **Rough
+cuts** (Reel Spinner 4c, `components/studio/rough-cuts-view.tsx`). Each rough
+cut waiting for him shows full or short, its length, how much was taken out,
+the moment's score and reasons for a short, a link to watch it in Drive, and
+three buttons: **Approve**, **Skip**, **Send back** (which needs a note saying
+what to change). The count line at the top ("2 waiting for you · 1 approved ·
+…") is also the filter. The website writes only the verdict and the note
+(`POST /api/studio/rough-cuts/:id/review`, through `reviewEdit`, which refuses
+a step out of order); the Mini acts on them. Nothing is finished without his
+Approve.
+
 **Where to watch them.** Drive, `Studio › Rough cuts`
 (https://drive.google.com/drive/folders/17HZZDNlGAcxWUxbMBdlywnn-Tjf4pfD7, then
 **Rough cuts**). Each file is named after its recording, then *full edit* or
