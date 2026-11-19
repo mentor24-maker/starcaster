@@ -479,9 +479,12 @@
   white-space: nowrap;
 }
 
-/* ── YouTube's Find creators (Outreach wizard 15/19) ───────────────────
-   components/outreach-wizard/youtube-creators.tsx. Cards wrap into as many
-   columns as fit and never force the page wider than the screen (T0). */
+/* ── YouTube's Find creators (Outreach wizard 15/19; table since SC-887) ──
+   components/outreach-wizard/youtube-creators.tsx, built from the shared
+   pieces in outreach-table.tsx. The table takes the canonical look from
+   _tables.css (T11); only the cells' own content is styled here. Every
+   ancestor sets min-width: 0 so the table cannot push the page wider than
+   the screen (T0, T8) — a long table scrolls inside its .table-wrap. */
 
 .yt-creators {
   display: flex;
@@ -499,68 +502,122 @@
   min-width: 0;
 }
 
-.yt-creator-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 18rem), 1fr));
-  gap: var(--space-3);
-  min-width: 0;
+.yt-creators-table-wrap {
+  margin-top: 0;
 }
 
-.yt-creator-card {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  min-width: 0;
-  padding: var(--space-3);
-  border: 1px solid var(--border-light);
-  border-radius: 8px;
+/* A sortable heading takes keyboard focus itself (the click is on the <th>). */
+.yt-creators-table-wrap th[data-sort-key]:focus-visible {
+  outline: 2px solid var(--focus-ring-color);
+  outline-offset: -2px;
 }
 
 .yt-creator-head {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
-  min-width: 0;
-}
-
-.yt-creator-head > div {
+  gap: var(--space-2);
   min-width: 0;
 }
 
 .yt-creator-avatar {
   flex: 0 0 auto;
-  width: 48px;
-  height: 48px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
   object-fit: cover;
   background: rgba(0, 0, 0, 0.08);
 }
 
+/* The columns have fixed widths and the content wraps inside them, so no
+   name, keyword, title or note can make the table wider than its card.
+   Content-sized columns could: a word with nowhere to break (a #hashtag in a
+   title, "self-help/men's" in a note) held its column open, and at 1280 the
+   table needed 1148px of a 1090px card, which put Open channel and half of
+   Reject behind a sideways scroll (SC-887, review round 2). The percentages,
+   the Actions column's fixed width and Newest videos (the rest) come to
+   the card's width at 1280, the
+   narrowest screen this table is checked at; below the floor it scrolls in
+   its own box. */
+.yt-creators-table {
+  table-layout: fixed;
+  width: 100%;
+  min-width: 68rem;
+}
+
+.yt-creators-col-channel { width: 16%; }
+.yt-creators-col-subs { width: 11%; }
+.yt-creators-col-keywords { width: 11%; }
+/* Newest videos has no width: it takes whatever room is left, so a wide
+   screen widens the titles and not the Actions icons' column. */
+.yt-creators-col-suggestion { width: 11%; }
+.yt-creators-col-status { width: 13%; }
+/* Four 36px icons, three 4px gaps, and the cell's own padding. */
+.yt-creators-col-actions { width: 11.75rem; }
+
+/* "anywhere", not "break-word": only "anywhere" lets a long word break when
+   the column is too narrow for it, instead of spilling into the next cell.
+   A channel name still wraps rather than truncating (T-1). */
+.yt-creators-table td {
+  overflow-wrap: anywhere;
+}
+
 .yt-creator-name {
   font-weight: 600;
-  overflow-wrap: anywhere;
 }
 
-.yt-creator-meta {
+.yt-creator-subs {
+  white-space: nowrap;
+  text-align: right;
+}
+
+/* Four 36px icons side by side. Tighter gaps than the shared row so the
+   column costs as little width as the icons allow. */
+.yt-creators-table .table-actions-row {
+  gap: 4px;
+}
+
+.yt-creator-more,
+.yt-creator-suggestion[title] {
+  cursor: help;
+}
+
+.yt-creator-more {
   opacity: 0.75;
-  overflow-wrap: anywhere;
-}
-
-.yt-creator-videos {
-  margin: 0;
-  padding-left: 1.2em;
-  min-width: 0;
-}
-
-.yt-creator-videos li {
-  overflow-wrap: anywhere;
+  white-space: nowrap;
 }
 
 .yt-creator-suggestion {
-  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.yt-creator-suggestion[data-suggestion="approved"] {
+  color: var(--status-ok-ink);
+}
+
+.yt-creator-suggestion[data-suggestion="rejected"] {
+  color: var(--btn-danger-flat-hover);
+}
+
+/* A filter fills its column and never sets the column's width: the column
+   widths above do that. Their default options ("Any", "Undecided") fit the
+   column at 1280. */
+.yt-creators-table .table-filter-row select,
+.yt-creators-table .table-filter-row input[type="search"] {
+  width: 100%;
+  min-width: 0;
+}
+
+.yt-creator-status-word {
+  white-space: nowrap;
+}
+
+.yt-creator-status-reasons {
+  opacity: 0.75;
+}
+
+.yt-creators-empty-row td {
+  text-align: center;
+  opacity: 0.8;
 }
 
 /* ── Reddit watch (Outreach wizard 18/19, task 86bcrmbwm) ─────────────────── */

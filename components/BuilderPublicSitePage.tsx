@@ -12,6 +12,7 @@ import {
   type ThemeShellBackgroundSource,
 } from "@/components/builder/builder-utils";
 import { BuilderViewportShellLayout } from "@/components/builder/builder-viewport-shell-layout";
+import { SiteBackToTop } from "@/components/site-back-to-top";
 import {
   createDefaultBackgroundSettings,
   createDefaultTheme,
@@ -47,6 +48,8 @@ type SitePage = {
   pageBackground: ReturnType<typeof createDefaultBackgroundSettings>;
   theme: ReturnType<typeof normalizeBuilderDocument>["theme"];
   layoutSections: ReturnType<typeof normalizeBuilderDocument>["layoutSections"];
+  /** Page-level switches (Back to top, SC-864). Absent = all off. */
+  pageOptions?: ReturnType<typeof normalizeBuilderDocument>["pageOptions"];
   projectId?: string;
   primaryColor?: string;
   secondaryColor?: string;
@@ -83,6 +86,8 @@ function mapSitePageRecord(page: Record<string, unknown>): SitePage {
     theme: doc.theme,
     // Lineage back on, so the skip link can see a shared header (SC-857).
     layoutSections: withSectionLineage(page, doc.layoutSections),
+    // A page record carries its switches as `pageOptions` beside the sections.
+    pageOptions: doc.pageOptions,
     projectId: String(page.projectId ?? page.project_id ?? ""),
     primaryColor: String(page.primaryColor ?? page.primary_color ?? ""),
     secondaryColor: String(page.secondaryColor ?? page.secondary_color ?? ""),
@@ -434,6 +439,10 @@ export function BuilderPublicSitePage({ projectId }: Props) {
           liveSite
         />
       </BuilderViewportShellLayout>
+      <SiteBackToTop
+        enabled={page.pageOptions?.backToTop === true}
+        accentColor={(themePalette ?? pageThemePalette(page)).accentColor || page.themeShell?.accentColor}
+      />
     </>
   );
 }

@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { SubstackDecisionDialog, reasonTally, type Decision } from '../substack-miner/substack-decision-dialog';
+import { RowIcon, SortHeader, filterRows, sortRows, type SortState, type SortValue } from './outreach-table';
 
 /**
  * YouTube's Find creators stage, worked on the Outreach screen itself —
@@ -7,9 +8,11 @@ import { SubstackDecisionDialog, reasonTally, type Decision } from '../substack-
  *
  * Find channels searches YouTube for the wizard's keywords
  * (POST /api/outreach/youtube/creators/find), then asks for a suggestion on
- * each undecided channel (…/suggest). Each card shows the channel's picture,
- * name, subscribers and newest three videos, the suggestion and its reason,
- * and Approve / Reject / Agree. Approve and Reject open the Substack Miner's
+ * each undecided channel (…/suggest). Since SC-887 the channels are a sortable
+ * table with a filter bar (search, keyword, status — Undecided by default —
+ * and suggestion): one row per channel with its picture, name, subscribers,
+ * matched keywords, newest videos, the suggestion (its reason on hover) and
+ * square icon actions Agree / Approve / Reject / Open. Approve and Reject open the Substack Miner's
  * own "why?" window, so a reason means the same thing on both screens; Agree
  * takes the suggestion as his decision, reasons included.
  *
@@ -113,50 +116,130 @@ export function findSummaryText(found: Record<string, any> | null, suggested: Re
 }
 
 const ACTION_WORD: Record<Decision, string> = { approved: 'Approve', rejected: 'Reject' };
+const STATUS_WORD: Record<YoutubeCreator['status'], string> = { candidate: 'candidate', approved: 'approved', rejected: 'rejected' };
 
-function CreatorCard({ creator, busy, onDecide, onAgree }: {
+export type CreatorSortKey = 'channel' | 'subscribers' | 'suggestion' | 'status';
+export type StatusFilter = 'undecided' | 'approved' | 'rejected' | 'all';
+export type SuggestionFilter = '' | 'approved' | 'rejected' | 'none';
+export type CreatorFilters = { search: string; keyword: string; status: StatusFilter; suggestion: SuggestionFilter };
+
+export const DEFAULT_FILTERS: CreatorFilters = { search: '', keyword: '', status: 'undecided', suggestion: '' };
+
+/**
+ * The Keyword filter's choices: the saved keywords, then any a channel
+ * matched, each once. Repeats are dropped ignoring case ("Tennis" and
+ * "tennis" filter the same rows, and the keyword store also folds case), and
+ * the first spelling seen is the one shown.
+ */
+export function keywordFilterOptions(saved: string[], creators: YoutubeCreator[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of [...saved, ...creators.flatMap((c) => c.keywordsHit)]) {
+    const k = String(raw || '').trim();
+    const folded = k.toLowerCase();
+    if (!k || seen.has(folded)) continue;
+    seen.add(folded);
+    out.push(k);
+  }
+  return out;
+}
+
+const CONFIDENCE_RANK: Record<Suggestion['confidence'], number> = { high: 3, medium: 2, low: 1 };
+
+/**
+ * What a column sorts by. Suggestion is one scale from "surest Approve" to
+ * "surest Reject", so high-to-low puts the channels most worth approving first;
+ * a channel with no suggestion sorts last.
+ */
+export function creatorSortValue(c: YoutubeCreator, key: CreatorSortKey): SortValue {
+  if (key === 'channel') return c.name || c.channelId;
+  if (key === 'subscribers') return typeof c.subscriberCount === 'number' && Number.isFinite(c.subscriberCount) ? c.subscriberCount : null;
+  if (key === 'status') return STATUS_WORD[c.status];
+  const s = c.suggestion;
+  if (!s) return null;
+  return s.action === 'approved' ? 3 + CONFIDENCE_RANK[s.confidence] : 4 - CONFIDENCE_RANK[s.confidence];
+}
+
+/** The rows the filter bar lets through; every filter must pass (AND). */
+export function filterCreators(list: YoutubeCreator[], f: CreatorFilters): YoutubeCreator[] {
+  const needle = f.search.trim().toLowerCase();
+  const keyword = f.keyword.trim().toLowerCase();
+  return filterRows(list, [
+    needle ? (c) => (c.name || c.channelId).toLowerCase().includes(needle) : null,
+    keyword ? (c) => c.keywordsHit.some((k) => k.toLowerCase() === keyword) : null,
+    f.status === 'all' ? null : (c) => (f.status === 'undecided' ? c.status === 'candidate' : c.status === f.status),
+    f.suggestion === '' ? null : (c) => (f.suggestion === 'none' ? !c.suggestion : c.suggestion?.action === f.suggestion),
+  ]);
+}
+
+/**
+ * Why the table is empty, naming every filter in force — "No rejected channels
+ * match 'yoga'" — so an empty table never reads as a broken one (landmine 17).
+ */
+export function emptyFilterText(f: CreatorFilters): string {
+  const statusWord = f.status === 'undecided' ? 'undecided ' : f.status === 'all' ? '' : `${f.status} `;
+  const parts: string[] = [];
+  if (f.search.trim()) parts.push(`match '${f.search.trim()}'`);
+  if (f.keyword) parts.push(`were found for '${f.keyword}'`);
+  if (f.suggestion === 'none') parts.push('have no suggestion');
+  else if (f.suggestion) parts.push(`have the suggestion ${ACTION_WORD[f.suggestion]}`);
+  return `No ${statusWord}channels${parts.length ? ` ${parts.join(' and ')}` : ''}.`;
+}
+
+function suggestionHover(s: Suggestion): string {
+  return `${s.reasons.length ? `${s.reasons.join(', ')}. ` : ''}${s.why}`.trim();
+}
+
+function CreatorRow({ creator, busy, onDecide, onAgree }: {
   creator: YoutubeCreator;
   busy: boolean;
   onDecide: (c: YoutubeCreator, d: Decision) => void;
   onAgree: (c: YoutubeCreator) => void;
 }): React.ReactElement {
   const s = creator.suggestion;
+  const name = creator.name || creator.channelId;
+  const videos = creator.latestVideos.slice(0, 3);
+  const [first, ...rest] = videos;
+  const statusWord = creator.status === 'candidate' ? 'Candidate' : creator.status === 'approved' ? 'Approved' : 'Rejected';
   return (
-    <li className="yt-creator-card" data-channel-id={creator.channelId} data-status={creator.status}>
-      <div className="yt-creator-head">
-        {creator.avatarUrl ? <img className="yt-creator-avatar" src={creator.avatarUrl} alt="" width={48} height={48} loading="lazy" /> : <span className="yt-creator-avatar" aria-hidden="true" />}
-        <div>
-          <a className="yt-creator-name" href={creator.channelUrl} target="_blank" rel="noreferrer noopener">{creator.name || creator.channelId}</a>
-          <p className="yt-creator-meta">{subscriberText(creator.subscriberCount)}{creator.keywordsHit.length ? ` · found for ${creator.keywordsHit.join(', ')}` : ''}</p>
+    <tr className="yt-creator-row" data-channel-id={creator.channelId} data-status={creator.status}>
+      <td className="yt-creator-channel">
+        <span className="yt-creator-head">
+          {creator.avatarUrl ? <img className="yt-creator-avatar" src={creator.avatarUrl} alt="" width={32} height={32} loading="lazy" /> : <span className="yt-creator-avatar" aria-hidden="true" />}
+          <a className="yt-creator-name" href={creator.channelUrl} target="_blank" rel="noreferrer noopener">{name}</a>
+        </span>
+      </td>
+      <td className="yt-creator-subs">{creator.subscriberCount === null || creator.subscriberCount === undefined || !Number.isFinite(creator.subscriberCount) ? 'hidden' : creator.subscriberCount.toLocaleString('en-US')}</td>
+      <td className="yt-creator-keywords">{creator.keywordsHit.join(', ')}</td>
+      <td className="yt-creator-videos">
+        {first ? (
+          <>
+            <a href={`https://www.youtube.com/watch?v=${encodeURIComponent(first.videoId)}`} target="_blank" rel="noreferrer noopener">{first.title || first.videoId}</a>
+            {rest.length ? <span className="yt-creator-more" title={rest.map((v) => v.title || v.videoId).join('\n')}> +{rest.length} more</span> : null}
+          </>
+        ) : <span className="outreach-wizard-muted">none read</span>}
+      </td>
+      <td className="yt-creator-suggestion" data-suggestion={s?.action || ''} title={s ? suggestionHover(s) : undefined}>
+        {s ? `${ACTION_WORD[s.action]} (${s.confidence})` : <span className="outreach-wizard-muted">No suggestion yet</span>}
+      </td>
+      <td className="yt-creator-status">
+        <span className="yt-creator-status-word">{statusWord}</span>
+        {creator.decisionReasons.length ? <span className="yt-creator-status-reasons"> — {creator.decisionReasons.join(', ')}</span> : null}
+        {creator.note ? <span className="yt-creator-status-note">. {creator.note}</span> : null}
+      </td>
+      <td className="actions-col">
+        <div className="table-actions-row">
+          {creator.status === 'candidate' ? (
+            <>
+              {s ? <RowIcon glyph="agree" tone="primary" label={`Agree: ${ACTION_WORD[s.action].toLowerCase()} ${name}`} disabled={busy} onClick={() => onAgree(creator)} /> : null}
+              <RowIcon glyph="approve" label={`Approve ${name}`} disabled={busy} onClick={() => onDecide(creator, 'approved')} />
+              <RowIcon glyph="reject" label={`Reject ${name}`} disabled={busy} onClick={() => onDecide(creator, 'rejected')} />
+            </>
+          ) : null}
+          <RowIcon glyph="open" label={`Open ${name} on YouTube`} href={creator.channelUrl} />
         </div>
-      </div>
-      {creator.latestVideos.length ? (
-        <ul className="yt-creator-videos" aria-label="Newest videos">
-          {creator.latestVideos.slice(0, 3).map((v) => (
-            <li key={v.videoId}><a href={`https://www.youtube.com/watch?v=${encodeURIComponent(v.videoId)}`} target="_blank" rel="noreferrer noopener">{v.title || v.videoId}</a></li>
-          ))}
-        </ul>
-      ) : <p className="yt-creator-meta">No recent videos were read for this channel.</p>}
-      {creator.status === 'candidate' ? (
-        <>
-          {s ? (
-            <p className="yt-creator-suggestion" data-suggestion={s.action}>
-              <strong>Suggested: {ACTION_WORD[s.action]}</strong> ({s.confidence} confidence)
-              {s.reasons.length ? ` — ${s.reasons.join(', ')}` : ''}. {s.why}
-            </p>
-          ) : <p className="yt-creator-meta">No suggestion yet.</p>}
-          <div className="outreach-wizard-stage-actions">
-            {s ? <button type="button" className="btn btn-primary" disabled={busy} onClick={() => onAgree(creator)}>Agree</button> : null}
-            <button type="button" className="btn" disabled={busy} onClick={() => onDecide(creator, 'approved')}>Approve</button>
-            <button type="button" className="btn" disabled={busy} onClick={() => onDecide(creator, 'rejected')}>Reject</button>
-          </div>
-        </>
-      ) : (
-        <p className="yt-creator-meta">
-          {creator.status === 'approved' ? 'Approved' : 'Rejected'}{creator.decisionReasons.length ? ` — ${creator.decisionReasons.join(', ')}` : ''}{creator.note ? `. ${creator.note}` : ''}
-        </p>
-      )}
-    </li>
+      </td>
+    </tr>
   );
 }
 
@@ -170,7 +253,8 @@ export default function YoutubeCreators({ onChanged }: { onChanged?: () => void 
   const [readError, setReadError] = useState('');
   const [notice, setNotice] = useState('');
   const [cannotTell, setCannotTell] = useState('');
-  const [showDecided, setShowDecided] = useState(false);
+  const [filters, setFilters] = useState<CreatorFilters>(DEFAULT_FILTERS);
+  const [sort, setSort] = useState<SortState<CreatorSortKey>>(null);
   const [deciding, setDeciding] = useState<{ creator: YoutubeCreator; decision: Decision } | null>(null);
   const [dialogError, setDialogError] = useState('');
 
@@ -255,6 +339,18 @@ export default function YoutubeCreators({ onChanged }: { onChanged?: () => void 
   const undecided = list.filter((c) => c.status === 'candidate');
   const decided = list.filter((c) => c.status !== 'candidate');
   const finding = busy === 'find' || busy === 'suggest';
+  const keywordOptions = keywordFilterOptions(keywords?.keywords || [], list);
+  // A keyword filter whose choice has left the list (he saved new keywords,
+  // say) would show "Any" while still hiding rows, so it is cleared; one
+  // that is still there under another spelling takes the listed spelling so
+  // the select shows it.
+  const keywordChoice = filters.keyword
+    ? keywordOptions.find((k) => k.toLowerCase() === filters.keyword.toLowerCase()) ?? ''
+    : '';
+  useEffect(() => {
+    if (filters.keyword && keywordChoice !== filters.keyword) setFilters((f) => ({ ...f, keyword: keywordChoice }));
+  }, [filters.keyword, keywordChoice]);
+  const rows = sortRows(filterCreators(list, filters), sort, creatorSortValue);
 
   return (
     <div className="yt-creators" data-yt-creators>
@@ -280,28 +376,78 @@ export default function YoutubeCreators({ onChanged }: { onChanged?: () => void 
             : 'No channels found yet.'}
         </p>
       ) : null}
-      {undecided.length ? (
-        <ul className="yt-creator-list">
-          {undecided.map((c) => (
-            <CreatorCard
-              key={c.id}
-              creator={c}
-              busy={!!busy}
-              onDecide={(creator, decision) => { setDialogError(''); setDeciding({ creator, decision }); }}
-              onAgree={(creator) => { if (creator.suggestion) void decide(creator, creator.suggestion.action, creator.suggestion.reasons, ''); }}
-            />
-          ))}
-        </ul>
-      ) : null}
-      {decided.length ? (
-        <button type="button" className="btn" aria-expanded={showDecided} onClick={() => setShowDecided((v) => !v)}>
-          {showDecided ? 'Hide decided' : `Show decided (${decided.length})`}
-        </button>
-      ) : null}
-      {showDecided && decided.length ? (
-        <ul className="yt-creator-list">
-          {decided.map((c) => <CreatorCard key={c.id} creator={c} busy={!!busy} onDecide={() => {}} onAgree={() => {}} />)}
-        </ul>
+      {list.length ? (
+        <div className="table-wrap yt-creators-table-wrap">
+          <table className="yt-creators-table">
+            {/* Fixed column widths (src/css/_outreach-wizard.css): content
+                wraps inside its column and can never widen the table, so
+                the Actions icons stay in the card at 1280 whatever a
+                channel's name, keywords or titles say (SC-887). */}
+            <colgroup>
+              <col className="yt-creators-col-channel" />
+              <col className="yt-creators-col-subs" />
+              <col className="yt-creators-col-keywords" />
+              <col className="yt-creators-col-videos" />
+              <col className="yt-creators-col-suggestion" />
+              <col className="yt-creators-col-status" />
+              <col className="yt-creators-col-actions" />
+            </colgroup>
+            <thead>
+              <tr className="table-filter-row">
+                <th>
+                  <input type="search" className="yt-creators-filter-search" placeholder="Channel" aria-label="Search channel names" value={filters.search} onChange={(e) => setFilters({ ...filters, search: e.target.value })} />
+                </th>
+                <th />
+                <th>
+                  <select aria-label="Keyword" value={filters.keyword} onChange={(e) => setFilters({ ...filters, keyword: e.target.value })}>
+                    <option value="">Any</option>
+                    {keywordOptions.map((k) => <option key={k} value={k}>{k}</option>)}
+                  </select>
+                </th>
+                <th />
+                <th>
+                  <select aria-label="Suggestion" value={filters.suggestion} onChange={(e) => setFilters({ ...filters, suggestion: e.target.value as SuggestionFilter })}>
+                    <option value="">Any</option>
+                    <option value="approved">Approve</option>
+                    <option value="rejected">Reject</option>
+                    <option value="none">None</option>
+                  </select>
+                </th>
+                <th>
+                  <select aria-label="Status" className="yt-creators-filter-status" value={filters.status} onChange={(e) => setFilters({ ...filters, status: e.target.value as StatusFilter })}>
+                    <option value="undecided">Undecided</option>
+                    <option value="approved">Approved</option>
+                    <option value="rejected">Rejected</option>
+                    <option value="all">All</option>
+                  </select>
+                </th>
+                <th className="actions-col" />
+              </tr>
+              <tr>
+                <SortHeader label="Channel" sortKey="channel" sort={sort} onSort={setSort} />
+                <SortHeader label="Subscribers" sortKey="subscribers" sort={sort} onSort={setSort} firstDir="desc" />
+                <th scope="col">Keywords</th>
+                <th scope="col">Newest videos</th>
+                <SortHeader label="Suggestion" sortKey="suggestion" sort={sort} onSort={setSort} firstDir="desc" />
+                <SortHeader label="Status" sortKey="status" sort={sort} onSort={setSort} />
+                <th scope="col" className="actions-col">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.length ? rows.map((c) => (
+                <CreatorRow
+                  key={c.id}
+                  creator={c}
+                  busy={!!busy}
+                  onDecide={(creator, decision) => { setDialogError(''); setDeciding({ creator, decision }); }}
+                  onAgree={(creator) => { if (creator.suggestion) void decide(creator, creator.suggestion.action, creator.suggestion.reasons, ''); }}
+                />
+              )) : (
+                <tr className="yt-creators-empty-row"><td colSpan={7} data-empty-filter>{emptyFilterText(filters)}</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       ) : null}
       {deciding ? (
         <SubstackDecisionDialog

@@ -12,6 +12,7 @@
  *   POST   /api/engage/reddit-comments/items/:id/reject  { reasons?, note? } — why (12/19)
  *   POST   /api/engage/reddit-comments/items/:id/paste       { postTitle, postBody, parentCommentText? }
  *   POST   /api/engage/reddit-comments/items/:id/read-again  ask the Mini to read it again
+ *   POST   /api/engage/reddit-comments/items/:id/hand-check  { outcome: 'live', link } | { outcome: 'not-posted' } (SC-893)
  *   GET    /api/engage/reddit-comments/status             the Mini's Reddit sign-in, and the pace
  *
  * Add saves the row as `readState: reading` and the Mini's signed-in browser
@@ -126,7 +127,7 @@ async function handle(req, res, pathname, method) {
     });
   }
 
-  const decision = pathname.match(/^\/api\/engage\/reddit-comments\/items\/([^/]+)\/(draft|approve|reject|paste|read-again)$/);
+  const decision = pathname.match(/^\/api\/engage\/reddit-comments\/items\/([^/]+)\/(draft|approve|reject|paste|read-again|hand-check)$/);
   if (decision) {
     if (method !== 'POST') return sendErr(res, 405, 'Method not allowed'), true;
     const id = decodeURIComponent(decision[1]);
@@ -136,6 +137,11 @@ async function handle(req, res, pathname, method) {
       return reply(res, await store.pasteForItem(id, body, scope));
     }
     if (decision[2] === 'read-again') return reply(res, await store.readAgain(id, scope));
+    if (decision[2] === 'hand-check') {
+      const body = await readBody(req, res);
+      if (!body) return true;
+      return reply(res, await store.settleByHand(id, body, scope));
+    }
     if (decision[2] === 'approve') {
       const body = await readBody(req, res);
       if (!body) return true;

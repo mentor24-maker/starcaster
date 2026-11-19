@@ -192,7 +192,35 @@ needs on its machine:
   until it does.
 - **Google Chrome** in `/Applications`.
 - **Doppler's `prd` key at `~/Studio`** (the Studio worker's), from which the
-  installer copies `ANTHROPIC_API_KEY` into `~/.openclaw/.env` without printing it.
+  installer copies one key per AI provider OpenClaw uses (today `OPENAI_API_KEY`
+  and `ANTHROPIC_API_KEY`) into `~/.openclaw/.env` without printing them. It
+  copies them on **every** run, so after a key is rotated in Doppler, running
+  the installer again is what reaches OpenClaw. A key Doppler cannot supply
+  stops the run with its name and leaves the file as it was.
+
+**Which AI it uses** is `lib/openclawModels.json`, not the installer: OpenAI's
+`gpt-5.5` first, Anthropic's `claude-sonnet-5-5` as the backup (SC-871). Until
+2026-11-18 OpenClaw knew only Anthropic, so when that key ran out of credit
+every outreach pass stopped. To change the order, edit that file and run the
+installer again; `--status` prints the order it holds (`model: ...`).
+
+**Does the backup take over when Anthropic runs out of credit?** OpenClaw's
+own manual says yes (`docs/concepts/model-failover.md` in the install,
+"Billing disables"): "credit balance too low" is a reason to move on, the key
+is set aside for ten minutes and the next model is tried. With OpenAI first
+that matters only if OpenAI fails, so the case that bites is OpenAI out of
+credit with Anthropic behind it. **Not yet proven on the Mini** (2026-11-19):
+the test needs a throwaway copy of the live keys, and the agent session was
+refused that copy. To prove it by hand, run one turn with the order reversed
+in a scratch folder while Anthropic is out of credit and see which provider
+answered:
+
+    D=$(mktemp -d) && grep -E '^(ANTHROPIC|OPENAI)_API_KEY=' ~/.openclaw/.env > $D/.env
+    echo '{"gateway":{"mode":"local"},"agents":{"defaults":{"model":{"primary":"anthropic/claude-sonnet-5-5","fallbacks":["openai/gpt-5.5"]}}}}' > $D/openclaw.json
+    OPENCLAW_STATE_DIR=$D OPENCLAW_CONFIG_PATH=$D/openclaw.json openclaw agent --local --agent main --json -m "Reply ok"
+    rm -rf $D
+
+An answer naming `openai` means the backup took over.
 
 Then `./scripts/install_openclaw.sh`, and `--status` to read it back. The install
 lives outside the checkout (`~/OpenClaw/app`, state in `~/.openclaw`), so it is

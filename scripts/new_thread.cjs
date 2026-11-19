@@ -31,6 +31,7 @@ const fs = require('fs');
 const path = require('path');
 const { execFileSync } = require('child_process');
 const { git } = require('./lib/repo_state.cjs');
+const { readTicketOpenState } = require('./builder/ticketOpenState.js');
 
 const topic = process.argv[2];
 const taskId = process.argv[3];
@@ -54,14 +55,24 @@ if (!/^[a-z0-9][a-z0-9-]*$/.test(topic)) {
 
 if (!taskId || taskId.startsWith('-')) usageAndExit();
 
-console.log(`[thread] Checking that ClickUp task ${taskId} exists and is open…`);
-try {
-  execFileSync('npm', ['run', 'clickup', '--', 'task-open', '--task', taskId], { stdio: 'inherit' });
-} catch {
-  console.error(`\nTask ${taskId} is not open (closed, done, or does not exist) — nothing was created.`);
-  console.error('A thread is only started for OPEN work; if the task id is wrong, check it and try again.\n');
+// Three answers, never two (SC-875): only a CONFIRMED closed ticket is "not
+// open". A door that refused, a tracker that did not answer, a ticket id it
+// does not know — those are "could not tell", and they say so, because
+// reading a refused command as a verdict is exactly how this check came to
+// refuse every ticket after the move off ClickUp.
+console.log(`[thread] Checking that ticket ${taskId} exists and is open…`);
+const ticket = readTicketOpenState(taskId);
+if (ticket.state === 'closed') {
+  console.error(`\nTicket ${taskId} is not open (${ticket.reason}) — nothing was created.`);
+  console.error('A thread is only started for OPEN work; if the ticket id is wrong, check it and try again.\n');
   process.exit(1);
 }
+if (ticket.state !== 'open') {
+  console.error(`\nCould not read ticket ${taskId} from the tracker: ${ticket.reason} — nothing was created.`);
+  console.error('This is not a verdict that the ticket is closed. Check the id and that the tracker is reachable, then try again.\n');
+  process.exit(2);
+}
+console.log(`[thread] Ticket ${taskId} is open (${ticket.reason}).`);
 
 // The main checkout, wherever this was run from: .git/ lives at its root.
 const commonDir = git(['rev-parse', '--git-common-dir'], '');
