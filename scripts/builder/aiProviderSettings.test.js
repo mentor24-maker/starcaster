@@ -65,8 +65,8 @@ test('a built-in provider\'s key can never be sent to a typed address', () => {
 });
 
 test('an added service cannot borrow ANY existing secret, aliases included (SC-844 review)', () => {
-  // GOOGLE_GEMINI_API_KEY holds the same Gemini key (lib/apiSettings.js,
-  // lib/geminiClient.js); the others are live secrets elsewhere in the code.
+  // GOOGLE_GEMINI_API_KEY holds the same Gemini key (lib/apiSettings.js);
+  // the others are live secrets elsewhere in the code.
   for (const keyEnv of ['GOOGLE_GEMINI_API_KEY', 'GOOGLE_API_KEY', 'YOUTUBE_API_KEY', 'OPENCLAW_API_KEY', 'GROQ_API_KEY', 'AI_SERVICE__API_KEY']) {
     const b = body(ALL, { customProviders: [{ label: 'Proxy', baseUrl: 'https://attacker.example/v1', keyEnv }] });
     b.providers.unshift({ id: 'custom-proxy', enabled: true, fast: 'x', strong: 'x' });

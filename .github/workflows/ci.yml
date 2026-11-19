@@ -260,6 +260,14 @@ jobs:
         # whether an AI feature is safe to leave running.
         run: npm run check:ai-metering
 
+      - name: AI calls go through the door (blocking)
+        # From 2026-10-30 one Anthropic account ran out of credit and every
+        # feature that called a provider its own way stopped at once, while a
+        # funded OpenAI key sat unused. AI switch 1-5 moved them all onto
+        # generate() in lib/aiClient.js; this stops the next one being written
+        # by hand. Reads source only (SC-847).
+        run: npm run check:ai-door
+
       - name: Convention checks (blocking)
         # Was advisory (continue-on-error) from the day it was added, waiting on
         # "the 7 pre-existing button-in-<th> violations". Six of those seven
