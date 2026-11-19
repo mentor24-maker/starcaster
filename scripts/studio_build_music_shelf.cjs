@@ -7,7 +7,7 @@
  * Reel Spinner 5a (SC-837). Builds the music shelf once: thirty tracks by
  * Kevin MacLeod (incompetech.com, Creative Commons Attribution 4.0), five per
  * mood the scoring uses, copied into a `Music` folder inside the Studio folder
- * on Drive, and the manifest `workers/studio/music-shelf.json` that the picker
+ * on Drive, and the manifest `lib/studioMusicShelf.json` that the picker
  * (workers/studio/music.js) reads. Why this library: docs/STUDIO.md, "Music".
  *
  * THE TRACKS ARE CHOSEN HERE, BY NAME (`SHELF` below), not by a rule over the
@@ -48,7 +48,7 @@ const TRACK_PAGE = 'https://incompetech.com/music/royalty-free/index.html?isrc='
 const LICENCE = 'CC BY 4.0';
 const LICENCE_URL = 'https://creativecommons.org/licenses/by/4.0/';
 const ARTIST = 'Kevin MacLeod';
-const MANIFEST = path.join(__dirname, '..', 'workers', 'studio', 'music-shelf.json');
+const MANIFEST = path.join(__dirname, '..', 'lib', 'studioMusicShelf.json');
 
 /** Five per mood. The moods are workers/studio/moments.js MOODS. */
 const SHELF = {
@@ -190,7 +190,7 @@ async function main() {
   }
 
   const shelf = {
-    about: 'Reel Spinner music shelf (SC-837). Built by scripts/studio_build_music_shelf.cjs; read by workers/studio/music.js. The audio lives on Drive in Studio › Music, never in git.',
+    about: 'Reel Spinner music shelf (SC-837). Built by scripts/studio_build_music_shelf.cjs; read by lib/studioMusicShelf.js (the website, for the rough-cut card) and workers/studio/music.js (the picker on the Mini). Kept in lib/ because Vercel never uploads workers/. The audio lives on Drive in Studio › Music, never in git.',
     driveFolderId: folderId,
     tracks,
   };
