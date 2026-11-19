@@ -1934,11 +1934,17 @@ The rule:
   and CI. The door itself and the key and billing checks (`lib/aiKeys.js`,
   `lib/credentialVerify.js`, `lib/anthropicBilling.js`) are allowed, because
   they ask providers about keys and money, not to generate.
+- **It also blocks the door's old one-provider helpers** (`queryGemini`,
+  `queryAnthropic`, `queryOpenAI`, `queryKimi`) outside `lib/aiClient.js`.
+  They live inside the door's file, so a caller names no address, but each
+  talks to one provider by name with no order and no fall-through. The first
+  version of the check missed this: `lib/wyrTweetOcr.js` called `queryGemini`
+  while the check printed that every call went through the door.
 - **A feature the door cannot serve yet goes on the check's `WAITING` list
   with its reason and the ticket that moves it**, and the check prints that
-  list every run. As of 2026-11-18 there are two, both needing the AI to read
-  a file the door cannot send yet: the Theme Wizard and the flyer upload
-  (SC-895). Do not add to it to make a new feature easier to write.
+  list every run. As of 2026-11-18 there are three, all needing the AI to read
+  a file the door cannot send yet: the Theme Wizard, the flyer upload and the
+  Would You Rather image reader (SC-895). Do not add to it to make a new feature easier to write.
 
 ## 6. Working in this repo
 

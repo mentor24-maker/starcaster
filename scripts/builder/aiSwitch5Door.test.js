@@ -90,6 +90,7 @@ const FEATURES = [
   {
     feature: 'messaging_content_short',
     tier: 'strong',
+    json: true,
     reply: '{"options":["Serve up summer","Rally with the best"]}',
     run: () => suggestions.generateMessagingContentSuggestions({ format: 'Headlines', topic: 'Summer camp' }, SCOPE),
     sent: ['Summer camp', 'sharp marketing content options'],
@@ -101,6 +102,7 @@ const FEATURES = [
   {
     feature: 'messaging_content_long',
     tier: 'strong',
+    json: true,
     reply: '{"title":"Why juniors play","subtitle":"","body":"Long body text about coaching juniors."}',
     run: () => suggestions.generateMessagingContentSuggestions({ format: 'Articles', topic: 'Juniors' }, SCOPE),
     sent: ['Juniors', 'publication-ready'],
@@ -113,6 +115,7 @@ const FEATURES = [
   {
     feature: 'messaging_topic_suggestions',
     tier: 'strong',
+    json: true,
     reply: '{"groups":[{"label":"Programs","topics":["Junior camps","Adult clinics"]}]}',
     run: () => suggestions.generateMessagingTopicSuggestions({ website_data: { source_url: 'https://example.com', keywords: [], pages: [] } }, SCOPE),
     sent: ['information architect'],
@@ -186,6 +189,8 @@ for (const f of FEATURES) {
       for (const refused of ['temperature', 'top_p', 'top_k']) assert.equal(refused in calls[0].body, false, refused);
       const sent = JSON.stringify(calls[0].body);
       for (const words of f.sent) assert.ok(sent.includes(words), `${words} in the request`);
+      // A feature that parses JSON asks the door for JSON, so OpenAI's JSON mode is on.
+      if (provider === 'openai') assert.equal(calls[0].body.response_format?.type === 'json_object', Boolean(f.json), 'JSON mode');
       assert.equal(metered.length, 1);
       assert.equal(metered[0].feature, f.feature, 'metered under the feature');
       assert.equal(metered[0].provider, provider, 'metered under the provider that answered');
@@ -265,6 +270,54 @@ test('check:ai-door names a hand-written call to any provider, file and line', (
   });
   const found = findViolations(dir).map((f) => `${f.rel}:${f.line}`).sort();
   assert.deepEqual(found, ['lib/a.js:2', 'lib/d.js:1', 'lib/e.js:1', 'lib/sub/b.js:1', 'routes/c.js:1']);
+});
+
+test('check:ai-door names a one-provider helper used outside the door, import or call', () => {
+  // SC-847 review: lib/wyrTweetOcr.js called queryGemini, which names no
+  // address, and the check printed "every AI call goes through the door".
+  const dir = tempRepo({
+    'lib/a.js': "const { queryGemini } = require('./aiClient');\nawait queryGemini(sys, msgs);\n",
+    'lib/b.js': "const ai = require('./aiClient');\nconst r = await ai.queryAnthropic(sys, msgs);\n",
+    'routes/c.js': "const {\n  queryOpenAI,\n} = require('../lib/aiClient');\n",
+    'lib/d.js': "aiClient['queryKimi'](s, m);\n",
+    'lib/comment.js': "// queryGemini() forces JSON, so this file uses generate()\n * see queryAnthropic()\nconst x = 1;\n",
+    'lib/aiClient.js': "async function queryGemini() {}\nmodule.exports = { queryGemini };\n",
+  });
+  const found = findViolations(dir).map((f) => `${f.rel}:${f.line}`).sort();
+  assert.deepEqual(found, ['lib/a.js:1', 'lib/a.js:2', 'lib/b.js:2', 'lib/d.js:1', 'routes/c.js:2']);
+});
+
+test('check:ai-door fails the command on a one-provider helper in a real lib file', () => {
+  // Break test, in the real repository: the old helper, no address in sight.
+  const planted = path.join(ROOT, 'lib', '__ai_door_helper_break_test.js');
+  fs.writeFileSync(planted, "const { queryAnthropic } = require('./aiClient');\n");
+  try {
+    let failed = null;
+    try {
+      execFileSync(process.execPath, [path.join(ROOT, 'scripts/check_ai_door.cjs')], { cwd: ROOT, stdio: 'pipe' });
+    } catch (err) {
+      failed = err;
+    }
+    assert.ok(failed, 'the check must fail');
+    assert.equal(failed.status, 1);
+    const said = String(failed.stderr);
+    assert.match(said, /lib\/__ai_door_helper_break_test\.js:1 {2}names the one-provider helper queryAnthropic/);
+    assert.match(said, /generate\(\)/);
+  } finally {
+    fs.unlinkSync(planted);
+  }
+});
+
+test('the passing line never claims every call goes through the door while files still wait', () => {
+  const out = execFileSync(process.execPath, [path.join(ROOT, 'scripts/check_ai_door.cjs')], { cwd: ROOT }).toString();
+  if (WAITING.size) {
+    assert.match(out, new RegExp(`except the ${WAITING.size} file\\(s\\) still waiting`));
+    for (const rel of WAITING.keys()) assert.ok(out.includes(`waiting  ${rel}`), `${rel} is printed`);
+  }
+});
+
+test('the Would You Rather image reader waits on SC-895, it is not silently exempt', () => {
+  assert.match(WAITING.get('lib/wyrTweetOcr.js') || '', /queryGemini.*SC-895/);
 });
 
 test('check:ai-door lets the door, the key checks and model listing through', () => {

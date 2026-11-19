@@ -15,7 +15,12 @@
  *
  * It reads source, never data: it fails when a file outside the door (and the
  * key and billing checks, which talk to providers about keys and money, not to
- * generate) contains a generate address or imports a provider's SDK.
+ * generate) contains a generate address, imports a provider's SDK, or uses one
+ * of the door's old single-provider helpers (queryGemini, queryAnthropic,
+ * queryOpenAI, queryKimi). Those helpers live inside lib/aiClient.js but skip
+ * the provider order and the fall-through exactly as a raw fetch does, so
+ * calling one by name is going round the door (SC-847 review, 2026-11-18:
+ * lib/wyrTweetOcr.js called queryGemini and this check said all was well).
  *
  * Usage: node scripts/check_ai_door.cjs [--report]
  */
@@ -40,6 +45,21 @@ const GENERATE_PATTERNS = [
   { what: "Google's AI SDK", re: /require\(\s*['"]@google\/(?:generative-ai|genai)['"]\s*\)|from\s+['"]@google\/(?:generative-ai|genai)['"]/ },
 ];
 
+// The door's old one-provider helpers. They sit inside lib/aiClient.js, so a
+// file using them names no address at all, yet each one talks to a single
+// provider by name: no provider order, no fall-through, no switch. Matched on
+// code lines only (a comment explaining them is not a call).
+const HELPER_PATTERNS = [
+  { what: 'the one-provider helper queryGemini (Gemini only)', re: /\bqueryGemini\b/ },
+  { what: 'the one-provider helper queryAnthropic (Anthropic only)', re: /\bqueryAnthropic\b/ },
+  { what: 'the one-provider helper queryOpenAI (OpenAI only)', re: /\bqueryOpenAI\b/ },
+  { what: 'the one-provider helper queryKimi (Kimi only)', re: /\bqueryKimi\b/ },
+];
+
+function isCommentLine(text) {
+  return /^\s*(?:\/\/|\/\*|\*)/.test(text);
+}
+
 // The door itself, and the three files that talk to providers about KEYS and
 // BILLING. Each spells a provider address to ask "does this key work?" or
 // "how much credit is left?", which the door cannot answer for them.
@@ -60,6 +80,9 @@ const WAITING = new Map([
     + ' cannot do yet, and it asks for claude-fable-5 by name for design taste (moved by SC-895)'],
   ['lib/eventHarvest.js',
     "the schedule upload has the AI read a PDF or photo of the flyer, which the door cannot do yet (moved by SC-895)"],
+  ['lib/wyrTweetOcr.js',
+    'the Would You Rather import has the AI read the words off a post image, which the door cannot do yet;'
+    + ' it uses the Gemini-only helper queryGemini (moved by SC-895)'],
 ]);
 
 function walk(dir, root = ROOT, out = []) {
@@ -76,7 +99,7 @@ function walk(dir, root = ROOT, out = []) {
   return out;
 }
 
-/** Every file outside the door that names a generate address: [{ rel, line, what }]. */
+/** Every file outside the door that names a generate address or a one-provider helper: [{ rel, line, what }]. */
 function findViolations(root = ROOT) {
   const found = [];
   for (const dir of SCAN_DIRS) {
@@ -90,6 +113,10 @@ function findViolations(root = ROOT) {
         for (const p of GENERATE_PATTERNS) {
           if (p.re.test(text)) found.push({ rel, line: index + 1, what: p.what });
         }
+        if (isCommentLine(text)) return;
+        for (const p of HELPER_PATTERNS) {
+          if (p.re.test(text)) found.push({ rel, line: index + 1, what: p.what });
+        }
       });
     }
   }
@@ -100,7 +127,9 @@ function main() {
   const report = process.argv.includes('--report');
   const found = findViolations();
   if (!found.length) {
-    console.log('AI door: every AI generation call goes through generate() in lib/aiClient.js');
+    console.log(WAITING.size
+      ? `AI door: every AI generation call goes through generate() in lib/aiClient.js, except the ${WAITING.size} file(s) still waiting below`
+      : 'AI door: every AI generation call goes through generate() in lib/aiClient.js');
     if (report) for (const [rel, why] of ALLOWED) console.log(`  allowed  ${rel}  (${why})`);
     for (const [rel, why] of WAITING) console.log(`  waiting  ${rel}  still calls a provider by hand: ${why}`);
     return 0;
@@ -128,4 +157,4 @@ provider its own way stopped at once (docs/DOCTRINE.md, "AI calls go through the
 
 if (require.main === module) process.exit(main());
 
-module.exports = { findViolations, GENERATE_PATTERNS, ALLOWED, WAITING };
+module.exports = { findViolations, GENERATE_PATTERNS, HELPER_PATTERNS, ALLOWED, WAITING };
