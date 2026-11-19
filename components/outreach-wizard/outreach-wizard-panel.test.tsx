@@ -6,6 +6,7 @@ import OutreachWizardPanel, {
   CHANNEL_STORAGE_KEY,
   CHECK_POLL_MS,
   PROJECT_SWITCH_EVENT,
+  STAGES_STORAGE_PREFIX,
   openStageIndex,
   type OutreachChannel,
   type OutreachOverview,
@@ -146,6 +147,12 @@ function stages() {
   return Array.from(container!.querySelectorAll<HTMLLIElement>(".outreach-wizard-stage"));
 }
 
+function header(key: string) {
+  const b = container!.querySelector<HTMLButtonElement>(`[data-stage="${key}"] .outreach-wizard-stage-toggle`);
+  if (!b) throw new Error(`no header for ${key}`);
+  return b;
+}
+
 function tab(label: string) {
   const b = Array.from(container!.querySelectorAll<HTMLButtonElement>('[role="tab"]')).find((x) => x.textContent === label);
   if (!b) throw new Error(`no tab ${label}`);
@@ -272,6 +279,10 @@ describe("OutreachWizardPanel", () => {
 
   it("the Learn stage shows its lessons on the wizard itself, for the channel picked (13/19)", async () => {
     await mount();
+    // Learn is not the open stage, so it starts collapsed and reads nothing (SC-886).
+    expect(lessonReads).toEqual([]);
+    await act(async () => header("learn").click());
+    await act(async () => {});
     const learn = container!.querySelector('[data-stage="learn"]')!;
     expect(learn.querySelector("[data-learn]")?.getAttribute("data-learn")).toBe("youtube");
     expect(lessonReads).toEqual(["/api/outreach/lessons?channel=youtube"]);
@@ -392,9 +403,124 @@ describe("YouTube's Find creators (Outreach wizard 15/19)", () => {
     act(() => root!.unmount());
     container!.remove();
     await mount();
+    await act(async () => header("creators").click());
+    await act(async () => {});
     const stage = container!.querySelector('[data-stage="creators"]')!;
     expect(stage.querySelector("[data-yt-creators]")).not.toBeNull();
     expect(stage.textContent).toContain("No channels found yet.");
     expect(stage.querySelector("a.btn")).toBeNull();
+  });
+});
+
+describe("Stages open and close from their header (SC-886)", () => {
+  const expanded = () => stages().map((r) => r.dataset.expanded === "true");
+
+  it("only the open stage starts expanded; a collapsed stage keeps its header and sentence", async () => {
+    await mount();
+    expect(expanded()).toEqual([true, false, false, false, false]);
+    const replies = stages()[3];
+    expect(replies.textContent).toContain("Replies");
+    expect(replies.textContent).toContain("0 comments.");
+    expect(header("replies").getAttribute("aria-expanded")).toBe("false");
+    const controls = header("replies").getAttribute("aria-controls")!;
+    const body = container!.querySelector<HTMLElement>(`#${controls}`)!;
+    expect(body.hidden).toBe(true);
+    expect(body.childElementCount).toBe(0);
+    // The open stage's body really is there: its primary button and Connect controls.
+    expect(header("connect").getAttribute("aria-expanded")).toBe("true");
+    expect(stages()[0].querySelector(".btn-primary")).not.toBeNull();
+  });
+
+  it("the header is a real button, so Enter and Space work the same as a click", async () => {
+    await mount();
+    const b = header("connect");
+    // A native <button type="button"> turns Enter and Space into a click in
+    // every browser; jsdom does not synthesise that, so what is asserted is
+    // the element itself, and that the click it produces toggles.
+    expect(b.tagName).toBe("BUTTON");
+    expect(b.getAttribute("type")).toBe("button");
+    await act(async () => b.click());
+    expect(expanded()[0]).toBe(false);
+    expect(container!.querySelector(".btn-primary")).toBeNull();
+    await act(async () => b.click());
+    expect(expanded()[0]).toBe(true);
+  });
+
+  it("with every stage done, all start collapsed", async () => {
+    const api = (window as any).App.api;
+    (window as any).App.api = async (path: string, options?: RequestInit) => {
+      if (path === "/api/outreach/overview") {
+        const o = overviewFor(activeProject);
+        o.channels[0].stages = o.channels[0].stages.map((x) => ({ ...x, state: "done" as const }));
+        return { ok: true, data: o };
+      }
+      return api(path, options);
+    };
+    await mount();
+    expect(expanded()).toEqual([false, false, false, false, false]);
+    expect(container!.textContent).toContain("Every YouTube stage is done.");
+  });
+
+  it("remembers Dane's choices per channel across a reload", async () => {
+    await mount();
+    await act(async () => header("connect").click());
+    await act(async () => header("replies").click());
+    expect(expanded()).toEqual([false, false, false, true, false]);
+    expect(JSON.parse(window.localStorage.getItem(`${STAGES_STORAGE_PREFIX}youtube`)!)).toEqual({ connect: false, replies: true });
+
+    // Another channel is untouched by YouTube's choices.
+    await act(async () => tab("Substack").click());
+    expect(expanded()).toEqual([false, false, true, false, false]);
+    await act(async () => tab("YouTube").click());
+
+    act(() => root!.unmount());
+    container!.remove();
+    await mount();
+    expect(expanded()).toEqual([false, false, false, true, false]);
+  });
+
+  it("with storage throwing, renders the default and no error", async () => {
+    const get = vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => { throw new Error("denied"); });
+    const set = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => { throw new Error("denied"); });
+    try {
+      await mount();
+      expect(expanded()).toEqual([true, false, false, false, false]);
+      expect(container!.querySelector('[role="alert"]')).toBeNull();
+      // Toggling still works for this visit, it is just not remembered.
+      await act(async () => header("replies").click());
+      expect(expanded()[3]).toBe(true);
+    } finally {
+      get.mockRestore();
+      set.mockRestore();
+    }
+  });
+
+  it("a damaged saved value falls back to the default", async () => {
+    window.localStorage.setItem(`${STAGES_STORAGE_PREFIX}youtube`, "{not json");
+    await mount();
+    expect(expanded()).toEqual([true, false, false, false, false]);
+  });
+
+  it("a collapsed Find conversations makes no conversations request; opening it does", async () => {
+    const reads: string[] = [];
+    const api = (window as any).App.api;
+    (window as any).App.api = async (path: string, options?: RequestInit) => {
+      if (path === "/api/outreach/overview") {
+        const o = overviewFor(activeProject);
+        o.channels[0].stages[2] = { ...o.channels[0].stages[2], state: "needs_you", next: null, inline: true };
+        return { ok: true, data: o };
+      }
+      if (path.startsWith("/api/outreach/youtube/conversations")) {
+        reads.push(path);
+        return { ok: true, data: { videos: [], newCount: 0, reading: { state: "current", sentence: "S." }, skippedCount: 0, commentedCount: 0 } };
+      }
+      return api(path, options);
+    };
+    await mount();
+    expect(expanded()[2]).toBe(false);
+    expect(reads).toEqual([]);
+    await act(async () => header("conversations").click());
+    await act(async () => {});
+    expect(reads.length).toBeGreaterThan(0);
   });
 });
