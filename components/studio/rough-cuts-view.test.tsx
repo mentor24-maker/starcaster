@@ -157,6 +157,13 @@ describe("rough cuts: what each line says", () => {
     expect(verdictLine({ status: "sent_back", group: "sent_back", daneNote: "trim the start" }))
       .toBe('Sent back: "trim the start"');
     expect(verdictLine({ status: "review", group: "waiting", daneNote: "" })).toBe("");
+    // Reel Spinner 4d: a re-cut says which note it answers; a hand-back says why it was not re-cut.
+    expect(verdictLine({ status: "review", group: "waiting", daneNote: "start two seconds later", recutCount: 1 }))
+      .toBe('Re-cut from your note: "start two seconds later"');
+    expect(verdictLine({ status: "review", group: "waiting", daneNote: "make it purple", recutCount: 0, recutProblem: "could not re-cut from your note: colour is not an edit" }))
+      .toBe("Could not re-cut from your note: colour is not an edit");
+    expect(verdictLine({ status: "review", group: "waiting", daneNote: "x", recutCount: 3, recutProblem: "re-cut 3 times; tell an agent session what is still wrong" }))
+      .toBe("Re-cut 3 times; tell an agent session what is still wrong");
   });
 
   it("every empty screen names its reason", () => {
