@@ -41,6 +41,8 @@
  *   POST /api/outreach/youtube/creators/suggest  { redo?: true } — suggest Approve
  *                                                or Reject for each undecided one
  *   POST /api/outreach/youtube/creators/:id/decide  { status, decisionReasons?, note? }
+ *                                                an approval also reads that channel's comments
+ *                                                straight away; the reply's `commentsRead` says how it went
  *
  *   GET  /api/outreach/reddit/subreddits         the subreddits the Mini watches
  *   POST /api/outreach/reddit/subreddits         { names: [] } — add some by hand
@@ -108,6 +110,7 @@ const defaultCreators = {
   store: () => require('../lib/youtubeCreatorsStore'),
   find: (scope, options) => require('../lib/acquire/YoutubeCreatorsFindRun').findYoutubeCreators(scope, options),
   suggest: (scope, options) => require('../lib/acquire/SubstackSuggestRun').runYoutubeSuggestions(scope, options),
+  readOnApprove: () => require('../lib/acquire/YoutubeCommentsReadDue'),
 };
 
 /** The Reddit watch's moving parts, required on first use for the same reason. */
@@ -187,9 +190,33 @@ async function handleCreators(req, res, pathname, method, creators) {
     if (method !== 'POST') return sendErr(res, 405, 'Method not allowed'), true;
     const body = await readBody(req, res);
     if (!body) return true;
-    return reply(res, await creators.store().decideCreator(decodeURIComponent(decide[1]), body, scope)), true;
+    const decided = await creators.store().decideCreator(decodeURIComponent(decide[1]), body, scope);
+    if (!decided.ok || decided.data.status !== 'approved') return reply(res, decided), true;
+    return sendOk(res, decided.status || 200, await readOnApprove(decided.data, scope, creators)), true;
   }
   return sendErr(res, 404, 'Unknown outreach endpoint', { code: 'NOT_FOUND' }), true;
+}
+
+/**
+ * A channel just approved is read straight away (SC-881), inside this request
+ * because Vercel may freeze work started after the reply. The approval is
+ * already saved: nothing here can turn it into a failure. The reply is the
+ * channel as stored plus `commentsRead`, the outcome Find creators shows.
+ */
+async function readOnApprove(approved, scope, creators) {
+  let read;
+  try {
+    const due = creators.readOnApprove ? creators.readOnApprove() : null;
+    if (!due) return approved;
+    read = await due.readApprovedChannel(scope, approved);
+    const line = due.formatApprovedReadLog(scope, approved, read);
+    if (read.state === 'failed') console.error(line); else console.log(line);
+  } catch (err) {
+    read = { state: 'failed', comments: 0, videos: 0, quota: false, creator: null, error: `the read stopped: ${(err && err.message) || 'unknown error'}` };
+    console.error(`[youtube-conversations] read-on-approve FAILED project=${scope.projectId} channel="${approved.name || approved.channelId}": ${read.error}`);
+  }
+  const { creator, ...outcome } = read;
+  return { ...(creator || approved), commentsRead: outcome };
 }
 
 /** The Reddit watch routes; false when `pathname` is not one of them. */

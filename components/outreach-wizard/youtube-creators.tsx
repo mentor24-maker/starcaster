@@ -35,7 +35,10 @@ export type YoutubeCreator = {
   decisionReasons: string[];
   note: string;
   suggestion: Suggestion | null;
+  /** Only on the reply to an approval (SC-881): how reading the channel straight away went. */
+  commentsRead?: CommentsRead;
 };
+export type CommentsRead = { state: 'read' | 'recent' | 'busy' | 'failed'; comments: number; videos: number; error: string; quota?: boolean; saveError?: string };
 export type Keywords = { keywords: string[]; source: 'saved' | 'substack_miner' | 'none' };
 
 type Api = (path: string, options?: RequestInit) => Promise<Record<string, any>>;
@@ -61,6 +64,27 @@ export function keywordsSourceText(k: Keywords | null): string {
   if (k.source === 'saved') return 'Searching YouTube for these keywords.';
   if (k.source === 'substack_miner') return 'No outreach keywords saved yet, so these are the Substack Miner\'s. Save to make them the Outreach list.';
   return 'No keywords yet. Add the subjects you want creators in, separated by commas.';
+}
+
+function plural(n: number, word: string): string {
+  return `${n} ${word}${n === 1 ? '' : 's'}`;
+}
+
+/**
+ * What reading a just-approved channel found, as a sentence (SC-881). The
+ * approval is saved whatever this says; a read that did not happen says why,
+ * and that it will be tried again by the scheduled read.
+ */
+export function commentsReadText(read: CommentsRead | undefined): string {
+  if (!read) return '';
+  if (read.state === 'read') {
+    return read.videos
+      ? `Read: ${plural(read.comments, 'comment')} on ${plural(read.videos, 'video')}. They are in Find conversations now.`
+      : 'Read: no videos in the last 14 days, so there are no comments to show yet.';
+  }
+  if (read.state === 'recent') return `Already read in the last hour: ${plural(read.comments, 'comment')} on ${plural(read.videos, 'video')}.`;
+  if (read.state === 'busy') return 'Its comments are already being read; they will be in Find conversations in a moment.';
+  return `The approval is saved, but its comments could not be read: ${read.error || 'unknown error'}${read.saveError ? ` (and that reason could not be recorded: ${read.saveError})` : ''}. The scheduled read tries again within three hours.`;
 }
 
 /** One run's outcome as a sentence. `cannotTell` (quota) leads, because it overrides the counts. */
@@ -200,11 +224,13 @@ export default function YoutubeCreators({ onChanged }: { onChanged?: () => void 
 
   const decide = async (creator: YoutubeCreator, status: Decision, decisionReasons: string[], note: string): Promise<boolean> => {
     setBusy(creator.id); setDialogError('');
+    if (status === 'approved') setNotice(`Approving ${creator.name || 'the channel'} and reading its newest videos now…`);
     try {
       const reply = await post(`${CREATORS_PATH}/${encodeURIComponent(creator.id)}/decide`, { status, decisionReasons, note });
-      const saved = reply?.data as YoutubeCreator;
+      const { commentsRead, ...saved } = reply?.data as YoutubeCreator;
       setCreators((list) => (list || []).map((c) => (c.id === creator.id ? saved : c)));
-      setNotice(`${saved.name || 'The channel'} ${status === 'approved' ? 'approved' : 'rejected'}${decisionReasons.length ? `, because: ${decisionReasons.join(', ')}` : ''}.`);
+      const decidedText = `${saved.name || 'The channel'} ${status === 'approved' ? 'approved' : 'rejected'}${decisionReasons.length ? `, because: ${decisionReasons.join(', ')}` : ''}.`;
+      setNotice([decidedText, commentsReadText(commentsRead)].filter(Boolean).join(' '));
       onChanged?.();
       return true;
     } catch (err) {

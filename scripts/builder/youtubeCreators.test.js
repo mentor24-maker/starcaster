@@ -23,7 +23,7 @@ const supabasePath = require.resolve('../../lib/supabase.js');
 const ALL = [
   '../../lib/projectScope.js', '../../lib/substackMinerStore.js', '../../lib/youtubeCreatorsStore.js',
   '../../lib/acquire/SubstackSuggestRun.js', '../../lib/acquire/YoutubeCreatorsFindRun.js',
-  '../../routes/outreach.js',
+  '../../lib/acquire/YoutubeCommentsReadDue.js', '../../routes/outreach.js',
 ].map((p) => require.resolve(p));
 
 const SCOPE = { projectId: 'proj_a', userId: 'user_1' };
@@ -31,7 +31,7 @@ const OTHER = { projectId: 'proj_b', userId: 'user_2' };
 const NOW = Date.parse('2026-10-28T15:00:00Z'); // 8am Pacific (PDT)
 
 function withDb() {
-  const sql = ['youtube_creators_setup.sql', 'substack_miner_setup.sql']
+  const sql = ['youtube_creators_setup.sql', 'youtube_conversations_setup.sql', 'substack_miner_setup.sql']
     .map((f) => fs.readFileSync(path.join(SQL_DIR, f), 'utf8')).join('\n');
   const db = createFakeDb(parseSchemaText(sql));
   const realSupabase = require.cache[supabasePath];
@@ -340,7 +340,8 @@ test('routes: list, decide, and a quota-exhausted find comes back as an answer w
     assert.equal(res.body.data.keywords.source, 'none');
 
     res = fakeRes();
-    await route.handle(req('POST', { status: 'approved', decisionReasons: ['deep'] }), res, `/api/outreach/youtube/creators/${c.id}/decide`, 'POST');
+    const noRead = { store: () => store };
+    await route.handle(req('POST', { status: 'approved', decisionReasons: ['deep'] }), res, `/api/outreach/youtube/creators/${c.id}/decide`, 'POST', { creators: noRead });
     assert.equal(res.statusCode, 200, JSON.stringify(res.body));
     assert.deepEqual(res.body.data.decisionReasons, ['deep']);
 
@@ -357,5 +358,129 @@ test('routes: list, decide, and a quota-exhausted find comes back as an answer w
     res = fakeRes();
     await route.handle(req('PUT', { keywords: ['consciousness'] }), res, '/api/outreach/keywords', 'PUT');
     assert.equal(res.statusCode, 201, JSON.stringify(res.body));
+  } finally { restore(); }
+});
+
+// ── Approving a channel reads it straight away (SC-881) ─────────────────────
+
+/** A fake YouTube for one channel's read: uploads, then comments per video. `mode` picks the outcome. */
+function fakeReadYoutube(mode, calls = []) {
+  return async (endpoint, params) => {
+    calls.push(endpoint);
+    if (mode === 'quota') return { ok: false, status: 403, reason: 'quotaExceeded', error: 'The request cannot be completed because you have exceeded your quota.' };
+    if (endpoint === 'playlistItems') {
+      if (mode === 'fail') return { ok: false, status: 500, reason: 'backendError', error: 'Backend Error' };
+      return {
+        ok: true,
+        data: { items: [1, 2, 3].map((k) => ({ snippet: { title: `Video ${k}`, resourceId: { videoId: `vidvidvid0${k}` } }, contentDetails: { videoPublishedAt: new Date(Date.now() - k * 86400000).toISOString() } })) },
+      };
+    }
+    if (endpoint === 'commentThreads') {
+      return {
+        ok: true,
+        data: { items: [1, 2, 3, 4].map((k) => ({ id: `c${k}${params.videoId}`, snippet: { totalReplyCount: 0, topLevelComment: { id: `c${k}${params.videoId}`, snippet: { textOriginal: `comment ${k}`, authorDisplayName: '@someone', likeCount: 1, publishedAt: new Date().toISOString() } } } })) },
+      };
+    }
+    return { ok: false, status: 404, error: `unexpected ${endpoint}` };
+  };
+}
+
+/** The route's creators deps, reading with the fake YouTube instead of the real one. */
+function readingCreators(store, ytFetch, apiKey = 'k') {
+  const due = require('../../lib/acquire/YoutubeCommentsReadDue.js');
+  return {
+    store: () => store,
+    readOnApprove: () => ({ ...due, readApprovedChannel: (scope, creator) => due.readApprovedChannel(scope, creator, { store, ytFetch, apiKey }) }),
+  };
+}
+
+async function decideVia(route, store, creators, id, status) {
+  const res = fakeRes();
+  await route.handle(req('POST', { status, decisionReasons: ['deep'] }), res, `/api/outreach/youtube/creators/${id}/decide`, 'POST', { creators });
+  return res;
+}
+
+test('approving a channel reads its comments straight away, and the reply says what it read', async () => {
+  const { store, route, restore } = withDb();
+  try {
+    const c = (await store.upsertCreator({ channelId: cid(21), name: 'Read Me' }, SCOPE)).data;
+    const calls = [];
+    const res = await decideVia(route, store, readingCreators(store, fakeReadYoutube('ok', calls)), c.id, 'approved');
+    assert.equal(res.statusCode, 200, JSON.stringify(res.body));
+    assert.equal(res.body.data.status, 'approved');
+    assert.equal(res.body.data.commentsRead.state, 'read', JSON.stringify(res.body.data.commentsRead));
+    assert.equal(res.body.data.commentsRead.videos, 3);
+    assert.equal(res.body.data.commentsRead.comments, 12);
+    assert.deepEqual(calls, ['playlistItems', 'commentThreads', 'commentThreads', 'commentThreads'], 'one uploads read and one comments read per video');
+
+    const row = (await store.getCreatorById(c.id, SCOPE)).data;
+    assert.equal(row.status, 'approved', 'the decision was saved');
+    assert.ok(row.lastCommentsReadAt, 'last_comments_read_at is set');
+    assert.equal(row.recentVideos.length, 3, 'recent_videos is kept');
+    assert.equal(row.commentsReadError, '');
+    assert.ok(res.body.data.lastCommentsReadAt, 'the reply is the row as now stored');
+
+    // Approving it again within the hour does not spend quota on a second read.
+    const again = await decideVia(route, store, readingCreators(store, fakeReadYoutube('ok', calls)), c.id, 'approved');
+    assert.equal(again.body.data.commentsRead.state, 'recent');
+    assert.equal(calls.length, 4, 'no second read');
+  } finally { restore(); }
+});
+
+test('a failed read leaves the channel approved and records why on its row', async () => {
+  const { store, route, restore } = withDb();
+  try {
+    const c = (await store.upsertCreator({ channelId: cid(22), name: 'Broken Read' }, SCOPE)).data;
+    const res = await decideVia(route, store, readingCreators(store, fakeReadYoutube('fail')), c.id, 'approved');
+    assert.equal(res.statusCode, 200, 'the approval is not reported as failed');
+    assert.equal(res.body.data.status, 'approved');
+    assert.equal(res.body.data.commentsRead.state, 'failed');
+    assert.match(res.body.data.commentsRead.error, /did not list the channel's uploads: Backend Error/);
+    const row = (await store.getCreatorById(c.id, SCOPE)).data;
+    assert.equal(row.status, 'approved', 'the decision was saved');
+    assert.match(row.commentsReadError, /Backend Error/, 'the row records why');
+    assert.equal(row.lastCommentsReadAt, null);
+  } finally { restore(); }
+});
+
+test('a used-up YouTube quota leaves the channel approved and says when it resets', async () => {
+  const { store, route, restore } = withDb();
+  try {
+    const c = (await store.upsertCreator({ channelId: cid(23), name: 'No Quota' }, SCOPE)).data;
+    const res = await decideVia(route, store, readingCreators(store, fakeReadYoutube('quota')), c.id, 'approved');
+    assert.equal(res.statusCode, 200);
+    assert.equal(res.body.data.status, 'approved');
+    assert.equal(res.body.data.commentsRead.state, 'failed');
+    assert.equal(res.body.data.commentsRead.quota, true);
+    const row = (await store.getCreatorById(c.id, SCOPE)).data;
+    assert.equal(row.status, 'approved', 'the decision was saved');
+    assert.match(row.commentsReadError, /quota/i, 'the row records the quota as the reason');
+  } finally { restore(); }
+});
+
+test('rejecting a channel reads nothing', async () => {
+  const { store, route, restore } = withDb();
+  try {
+    const c = (await store.upsertCreator({ channelId: cid(24), name: 'Not For Us' }, SCOPE)).data;
+    const calls = [];
+    const res = await decideVia(route, store, readingCreators(store, fakeReadYoutube('ok', calls)), c.id, 'rejected');
+    assert.equal(res.statusCode, 200);
+    assert.equal(res.body.data.status, 'rejected', 'the decision was saved');
+    assert.equal(res.body.data.commentsRead, undefined);
+    assert.deepEqual(calls, [], 'YouTube was not asked');
+    const row = (await store.getCreatorById(c.id, SCOPE)).data;
+    assert.equal(row.lastCommentsReadAt, null);
+  } finally { restore(); }
+});
+
+test('with no YouTube key the approval still stands and the row says the key is missing', async () => {
+  const { store, route, restore } = withDb();
+  try {
+    const c = (await store.upsertCreator({ channelId: cid(25), name: 'Keyless' }, SCOPE)).data;
+    const res = await decideVia(route, store, readingCreators(store, fakeReadYoutube('ok'), ''), c.id, 'approved');
+    assert.equal(res.statusCode, 200);
+    assert.equal(res.body.data.status, 'approved');
+    assert.match(res.body.data.commentsRead.error, /YOUTUBE_API_KEY/);
+    assert.match((await store.getCreatorById(c.id, SCOPE)).data.commentsReadError, /YOUTUBE_API_KEY/);
   } finally { restore(); }
 });
