@@ -10,7 +10,9 @@ on the Dane of Earth project's Context page, called "Reel Spinner — end
 cards", one line per project, so Dane can change it without anyone touching
 the program. The note was created today with the three web addresses that
 were already confirmed (wavecenter.com, alphire.agency, starcaster.pro). The
-DEO and Spirality addresses were asked of Dane rather than guessed.
+DEO and Spirality addresses were asked of Dane rather than guessed; he
+answered the same afternoon (DEO goes to wavecenter.com, Spirality to
+daneofearth.org/spirality), so all five end cards now exist.
 
 A short gets the card for its own moment's project. A full video gets the
 project it mentions most. A personal story gets the WaveCenter card. When a

@@ -759,8 +759,9 @@ Name, a one-line invitation, and the address, split by `|`. A line with no
 `|` is ignored, so the note can carry a sentence saying what it is. Seeded on
 2026-11-19 (note `e24a9965-28bc-4097-9b76-ff1f99d1bd57`) with the three
 addresses this repository already confirms: wavecenter.com, alphire.agency,
-starcaster.pro. **DEO and Spirality have no line yet**; their addresses were
-asked of Dane rather than guessed. Change the wording on the Context page;
+starcaster.pro. DEO and Spirality were asked of Dane rather than guessed, and
+added the same day from his answer: **DEO points at wavecenter.com** and
+**Spirality at daneofearth.org/spirality**. All five projects have a card. Change the wording on the Context page;
 nothing needs redeploying. (Because it is switched on for Reel Spinner, the
 moment scoring reads it too, alongside the channel brief; scoring only shows
 it was done under older notes, it does not rescore by itself.)
