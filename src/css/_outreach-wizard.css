@@ -108,9 +108,9 @@
 }
 
 .outreach-wizard-stage-toggle[aria-expanded="true"] .outreach-wizard-stage-mark {
-  border-color: var(--accent-dark);
+  border-color: var(--accent);
   background: color-mix(in srgb, var(--accent) 12%, transparent);
-  color: var(--accent-dark);
+  color: var(--accent);
 }
 
 .outreach-wizard-stage-mark .builder-collapse-icon-svg {
