@@ -9,7 +9,7 @@
  * workers/studio/moments.js `MOODS`).
  *
  * Pure: no network, no files, no clock. The shelf is the committed manifest
- * `workers/studio/music-shelf.json` (built once by
+ * `lib/studioMusicShelf.json` (built once by
  * scripts/studio_build_music_shelf.cjs); the audio files live on Drive in the
  * Studio folder's `Music` folder and are never committed.
  *
@@ -35,6 +35,8 @@
  */
 
 const { MOODS } = require('./moments.js');
+// The shelf and its labeller live in lib/ so the website can read them too.
+const { trackLabel, loadShelf } = require('../../lib/studioMusicShelf.js');
 
 /** The mood the fallback comes from. */
 const CALM = 'calm';
@@ -172,23 +174,6 @@ function moodForMoments(moments) {
     .filter((m) => m && MOODS.includes(m.mood))
     .sort((a, b) => (Number(b.score) || 0) - (Number(a.score) || 0));
   return scored.length ? scored[0].mood : '';
-}
-
-/**
- * A stored track id in words, for a screen: "Title, Artist". An id the shelf
- * does not know says so rather than showing nothing (landmine 17).
- */
-function trackLabel(shelf, trackId) {
-  const id = text(trackId);
-  if (!id) return 'No music picked yet';
-  const tracks = Array.isArray(shelf && shelf.tracks) ? shelf.tracks : [];
-  const track = tracks.find((t) => t && t.id === id);
-  return track ? `${track.title}, ${track.artist}` : `Unknown track "${id}" (not on the music shelf)`;
-}
-
-/** The committed shelf. Read on demand so a test can pass its own. */
-function loadShelf() {
-  return require('./music-shelf.json');
 }
 
 module.exports = {

@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import MomentsView from './moments-view';
+import RoughCutsView from './rough-cuts-view';
 import PairLines, { type PairView } from './pair-lines';
 
 /**
@@ -799,6 +800,7 @@ export default function FootagePanel(): React.ReactElement {
   const [searchNote, setSearchNote] = useState('');
   const [searching, setSearching] = useState(false);
   const searchSeq = useRef(0);
+  const [screen, setScreen] = useState<'recordings' | 'roughCuts'>('recordings');
 
   const clearSearch = useCallback(() => {
     searchSeq.current += 1;
@@ -939,8 +941,44 @@ export default function FootagePanel(): React.ReactElement {
     }
   }
 
+  const switcher = (
+    <div className="studio-footage-screens" role="group" aria-label="Footage screens">
+      <button
+        type="button"
+        className="btn"
+        aria-pressed={screen === 'recordings'}
+        data-testid="studio-screen-recordings"
+        onClick={() => setScreen('recordings')}
+      >
+        Recordings
+      </button>
+      <button
+        type="button"
+        className="btn"
+        aria-pressed={screen === 'roughCuts'}
+        aria-expanded={screen === 'roughCuts'}
+        data-testid="studio-screen-roughcuts"
+        // A second press goes back to the recordings, like any open/close
+        // control (and how check:screens closes what it opened).
+        onClick={() => setScreen((s) => (s === 'roughCuts' ? 'recordings' : 'roughCuts'))}
+      >
+        Rough cuts
+      </button>
+    </div>
+  );
+
+  if (screen === 'roughCuts') {
+    return (
+      <div ref={hostRef} className="studio-footage-panel">
+        {switcher}
+        <RoughCutsView />
+      </div>
+    );
+  }
+
   return (
     <div ref={hostRef} className="studio-footage-panel">
+      {switcher}
       <form
         className="studio-footage-search"
         role="search"
