@@ -20,7 +20,10 @@ const ROOT = path.resolve(__dirname, '..', '..');
 const SCAN_DIRS = ['lib', 'routes', 'scripts', 'workers'];
 const SKIP_DIRS = new Set(['node_modules', 'dist', '.git']);
 // Generated server libs (CLAUDE.md "Generated files") and tests are not callers.
-const SKIP_FILES = /(^|\/)lib\/builder\/|\.test\.(c|m)?js$|(^|\/)scripts\/ui\//;
+// scripts/check_ai_door.cjs is the door's own checker: its help text prints an
+// example generate() call (feature 'what_spent_this') inside a multi-line
+// message, which is text it shows, not a call it makes.
+const SKIP_FILES = /(^|\/)lib\/builder\/|\.test\.(c|m)?js$|(^|\/)scripts\/ui\/|^scripts\/check_ai_door\.cjs$/;
 
 function walk(dir, out = []) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -102,6 +105,14 @@ function scanSource(rel, raw) {
   for (const m of src.matchAll(/\bfeature\s*:\s*([^,\n}]+)/g)) {
     if (insideTemplate(src, m.index)) continue;
     const expr = m[1].trim();
+    // `cond ? 'a' : 'b'`: both names are checked (SC-872 review, PR #1064's
+    // messaging_content_long / _short). Only two plain literals; anything
+    // richer is a problem below, never skipped.
+    const ternary = expr.match(/^[^?'"`]+\?\s*(['"`])([^'"`]*)\1\s*:\s*(['"`])([^'"`]*)\3$/);
+    if (ternary) {
+      out.features.push({ name: ternary[2], line: lineOf(m.index) }, { name: ternary[4], line: lineOf(m.index) });
+      continue;
+    }
     for (const alt of expr.split('||').map((x) => x.trim())) {
       const lit = alt.match(/^(['"`])([^'"`]*)\1$/);
       if (lit) { out.features.push({ name: lit[2], line: lineOf(m.index) }); continue; }
@@ -358,4 +369,49 @@ test('saving group orders writes only that field (the main order is left alone),
   } finally {
     supabase.sbQuery = original;
   }
+});
+
+// ── SC-872 review, round 1 ─────────────────────────────────────────────────
+
+test('a feature chosen by `cond ? \'a\' : \'b\'` has both names checked', () => {
+  const src = "const aiClient = require('./aiClient');\nfunction ask(o) { return aiClient.generate({ feature: o.feature }); }\nask({\n  feature: long ? 'messaging_content_long' : 'not-in-a-group',\n});\n";
+  const s = scanSource('lib/m.js', src);
+  assert.deepEqual(s.features.map((f) => f.name), ['messaging_content_long', 'not-in-a-group']);
+  const problems = unassigned(new Map([['lib/m.js', s]]));
+  assert.equal(problems.length, 1);
+  assert.match(problems[0], /^lib\/m\.js:4 .*"not-in-a-group".*no group/);
+});
+
+test('a richer computed feature name is a problem, never skipped', () => {
+  const src = "const { generate } = require('./aiClient');\ngenerate({ feature: `messaging_${kind}`, messages: 'x' });\n";
+  assert.match(unassigned(new Map([['lib/c.js', scanSource('lib/c.js', src)]])).join('\n'), /lib\/c\.js:2 .*cannot resolve/);
+});
+
+test('a row holding only a group order (main never saved) keeps AI on for every other group', async () => {
+  // The review's reproduction: the first save is a group's, so Postgres fills providers = [].
+  const row = { id: 'platform', providers: [], custom_providers: [], group_orders: { outreach: list(['openai', 'anthropic', 'gemini', 'kimi']) } };
+  const settings = { ok: true, data: store.normaliseRow(row) };
+  const env = { AI_PROVIDER_ORDER: 'anthropic,openai' };
+  for (const feature of ['seo_alt_text', 'studio_reel_moments', 'acquire_content_handler_generate', 'ai-try', 'not-a-listed-feature']) {
+    const g = await ai.getAiProviderOrder({ env, readSettings: async () => settings, feature });
+    assert.ok(g.providers.length > 0, `${feature} has no providers`);
+    assert.equal(g.providers[0].id, 'anthropic', feature);
+    assert.equal(g.orderUsed, 'main', feature);
+    assert.match(g.fallbackReason, /main order .* has not been saved yet/, feature);
+  }
+  const outreach = await ai.getAiProviderOrder({ env, readSettings: async () => settings, feature: 'reddit-comment-draft' });
+  assert.equal(outreach.orderUsed, 'group', 'the group order that WAS saved still applies');
+  assert.equal(outreach.providers[0].id, 'openai');
+  const plain = await ai.getAiProviderOrder({ env, readSettings: async () => settings });
+  assert.ok(plain.providers.length > 0, 'the main order with no feature named is not empty either');
+});
+
+test('group orders read back: same is same, a changed or dropped group is not', () => {
+  const sent = store.validateGroupOrders({ outreach: list(['openai', 'anthropic', 'gemini', 'kimi']) }).data;
+  const readOf = (groupOrders) => store.normaliseRow({ id: 'platform', providers: [], custom_providers: [], group_orders: groupOrders });
+  assert.equal(store.sameGroupOrders(sent, readOf(sent)), true);
+  assert.equal(store.sameGroupOrders(sent, readOf({})), false, 'the save did not land');
+  assert.equal(store.sameGroupOrders(sent, readOf({ outreach: list(['anthropic', 'openai', 'gemini', 'kimi']) })), false, 'a different order');
+  assert.equal(store.sameGroupOrders(sent, readOf({ ...sent, writing: list(ALL) })), false, 'a group that should follow main has its own');
+  assert.equal(store.sameGroupOrders(sent, readOf({ outreach: 'damaged' })), false, 'an unreadable group is never a match');
 });
