@@ -537,6 +537,60 @@ one job per recording needed, and always prints how many pairs exist —
 `pairs: 1 lined up · 0 refused with a reason · 0 not looked at yet`. A dry run
 until you add `-- --apply`; a second `--apply` enqueues nothing.
 
+## Background music (Reel Spinner step 5a)
+
+Dane chose on 2026-11-16 that music is **"Picked for you"**: nobody chooses a
+track by hand. Each edit gets one track from a fixed shelf, matched to the mood
+the scoring found for it.
+
+**Where the music comes from: Kevin MacLeod's library at incompetech.com,**
+under the Creative Commons Attribution 4.0 licence. Why this one, over Pixabay
+Music (the other candidate):
+
+- **Use on YouTube is allowed with no payment, ever**, including on a channel
+  that earns money, as long as the video's description credits the track. The
+  credit line is on every track in the manifest (`attribution`); the YouTube
+  step (6b) copies it into the description.
+- **Every track has its own page and a fixed licence.** The licence cannot be
+  changed under us later, and each track's page is a stable link.
+- **Content ID.** Kevin MacLeod does not register his music with YouTube's
+  Content ID, which is what raises automatic copyright claims. Pixabay's
+  library is uploaded by thousands of contributors, some of whom have later
+  registered their tracks with Content ID, which is how a "free" Pixabay track
+  ends up claimed on a video months after it was used. A claim can still
+  happen by mistake (someone else registering a remix); the fix is to dispute
+  it on YouTube citing the CC BY licence and the track page in the manifest.
+- **The catalogue is machine-readable**, so each track's length, tempo and page
+  come from incompetech itself rather than being typed by hand.
+
+**The shelf:** thirty tracks, five for each mood (hopeful, urgent, reflective,
+determined, playful, calm), in **Studio › Music** on Drive
+(folder `1By_hHjk2hwIXsuZCmTus-PBXriO1aTpH`). The list of what is on it, with
+each track's licence, credit line, mood, length and Drive file id, is
+`workers/studio/music-shelf.json`, committed. The audio files are never
+committed. The titles were chosen by hand for sitting under someone talking:
+no vocals, no novelty pieces, between about two and five minutes long.
+
+**How a track is picked** (`workers/studio/music.js`):
+
+1. A track of the edit's mood. A full edit takes the mood of its best-scoring
+   moment. An edit with no mood, or a mood the shelf has nothing for, gets the
+   **calmest** track (the slowest calm one) and the pick says so.
+2. Never the same track as the previous edit of the same recording.
+3. Long enough to run under the whole edit, if any is.
+4. The edit's own id decides among what is left, so the same edit always gets
+   the same track and different edits spread across the shelf.
+
+The pick is stored as the track's id in `video_edits.music_track`; the
+rough-cut card (4c, SC-835) shows its title and artist from the manifest.
+
+**Adding or changing tracks:** edit the list in
+`scripts/studio_build_music_shelf.cjs` and run `npm run studio:music-shelf`.
+It is a dry run that checks every download and licence link opens; add
+`-- --apply` to upload what is missing and rewrite the manifest. Tracks
+already on Drive are reused, so a second run uploads nothing. It uploads under
+the Studio worker's sign-in (mentor24), whose storage it uses: about 200 MB.
+
 ## YouTube (Reel Spinner step 6)
 
 Finished edits upload to the **Dane of Earth** channel (Dane's choice,
@@ -650,6 +704,10 @@ For an agent session working on this, not for day-to-day use.
     with `listEditsByStatus` because the website cannot reach its queue.
     Every move is guarded on the status it was read in.
   Shared input rules: `lib/reelSpinnerInput.js`. Nothing calls these stores yet.
+- Music (Reel Spinner 5a, SC-837): the picker `workers/studio/music.js`
+  (pure; tests `scripts/builder/studioMusic.test.js`), the committed manifest
+  `workers/studio/music-shelf.json`, and the one-time builder
+  `scripts/studio_build_music_shelf.cjs` (`npm run studio:music-shelf`).
 - The pipeline: `workers/studio/` — `drive.js` (watcher), `ingest.js`,
   `probe.js`, `proxy.js`, `queue.js` (the local work list on the Mini, SQLite,
   deliberately not Supabase — the queue writes thousands of rows per video).
