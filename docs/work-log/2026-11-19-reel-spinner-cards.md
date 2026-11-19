@@ -22,3 +22,9 @@ shrunk to fit. The finished picture is also measured, and one with text
 running off the edge is never saved.
 
 Putting the cards into the videos is the next step (5c).
+
+Review found one real defect before merge: a dollar sign in a video title could
+quietly change the words on the title card ("How I made $$$" came out as
+"How I made $$"), because of how JavaScript treats "$" when it fills in a
+template. The fill-in now passes the text through untouched, and a test proves
+titles with "$$", "$&" and "$'" arrive exactly as written.

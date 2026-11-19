@@ -187,6 +187,19 @@ test('the cards: escaped text, sized boxes, and no title is a refusal', () => {
   assert.equal(endCard({ project: 'DEO', name: 'DEO' }).ok, false);
 });
 
+test('the cards: a "$" in the text comes through unchanged, never read as a replacement code', () => {
+  for (const title of ['How I made $$$ teaching', 'Price $$5 and $& here', "Earn $' fast", 'Before $` after']) {
+    const t = titleCard(title);
+    assert.equal(t.ok, true, title);
+    const drawn = [...t.html.matchAll(/<span class="line">([^<]*)<\/span>/g)].map((m) => m[1]).join(' ');
+    assert.equal(drawn.replace(/&#39;/g, "'").replace(/&amp;/g, '&'), title);
+  }
+  const e = endCard({ project: 'WaveCenter', name: 'Wave$$Center', invitation: 'Earn $& and $\' here', address: 'wavecenter.com' });
+  assert.equal(e.ok, true);
+  assert.match(e.html, />Wave\$\$Center</);
+  assert.match(e.html, />Earn \$&amp; and \$&#39; here</);
+});
+
 test('the end card\'s three boxes together fit inside the card', () => {
   const total = BOXES.name.maxHeight + BOXES.invitation.maxHeight + BOXES.address.maxHeight + 8 + 3 * 48;
   assert.ok(total <= 1080 - 2 * 140, `${total}px of boxes on an 800px card`);

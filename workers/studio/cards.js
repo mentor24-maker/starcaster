@@ -302,7 +302,10 @@ function blockHtml(cls, fitted, box) {
 
 function fillTemplate(kind, blocks) {
   const template = fs.readFileSync(TEMPLATE_FILE, 'utf8');
-  return template.replace('{{kind}}', kind).replace('{{blocks}}', blocks.join('\n'));
+  // A function, never a string, as the replacement: a string replacement reads
+  // "$$", "$&", "$'" and "$`" as codes, so a title like "How I made $$$" would
+  // be drawn with different words (SC-838 review).
+  return template.replace('{{kind}}', () => kind).replace('{{blocks}}', () => blocks.join('\n'));
 }
 
 /**
