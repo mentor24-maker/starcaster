@@ -139,6 +139,17 @@ const SCREENS = [
   },
   {
     id: 'engageOutreachPage',
+    label: 'Engage: Outreach, Reddit Find conversations table',
+    shot: 'reddit-conversations',
+    tab: { pick: '.outreach-wizard-tabs [role="tab"]:has-text("Reddit")', back: '.outreach-wizard-tabs [role="tab"]:has-text("YouTube")' },
+    open: '[data-channel="reddit"] [data-stage="conversations"] .outreach-wizard-stage-toggle',
+    ready: '[data-channel="reddit"] .reddit-conversations-table tbody tr',
+    // Expand / Write replies / Skip / Save as contact / Open are the last column (SC-891).
+    inReach: ['.reddit-conversations-table thead th.actions-col', '.reddit-conversations-table tbody td.actions-col'],
+    inReachFrom: 1280,
+  },
+  {
+    id: 'engageOutreachPage',
     label: 'Engage: Outreach, Reddit subreddits table',
     tab: { pick: '.outreach-wizard-tabs [role="tab"]:has-text("Reddit")', back: '.outreach-wizard-tabs [role="tab"]:has-text("YouTube")' },
     open: '[data-channel="reddit"] [data-stage="creators"] .outreach-wizard-stage-toggle',
