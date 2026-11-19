@@ -41,6 +41,7 @@ export type RoughCut = {
   music: { trackId: string; label: string };
   daneNote: string;
   recutCount: number;
+  recutProblem?: string;
   updatedAt: string;
 };
 
@@ -117,7 +118,10 @@ export function lengthLine(edit: Pick<RoughCut, 'lengthS' | 'savedS'>): string {
 }
 
 /** What has happened to it, for anything no longer waiting. */
-export function verdictLine(edit: Pick<RoughCut, 'status' | 'group' | 'daneNote'>): string {
+export function verdictLine(
+  edit: Pick<RoughCut, 'status' | 'group' | 'daneNote'> & Partial<Pick<RoughCut, 'recutCount' | 'recutProblem'>>,
+): string {
+  if (edit.group === 'waiting') return edit.recutProblem ? edit.recutProblem.charAt(0).toUpperCase() + edit.recutProblem.slice(1) : (edit.recutCount && edit.daneNote ? `Re-cut from your note: "${edit.daneNote}"` : '');
   if (edit.group === 'approved') {
     const after = AFTER_APPROVAL[edit.status];
     return after ? `Approved — ${after}.` : 'Approved — the Mac Mini will finish it.';
