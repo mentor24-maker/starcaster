@@ -1115,6 +1115,26 @@ try {
     }
 
     /*
+     * Optional INJECT: markup appended to <body> after the page has rendered,
+     * styled by the real stylesheet. It exists for something the preview page
+     * cannot draw: the floating Bug Report button, which the preview always
+     * renders inline (previewMode, so trying it never files a real report).
+     * Back to top has to clear that button on a live site (SC-864), so the
+     * contract places an element with the trigger's real classes and lets the
+     * site's own CSS put it in the corner. A selector-free string only; the
+     * contract's expect() still has to find it, so a stand-in that failed to
+     * appear is a failure, never a quiet pass.
+     */
+    if (contract.inject?.html) {
+      await target.evaluate((html) => {
+        const host = document.createElement('div');
+        host.setAttribute('data-check-render-inject', '');
+        host.innerHTML = html;
+        document.body.appendChild(host);
+      }, contract.inject.html);
+    }
+
+    /*
      * Optional HOVER, for behaviour that only exists while the pointer is on
      * something. Everything else here reads one static frame, which cannot see
      * a `:hover` or `:focus-within` rule at all — so a menu item that changes

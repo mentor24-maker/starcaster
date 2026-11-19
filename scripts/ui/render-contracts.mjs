@@ -1491,7 +1491,8 @@ export const RENDER_CONTRACTS = [
     why:
       'Back to top and the floating Bug Report button both default to the bottom-right corner, and ' +
       'review of PR #1067 found the new button sitting on top of Bug Report and taking its clicks ' +
-      '(SC-864). This turns both on, scrolls 3000px down so Back to top shows, and measures the two ' +
+      '(SC-864). This puts a floating Bug Report trigger in that corner, turns Back to top on, scrolls ' +
+      '3000px down so it shows, and measures the two ' +
       'boxes: they must not overlap, and Back to top must be the one above.',
     section: {
       layout: 'single',
@@ -1499,13 +1500,16 @@ export const RENDER_CONTRACTS = [
       pageOptions: { backToTop: true },
       modules: [{ type: 'text', text: '<p>A long page with a Bug Report button.</p>' }],
     },
-    emulate: { liveSite: true, reducedMotion: 'reduce' },
-    siteWideBugReport: {
-      moduleId: 'site-wide-module',
-      pageId: '1',
-      pageSlug: '',
-      pageName: 'Home',
-      settings: { iconBlock: 'true', blockColor: '#c0392b', iconColor: '#ffffff', iconSize: '50', corner: 'bottom-right', showOn: 'site' },
+    emulate: { reducedMotion: 'reduce' },
+    /*
+     * The preview page draws Bug Report inline, never floating (so trying it
+     * there never files a report), so the floating trigger is placed by hand:
+     * its real classes, a 50px glyph, positioned by the site's own CSS.
+     */
+    inject: {
+      html:
+        '<button type="button" class="builder-bug-report-trigger builder-bug-report-trigger--bottom-right is-block is-floating" ' +
+        'style="--bug-report-size:50px"><span class="builder-bug-report-glyph"></span></button>',
     },
     selector: 'a.site-back-to-top',
     read: ['visibility'],
@@ -1520,7 +1524,7 @@ export const RENDER_CONTRACTS = [
       if (!sample.found) return 'no Back to top button rendered on a page that turned it on.';
       const last = (sample.series || []).at(-1);
       if (!last?.top) return 'the Back to top button was not found after scrolling, so the overlap could not be measured.';
-      if (!last.bug) return 'no floating Bug Report button rendered, so this check measured nothing — the site-wide module did not reach the page.';
+      if (!last.bug || !(last.bug.height > 0)) return 'no floating Bug Report button was on the page, so this check measured nothing — the injected stand-in did not render.';
       if (last.top.visibility !== 'visible') return `${last.scrollY}px down Back to top is visibility: ${last.top.visibility}; it never appeared, so the overlap was not tested.`;
       const a = last.top;
       const b = last.bug;
