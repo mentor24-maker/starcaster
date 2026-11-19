@@ -137,6 +137,16 @@ const SCREENS = [
   },
   {
     id: 'engageOutreachPage',
+    label: 'Engage: Outreach, YouTube Find conversations table',
+    shot: 'yt-conversations',
+    open: '[data-channel="youtube"] [data-stage="conversations"] .outreach-wizard-stage-toggle',
+    ready: '[data-channel="youtube"] .yt-conversations-table tbody tr',
+    // Write replies / Skip / Save as contact / Open are the last column (SC-888).
+    inReach: ['.yt-conversations-table thead th.actions-col', '.yt-conversations-table tbody td.actions-col'],
+    inReachFrom: 1280,
+  },
+  {
+    id: 'engageOutreachPage',
     label: 'Engage: Outreach, Substack Find conversations table',
     shot: 'substack-conversations',
     tab: { pick: '.outreach-wizard-tabs [role="tab"]:has-text("Substack")', back: '.outreach-wizard-tabs [role="tab"]:has-text("YouTube")' },
