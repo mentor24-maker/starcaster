@@ -342,7 +342,7 @@ test('a decision recorded through attachFeedback still stands when the lessons r
   const { db, feedback, restore } = withDb();
   const aiPath = require.resolve('../../lib/aiClient.js');
   const realAi = require.cache[aiPath];
-  require.cache[aiPath] = { id: aiPath, filename: aiPath, loaded: true, exports: { queryAnthropic: async () => ({ ok: false, error: 'no key in tests' }) } };
+  require.cache[aiPath] = { id: aiPath, filename: aiPath, loaded: true, exports: { generate: async () => ({ ok: false, error: 'no key in tests' }) } };
   try {
     await seed(db, DECISIONS.slice(0, 4));
     const decided = await feedback.attachFeedback({ ok: true, status: 200, data: { id: 'item-x', status: 'rejected' } },
