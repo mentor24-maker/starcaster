@@ -367,22 +367,105 @@
   white-space: pre-line;
 }
 
-/* ── YouTube: Find conversations (Outreach wizard 16/19) ─────────────
-   components/outreach-wizard/youtube-conversations.tsx. One box per video,
-   its comments inside it, reusing the Substack list's comment cards. */
+/* ── YouTube: Find conversations (Outreach wizard 16/19; a table since SC-888)
+   components/outreach-wizard/youtube-conversations.tsx. The table itself is
+   _tables.css (T11); this styles only the cells. Fixed column widths, the same
+   way Find creators does it: content wraps inside its column and can never
+   widen the table, so the Actions icons stay in the card at 1280. Comment has
+   no width and takes what is left. */
 
-.yt-conversation-video {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  min-width: 0;
-  padding: var(--space-3);
-  border: 1px solid var(--border-light);
-  border-radius: var(--radius-md);
+.yt-conversations-table-wrap {
+  margin-top: 0;
 }
 
-.yt-conversation-video .outreach-conversation {
-  border-style: dashed;
+.yt-conversations-table-wrap th[data-sort-key]:focus-visible {
+  outline: 2px solid var(--focus-ring-color);
+  outline-offset: -2px;
+}
+
+.yt-conversations-table {
+  table-layout: fixed;
+  width: 100%;
+  min-width: 68rem;
+}
+
+.yt-conversations-col-author { width: 11%; }
+.yt-conversations-col-video { width: 17%; }
+.yt-conversations-col-posted { width: 8%; }
+.yt-conversations-col-likes { width: 7%; }
+.yt-conversations-col-rank { width: 7%; }
+.yt-conversations-col-reply { width: 9%; }
+/* Four 36px icons, three 4px gaps, and the cell's own padding. */
+.yt-conversations-col-actions { width: 11.75rem; }
+
+.yt-conversations-table td {
+  overflow-wrap: anywhere;
+}
+
+.yt-conversations-table .table-actions-row {
+  gap: 4px;
+}
+
+.yt-conversation-text[title],
+.yt-conversation-rank[title] {
+  cursor: help;
+}
+
+.yt-conversation-video-line {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.yt-conversation-video-title {
+  min-width: 0;
+}
+
+.yt-conversation-channel {
+  display: block;
+  opacity: 0.75;
+  font-size: 0.9em;
+}
+
+.yt-conversation-posted,
+.yt-conversation-likes,
+.yt-conversation-rank {
+  white-space: nowrap;
+}
+
+.yt-conversation-likes,
+.yt-conversation-rank {
+  text-align: right;
+}
+
+.yt-conversations-filter-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.yt-conversations-table .table-filter-row select,
+.yt-conversations-table .table-filter-row input[type="search"] {
+  width: 100%;
+  min-width: 0;
+}
+
+/* A held video's sentence, or a row's own failure, on a full-width line
+   directly under the row it belongs to. */
+.yt-conversation-note-row td {
+  padding-top: 0;
+}
+
+.yt-conversation-note-row .outreach-wizard-error {
+  margin: 0;
+}
+
+.yt-conversations-empty-row td {
+  text-align: center;
+  opacity: 0.8;
 }
 
 /* ── Learn: lessons drafts are written with (Outreach wizard 13/19) ─────
@@ -616,6 +699,101 @@
 }
 
 .yt-creators-empty-row td {
+  text-align: center;
+  opacity: 0.8;
+}
+
+/* ── Substack's Find conversations (Outreach wizard 14/19; table since SC-889)
+   components/outreach-wizard/substack-conversations.tsx, the same shared
+   pieces and the same fixed-width rule as Find creators above: every column
+   has a width, content wraps inside it, so a long Note or an unbroken handle
+   can never push the Actions icons off the card at 1280 (T0). Note takes the
+   rest of the row. */
+
+.substack-conversations-table-wrap {
+  margin-top: 0;
+}
+
+.substack-conversations-table-wrap th[data-sort-key]:focus-visible {
+  outline: 2px solid var(--focus-ring-color);
+  outline-offset: -2px;
+}
+
+.substack-conversations-table {
+  table-layout: fixed;
+  width: 100%;
+  min-width: 68rem;
+}
+
+.substack-conversations-col-writer { width: 14%; }
+.substack-conversations-col-author { width: 12%; }
+.substack-conversations-col-keyword { width: 11%; }
+.substack-conversations-col-posted { width: 7%; }
+.substack-conversations-col-rank { width: 7%; }
+.substack-conversations-col-reply { width: 10%; }
+/* Four 36px icons, three 4px gaps, and the cell's own padding. */
+.substack-conversations-col-actions { width: 11.75rem; }
+
+.substack-conversations-table td {
+  overflow-wrap: anywhere;
+}
+
+.substack-conversations-table .table-actions-row {
+  gap: 4px;
+}
+
+.substack-conversations-table .table-filter-row select,
+.substack-conversations-table .table-filter-row input[type="search"] {
+  width: 100%;
+  min-width: 0;
+}
+
+.substack-conversation-note[title],
+.substack-conversation-rank[title],
+.substack-conversation-posted[title] {
+  cursor: help;
+}
+
+.substack-conversation-writer a {
+  font-weight: 600;
+}
+
+.substack-conversation-badge {
+  display: inline-block;
+  margin-left: var(--space-1);
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 0.75em;
+  line-height: 1.6;
+  white-space: nowrap;
+  color: var(--status-ok-ink);
+  background: var(--status-ok-bg);
+}
+
+.substack-conversation-posted,
+.substack-conversation-rank {
+  white-space: nowrap;
+}
+
+.substack-conversation-rank {
+  text-align: right;
+}
+
+.substack-conversation-reply[data-reply="draft"],
+.substack-conversation-reply[data-reply="idea"] {
+  color: var(--status-ok-ink);
+}
+
+/* A row's own message: one full-width line directly under its row. */
+.substack-conversation-message-row td {
+  padding-top: 0;
+}
+
+.substack-conversation-message-row p {
+  margin: 0;
+}
+
+.substack-conversations-empty-row td {
   text-align: center;
   opacity: 0.8;
 }

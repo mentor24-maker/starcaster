@@ -627,6 +627,62 @@ scored recording(s) · 0 with no edits yet · 0 edit(s) still to render · 5
 edit(s) rendered"*. It is a dry run until you add `-- --apply`, and a second
 `--apply` queues nothing.
 
+## Re-cuts from Dane's note (Reel Spinner step 4d)
+
+When Dane clicks **Send back** on a rough cut and types what to change ("start
+two seconds later", "cut the bit where I lose my train of thought"), the Mini
+cuts it again and puts the new rough cut back in front of him, usually within
+a few minutes.
+
+**How.** Once a minute the Mini asks the catalog for edits marked
+`sent_back` and queues one `recut` job each (`workers/studio/recutPass.js`).
+The job asks the AI door (`generate()`, the strong tier, metered as
+`studio_recut`, never a provider by name) for the stretches of the recording
+to keep, showing it his note, the edit as it stands and the timed transcript
+(`workers/studio/recut.js`). The answer goes through the edit-list rules
+before anything is rendered: inside the recording, in order, nothing
+overlapping, something kept, not the same edit he sent back, and no word cut
+in half (a boundary inside a word moves out to the word's edge, so the word is
+kept). The pauses, "um"s and repeats the first cut took out are taken out
+again by the same rule, so a re-cut never brings them back. Then it renders
+and uploads exactly the way a first rough cut does, and goes back to
+**waiting for you**. On Drive the file says which re-cut it is
+(*IMG_1962 — full edit, re-cut 1 (e1000000).mp4*).
+
+**What the card says.**
+
+- **Re-cut from your note: "start two seconds later"** — the new rough cut is
+  the one the Watch link opens, and the line above it says *recut 1 time*.
+- **Could not re-cut from your note: …** — the note could not
+  become a valid edit (the AI said it cannot be done by choosing what to keep,
+  such as adding music, or its answer broke a rule). The rough cut and the
+  edit are exactly the ones he sent back. This does not count as a re-cut;
+  send it back with a different note to try again.
+  A reason longer than the card holds (2,000 characters) is cut at a word and
+  ends in "…", so it always fits: a reason the catalog refused would otherwise
+  be retried, and the AI paid again, every fifteen minutes.
+- **Re-cut 3 times; tell an agent session what is still wrong**
+  — after three re-cuts of one edit the Mini stops rather than looping, and
+  every later send-back of that edit gets the same answer without paying for
+  another AI call.
+
+**When it waits instead** (nothing on the card changes; the edit stays
+**sent back**):
+
+- **No AI provider can pay, or no network.** The job waits an hour and the bus
+  hears once per six hours (`reel-spinner-recut`), the same rule scoring uses.
+- **ffmpeg missing, the disk too full, the catalog not answering.** The job
+  waits 15 minutes. All of these are checked before the AI is asked, so a
+  machine problem never wastes an answer.
+- **No working copy on the Mini**: the job is blocked with the fix in its
+  reason.
+- **The catalog refuses the hand-back itself** (a 400, which sending again
+  cannot fix): the job is blocked with the reason instead of retried.
+
+**A render or upload that fails after the new edit is chosen** marks the edit
+`failed` and queues an ordinary rough-cut job for the recording, which renders
+it from the saved new edit. The AI is not asked again.
+
 ## Background music (Reel Spinner step 5a)
 
 Dane chose on 2026-11-16 that music is **"Picked for you"**: nobody chooses a
