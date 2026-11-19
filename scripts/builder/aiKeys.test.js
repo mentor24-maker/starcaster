@@ -185,3 +185,132 @@ test('describeAccount: shows a name once one is recorded, the id either way', ()
   assert.equal(aiKeys.describeAccount(ORG, { [ORG]: 'Alphire' }), 'Alphire (org 33d0ab74…)');
   assert.equal(aiKeys.describeAccount(ORG, {}), 'org 33d0ab74… (not named yet)');
 });
+
+// ── The whole AI switch (SC-848) ──────────────────────────────────────────
+
+const SAVED = {
+  exists: true,
+  providers: [
+    { id: 'anthropic', enabled: true, fast: 'claude-haiku-4-5', strong: 'claude-sonnet-5-5' },
+    { id: 'openai', enabled: true, fast: 'gpt-5.4-mini', strong: 'gpt-5.5' },
+    { id: 'custom-groq', enabled: true, fast: 'llama-x', strong: 'llama-y' },
+    { id: 'gemini', enabled: false, fast: 'gemini-3.8-flash', strong: 'gemini-3.1-pro-preview' },
+  ],
+  customProviders: [{ id: 'custom-groq', label: 'Groq', baseUrl: 'https://api.groq.com/openai/v1', keyEnv: 'AI_SERVICE_GROQ_API_KEY' }],
+};
+
+function switchRows(verdicts, { settings = SAVED, keys = {} } = {}) {
+  const order = aiKeys.switchProviders({ settings });
+  const entries = aiKeys.switchEntries(order, { keyFor: (def) => ({ key: keys[def.id] ?? `key-${def.id}` }), place: 'the website' });
+  const probe = async (provider) => {
+    const v = verdicts[provider] || 'works';
+    if (v === 'dry') return ANTHROPIC_DRY;
+    if (v === 'blind') return { error: 'no answer within 20s' };
+    return { status: 200, body: {} };
+  };
+  return aiKeys.checkKeys(entries, { probe });
+}
+
+test('switchProviders: the saved order first, switched-off ones marked, Kimi and added services included', () => {
+  const order = aiKeys.switchProviders({ settings: SAVED });
+  assert.equal(order.source, 'settings');
+  assert.deepEqual(order.providers.map((p) => [p.def.id, p.enabled]), [
+    ['anthropic', true], ['openai', true], ['custom-groq', true], ['gemini', false], ['kimi', false],
+  ]);
+  const groq = order.providers[2].def;
+  assert.equal(groq.baseUrl, 'https://api.groq.com/openai/v1');
+  assert.equal(groq.models.fast, 'llama-x');
+});
+
+test('switchProviders: with no saved row it follows AI_PROVIDER_ORDER and says why', () => {
+  const order = aiKeys.switchProviders({ settings: null, env: { AI_PROVIDER_ORDER: 'kimi,anthropic' }, fallbackReason: 'the row could not be read' });
+  assert.equal(order.source, 'AI_PROVIDER_ORDER');
+  assert.deepEqual(order.providers.map((p) => [p.def.id, p.enabled]), [['kimi', true], ['anthropic', true], ['openai', false], ['gemini', false]]);
+  assert.match(aiKeys.orderSourceText(order), /AI_PROVIDER_ORDER setting, because the row could not be read/);
+});
+
+test('checkKeys: Kimi with no key reads NOT SET by its key name', async () => {
+  const rows = await switchRows({}, { keys: { kimi: '' } });
+  const kimi = rows.find((r) => r.provider === 'kimi');
+  assert.equal(kimi.verdict, VERDICT.NOT_SET);
+  assert.match(kimi.reason, /MOONSHOT_API_KEY/);
+  assert.match(aiKeys.rowLine(kimi), /Kimi/);
+  assert.match(aiKeys.rowLine(kimi), /switched off/);
+});
+
+test('one provider dry while another works is a notice naming what calls use, never an ALARM', async () => {
+  const rows = await switchRows({ anthropic: 'dry' });
+  const plan = aiKeys.planAlarms({ rows, state: {}, now: Date.parse('2026-11-18T12:00:00Z') });
+  assert.equal(plan.outage, null);
+  assert.equal(plan.post.length, 1);
+  assert.equal(plan.serving.provider, 'openai');
+  const text = aiKeys.renderMessage({ ...plan, node: 'mac-mini', at: 'now' });
+  assert.doesNotMatch(text, /^ALARM:/i);
+  assert.match(text, /Anthropic is out of credit; calls are using OpenAI\./);
+});
+
+test('every switched-on provider dry is an ALARM, once per 6h, with one all-clear when one serves again', async () => {
+  const T0 = Date.parse('2026-11-18T12:00:00Z');
+  // Gemini is switched off and Kimi is not in the order: neither can rescue it.
+  const rows = await switchRows({ anthropic: 'dry', openai: 'dry', 'custom-groq': 'dry' });
+  const first = aiKeys.planAlarms({ rows, state: {}, now: T0 });
+  assert.ok(first.outage);
+  const text = aiKeys.renderMessage({ ...first, node: 'mac-mini', at: 'now' });
+  assert.match(text, /^ALARM: /, 'the tracker texts only posts that START with ALARM:');
+  assert.match(text, /every AI feature has stopped/);
+  assert.equal((text.match(/Anthropic \(key/g) || []).length, 1, 'a provider under the outage is not listed twice');
+
+  const later = aiKeys.planAlarms({ rows, state: first.next, now: T0 + 10 * 60000 });
+  assert.equal(later.outage, null, 'not again on the next wake');
+  assert.equal(later.post.length, 0);
+
+  const sixHours = aiKeys.planAlarms({ rows, state: first.next, now: T0 + 6 * 3600000 });
+  assert.ok(sixHours.outage, 'still down 6h later says so again');
+
+  const back = await switchRows({ anthropic: 'dry', 'custom-groq': 'dry' });
+  const fixed = aiKeys.planAlarms({ rows: back, state: first.next, now: T0 + 3600000 });
+  assert.equal(fixed.outage, null);
+  assert.equal(fixed.restored.provider, 'openai');
+  assert.equal(fixed.next[aiKeys.OUTAGE_KEY], undefined);
+  assert.match(aiKeys.renderMessage({ ...fixed, node: 'mac-mini', at: 'now' }), /AI features can answer again: calls are using OpenAI/);
+});
+
+test('a switched-on provider that cannot be read is not an outage: it might be serving', async () => {
+  const rows = await switchRows({ anthropic: 'dry', openai: 'blind', 'custom-groq': 'dry' });
+  const plan = aiKeys.planAlarms({ rows, state: {}, now: Date.parse('2026-11-18T12:00:00Z') });
+  assert.equal(plan.outage, null);
+  assert.equal(aiKeys.switchState(rows).blind, true);
+});
+
+test('a switched-off provider running dry is never news, and closes any alarm it had', async () => {
+  const rows = await switchRows({ gemini: 'dry' });
+  const plan = aiKeys.planAlarms({ rows, state: { 'website-gemini': { verdict: VERDICT.OUT_OF_CREDIT, at: '2026-11-18T00:00:00Z' } } });
+  assert.equal(plan.post.length + plan.clear.length, 0);
+  assert.equal(plan.next['website-gemini'], undefined);
+});
+
+test('probeKey: Kimi is probed with the request the door sends, at its own address and fast model', async () => {
+  const calls = [];
+  const fetchImpl = async (url, init) => {
+    calls.push({ url, body: JSON.parse(init.body), auth: init.headers.authorization });
+    return { ok: true, status: 200, headers: new Map(), text: async () => '{"choices":[],"usage":{"prompt_tokens":3,"completion_tokens":1}}' };
+  };
+  const metered = [];
+  const order = aiKeys.switchProviders({ settings: null, env: { AI_PROVIDER_ORDER: 'kimi' } });
+  const def = order.providers[0].def;
+  const probe = await aiKeys.probeKey('kimi', 'k', { fetchImpl, def, recordUsage: async (u) => { metered.push(u); } });
+  assert.equal(probe.status, 200);
+  assert.equal(calls[0].url, 'https://api.moonshot.ai/v1/chat/completions');
+  assert.equal(calls[0].body.model, def.models.fast);
+  assert.equal(calls[0].auth, 'Bearer k');
+  assert.equal(metered[0].feature, 'ai-keys-check');
+  assert.equal(metered[0].provider, 'kimi');
+});
+
+test('classify: Moonshot\'s out-of-quota 429 is OUT OF CREDIT, not rate limiting', () => {
+  const reading = aiKeys.classify('Kimi', {
+    status: 429,
+    body: { error: { type: 'exceeded_current_quota_error', message: 'Your account org-abc <ak-xyz> is suspended, please check your plan and billing details' } },
+  });
+  assert.equal(reading.verdict, VERDICT.OUT_OF_CREDIT);
+});
