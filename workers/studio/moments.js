@@ -112,6 +112,11 @@ PROJECT_BY_KEY.set('daneofearth', 'personal story');
 PROJECT_BY_KEY.set('deomovement', 'DEO');
 const MOOD_BY_KEY = new Map(MOODS.map((m) => [keyOf(m), m]));
 
+/** A project as written by a person or the model ("deo movement", "Star Caster") → its name on PROJECTS, or ''. */
+function projectNamed(value) {
+  return PROJECT_BY_KEY.get(keyOf(value)) || '';
+}
+
 /**
  * Tier and output budget from the environment, falling back to the defaults.
  * A budget that is not a positive whole number is ignored, not obeyed, and a
@@ -554,6 +559,7 @@ module.exports = {
   PROJECTS,
   MOODS,
   NO_BRIEF_REASON,
+  projectNamed,
   momentsConfig,
   queryThroughDoor,
   buildPrompt,

@@ -740,6 +740,60 @@ It is a dry run that checks every download and licence link opens; add
 already on Drive are reused, so a second run uploads nothing. It uploads under
 the Studio worker's sign-in (mentor24), whose storage it uses: about 200 MB.
 
+## Title and end cards (Reel Spinner step 5b)
+
+Every finished video opens on a **title card** (the video's title) and closes
+on an **end card** inviting the viewer to the project the video speaks to.
+This step makes the cards as pictures (1920 × 1080 PNG); putting them into a
+video is 5c.
+
+**The words come from a Context note**, never from code: in the Dane of Earth
+project, on Assets › Context, the note titled exactly **`Reel Spinner — end
+cards`**, switched on for Reel Spinner. One line per project:
+
+```
+WaveCenter | Come and help build WaveCenter with us | wavecenter.com
+```
+
+Name, a one-line invitation, and the address, split by `|`. A line with no
+`|` is ignored, so the note can carry a sentence saying what it is. Seeded on
+2026-11-19 (note `e24a9965-28bc-4097-9b76-ff1f99d1bd57`) with the three
+addresses this repository already confirms: wavecenter.com, alphire.agency,
+starcaster.pro. **DEO and Spirality have no line yet**; their addresses were
+asked of Dane rather than guessed. Change the wording on the Context page;
+nothing needs redeploying. (Because it is switched on for Reel Spinner, the
+moment scoring reads it too, alongside the channel brief; scoring only shows
+it was done under older notes, it does not rescore by itself.)
+
+**Which end card** (`workers/studio/cards.js` `endCardProjectFor`): a short
+takes the project of the moment it was cut from; a full video takes the
+project its moments name most often (a tie goes to the higher total score,
+then to the order WaveCenter, DEO, Alphire, StarCaster, Spirality); a
+**personal story gets the WaveCenter card** (Dane: "especially WaveCenter").
+
+**It never makes a blank card.** No note, a note switched off, or a project
+with no line stops with the reason, for example
+`no end card for DEO in Reel Spinner — end cards`.
+
+**Nothing runs off a card.** The text is wrapped by `cards.js` itself, at the
+largest size that fits, from a generous estimate of letter widths; a title too
+long to fit even small is cut with "…" and says so. The browser then draws
+each line unbreakably and the picture is MEASURED: anything past its box and
+the card is refused, not saved. Drawn by the Chromium the UI harness uses,
+from `workers/studio/card-template.html` (the Mini's ffmpeg has no text
+drawing).
+
+```
+npm run studio:cards -- draw --project <id> --title "<title>" --out <folder>
+npm run studio:cards -- draw --notes-file <file> --title "<title>" --out <folder>
+npm run studio:cards -- seed --project <id> --notes-file <file> [--apply]
+```
+
+`draw` writes a title card and one end card per line; `seed` creates the note
+(a dry run without `--apply`, and refuses if the note already exists). On the
+Mini, run either from `~/Studio` under `doppler run` so it reads production.
+Exit 0 done, 1 refused, 2 could not tell.
+
 ## YouTube (Reel Spinner step 6)
 
 Finished edits upload to the **Dane of Earth** channel (Dane's choice,
@@ -862,6 +916,10 @@ For an agent session working on this, not for day-to-day use.
   (pure; tests `scripts/builder/studioMusic.test.js`), the committed manifest
   `lib/studioMusicShelf.json`, and the one-time builder
   `scripts/studio_build_music_shelf.cjs` (`npm run studio:music-shelf`).
+- Title and end cards (Reel Spinner 5b, SC-838): `workers/studio/cards.js`
+  (choosing, fitting, drawing; tests `scripts/builder/studioCards.test.js`),
+  the template `workers/studio/card-template.html`, and
+  `scripts/studio_cards.cjs` (`npm run studio:cards`).
 - The pipeline: `workers/studio/` — `drive.js` (watcher), `ingest.js`,
   `probe.js`, `proxy.js`, `queue.js` (the local work list on the Mini, SQLite,
   deliberately not Supabase — the queue writes thousands of rows per video).
