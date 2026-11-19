@@ -909,3 +909,91 @@ p.reddit-sub-rule {
   margin: 0;
   overflow-wrap: anywhere;
 }
+
+/* ── Reddit Find conversations table (SC-891) ───────────────────────────────
+   Built the same way as YouTube's Find creators: fixed column widths, content
+   wraps inside its column and can never widen the table, so the Actions icons
+   stay inside the card at 1280. Post has no width: it takes whatever is left,
+   so a wide screen widens titles, never the icons' column. */
+
+.reddit-conversations-table-wrap {
+  margin-top: 0;
+}
+
+.reddit-conversations-table-wrap th[data-sort-key]:focus-visible {
+  outline: 2px solid var(--focus-ring-color);
+  outline-offset: -2px;
+}
+
+.reddit-conversations-table {
+  table-layout: fixed;
+  width: 100%;
+  min-width: 68rem;
+}
+
+.reddit-conversations-col-sub { width: 10%; }
+.reddit-conversations-col-author { width: 8.5%; }
+.reddit-conversations-col-posted { width: 7%; }
+.reddit-conversations-col-num { width: 6%; }
+/* "Comments" with its sort mark is the widest numeric heading. */
+.reddit-conversations-col-comments { width: 8.5%; }
+.reddit-conversations-col-keyword { width: 9%; }
+.reddit-conversations-col-reply { width: 8%; }
+/* Five 36px icons, four 4px gaps, and the cell's own padding. */
+.reddit-conversations-col-actions { width: 13.5rem; }
+
+/* "anywhere" lets a long unbroken word break inside its column; a title
+   still wraps rather than truncating (T-1). */
+.reddit-conversations-table td {
+  overflow-wrap: anywhere;
+}
+
+.reddit-conversations-table .table-actions-row {
+  gap: 4px;
+}
+
+.reddit-conversation-post a {
+  font-weight: 600;
+}
+
+.reddit-conversation-posted {
+  white-space: nowrap;
+}
+
+.reddit-conversation-num {
+  white-space: nowrap;
+  text-align: right;
+}
+
+.reddit-conversation-rank[title],
+.reddit-comment-text[title] {
+  cursor: help;
+}
+
+.reddit-conversations-table .table-filter-row select,
+.reddit-conversations-table .table-filter-row input[type="search"] {
+  width: 100%;
+  min-width: 0;
+}
+
+/* A post's comments sit indented beneath it, marked by a rule down the left. */
+.reddit-comment-row .reddit-comment-text {
+  padding-left: var(--space-5);
+  border-left: 2px solid var(--border-light);
+}
+
+/* The rule, the post's text, a "no comments" sentence, or a row's own
+   failure: one full-width line directly under the row it belongs to. */
+.reddit-conversation-note-row td {
+  padding-top: 0;
+  white-space: normal;
+}
+
+.reddit-conversation-note-row p {
+  margin: 0 0 var(--space-1);
+}
+
+.reddit-conversations-empty-row td {
+  text-align: center;
+  opacity: 0.8;
+}
