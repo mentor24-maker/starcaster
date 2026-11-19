@@ -46,6 +46,7 @@ const videoEditsStore = require(path.join(ROOT, 'lib/videoEditsStore.js'));
 const youtubeOutreachStore = require(path.join(ROOT, 'lib/youtubeOutreachStore.js'));
 const substackNotesStore = require(path.join(ROOT, 'lib/substackNotesStore.js'));
 const substackMinerStore = require(path.join(ROOT, 'lib/substackMinerStore.js'));
+const youtubeCreatorsStore = require(path.join(ROOT, 'lib/youtubeCreatorsStore.js'));
 const assetsStore = require(path.join(ROOT, 'lib/assetsStore.js'));
 const substackContactCapture = require(path.join(ROOT, 'lib/acquire/SubstackContactCapture.js'));
 const youtubeOutreachCommentsStore = require(path.join(ROOT, 'lib/youtubeOutreachCommentsStore.js'));
@@ -2172,6 +2173,60 @@ try {
   console.error(`  failed to seed assets: ${err.message}`);
 }
 
+/**
+ * Channels for Engage › Outreach › YouTube › Find creators (SC-887), so its
+ * table has rows to measure at 1280/1440/1920: the longest name the fixture
+ * has (T-1 says it wraps, never truncates), a channel with a hidden
+ * subscriber count, one with three videos (the "+2 more"), each kind of
+ * suggestion, and one approved and two rejected, plus text with no space to break at in
+ * a name, keyword, title and note. Idempotent by channel id —
+ * the store merges a second find, and a decided channel is left alone.
+ */
+async function seedYoutubeCreators(scope) {
+  const id = (n) => `UCfixture${String(n).padStart(15, '0')}`;
+  const channels = [
+    { channelId: id(1), name: `${LONG} Channel`, subscriberCount: 128400, keywordsHit: ['tennis', 'junior tennis', 'coaching', 'fitness'],
+      latestVideos: [{ videoId: 'fixtureVid1', title: `${LONG}: a whole morning of junior drills, start to finish` }, { videoId: 'fixtureVid2', title: 'Serve practice' }, { videoId: 'fixtureVid3', title: 'Footwork' }],
+      suggestion: { action: 'approved', reasons: [], confidence: 'high', why: 'Every recent video is about coaching juniors.' } },
+    { channelId: id(2), name: 'Hidden Count Tennis', subscriberCount: null, keywordsHit: ['tennis'], latestVideos: [{ videoId: 'fixtureVid4', title: 'Rally' }],
+      suggestion: { action: 'rejected', reasons: [], confidence: 'low', why: 'Mostly product reviews.' } },
+    { channelId: id(3), name: 'No Suggestion Yet', subscriberCount: 950, keywordsHit: ['coaching'], latestVideos: [] },
+    { channelId: id(4), name: 'Approved Channel', subscriberCount: 5200, keywordsHit: ['tennis'], latestVideos: [], decide: 'approved' },
+    { channelId: id(5), name: 'Rejected Channel', subscriberCount: 40, keywordsHit: ['fitness'], latestVideos: [], decide: 'rejected' },
+    // Text with no spaces to break at, the shape real decisions and titles
+    // take ("self-help/men's advice framing", a #hashtag in a title). Before SC-887's third round a
+    // slash-joined run like this could not wrap, held its column open, and
+    // pushed the Actions icons out of the card at 1280.
+    // One undecided (the table opens on Undecided, so this is the one the
+    // screen check sees) and one rejected whose note lands in Status.
+    { channelId: id(8), name: 'Consciousness/Nonduality/Awakening Collective', subscriberCount: 3100, keywordsHit: ['consciousness/nonduality/awakening'],
+      latestVideos: [{ videoId: 'fixtureVid5', title: 'Nonduality explained #NondualityConsciousnessSelfInquiryAwakening' }],
+      suggestion: { action: 'rejected', reasons: [], confidence: 'medium', why: 'Self-help/men\'s-advice framing.' } },
+    { channelId: id(7), name: 'Rejected With A Note', subscriberCount: 870, keywordsHit: ['fitness'], latestVideos: [], decide: 'rejected',
+      note: "self-help/men's-advice/consciousness/nonduality framing, not a fit" },
+  ];
+  for (const c of channels) {
+    const { suggestion, decide, note, ...input } = c;
+    const saved = must(await youtubeCreatorsStore.upsertCreator({ ...input, channelUrl: `https://www.youtube.com/channel/${c.channelId}`, foundVia: 'keyword_search' }, scope), 'save YouTube creator');
+    if (saved.status !== 'candidate') continue;
+    if (suggestion) must(await youtubeCreatorsStore.recordSuggestion(saved.id, suggestion, scope), 'save YouTube creator suggestion');
+    if (decide) must(await youtubeCreatorsStore.decideCreator(saved.id, { status: decide, ...(note ? { note } : {}) }, scope), 'decide YouTube creator');
+  }
+  // Landmine 12: read the rows back through the project scope.
+  const listed = must(await youtubeCreatorsStore.listCreators(1000, scope), 'list YouTube creators');
+  const seen = new Set(listed.map((c) => c.channelId));
+  const missing = channels.filter((c) => !seen.has(c.channelId)).length;
+  if (missing) throw new Error(`${missing} YouTube creator(s) were written but do not read back in this project`);
+  return { total: channels.length };
+}
+
+let creatorsSeeded = null;
+try {
+  creatorsSeeded = await seedYoutubeCreators({ projectId: project.id, userId });
+} catch (err) {
+  console.error(`  failed to seed YouTube creators: ${err.message}`);
+}
+
 let minerSeeded = null;
 try {
   minerSeeded = await seedSubstackMiner({ projectId: project.id, userId });
@@ -2216,5 +2271,10 @@ console.log(
   assetsSeeded
     ? `Assets seeded — ${assetsSeeded.made} created, ${assetsSeeded.found} already present.`
     : 'WARNING: assets were NOT seeded; the Assets table will be empty and check:screens proves nothing there.'
+);
+console.log(
+  creatorsSeeded
+    ? `YouTube creators seeded — ${creatorsSeeded.total} channel(s): undecided with each kind of suggestion, one approved, two rejected, one with no space to break at.`
+    : 'WARNING: YouTube creators were NOT seeded; Engage › Outreach › Find creators will be empty and check:screens proves nothing there.'
 );
 console.log(`export UI_HARNESS_PROJECT_ID=${project.id}`);
