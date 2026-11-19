@@ -307,12 +307,25 @@ async function momentsJob({
         + `Fix: inspect video_moments for source ${sourceId} by hand, then delete this blocked job.`);
     }
     if (typeof queue.cacheSet === 'function') queue.cacheSet(unsavedKey(sourceId), '', { ttlMs: 1 });
+    // Done moments are what the rough cut (Reel Spinner 4b) waits on. Queued
+    // only after the row read back as kept, so a rough cut never starts from
+    // moments the catalog does not hold. A second scoring queues the same live
+    // job, and the rough-cut pass creates no second set of edit rows.
+    let roughCut = null;
+    if (data.status === MOMENTS_DONE) {
+      try {
+        const { job: queued, created } = require('./roughCutPass.js').enqueueRoughCut(queue, { sourceId, why: 'its moments are scored' });
+        roughCut = { jobId: queued.id, created };
+      } catch (err) {
+        roughCut = { error: `the rough cut could not be queued: ${err.message} (npm run studio:backfill-roughcuts catches it up)` };
+      }
+    }
     if (jobAction === 'fail') {
       queue.fail(job.id, owner, reason);
       return { ...base, outcome, jobAction: 'failed', reason };
     }
     const completed = queue.complete(job.id, owner);
-    return { ...base, outcome, jobAction: completed ? 'completed' : 'none', reason };
+    return { ...base, outcome, jobAction: completed ? 'completed' : 'none', reason, ...(roughCut ? { roughCut } : {}) };
   };
 
   if (!sourceId) {

@@ -537,6 +537,75 @@ one job per recording needed, and always prints how many pairs exist —
 `pairs: 1 lined up · 0 refused with a reason · 0 not looked at yet`. A dry run
 until you add `-- --apply`; a second `--apply` enqueues nothing.
 
+## Rough cuts (Reel Spinner step 4)
+
+Once a recording's moments are scored, the Mini makes a **rough cut** of each
+edit, a quick, small video Dane can watch to decide whether it is worth
+finishing. It has the "um"s, repeats and long pauses taken out and uses the
+chosen sound. It has no music, no title cards and no full-quality picture:
+those come with the finished render (step 5c).
+
+**Where to watch them.** Drive, `Studio › Rough cuts`
+(https://drive.google.com/drive/folders/17HZZDNlGAcxWUxbMBdlywnn-Tjf4pfD7, then
+**Rough cuts**). Each file is named after its recording, then *full edit* or
+*short from 12m33s, score 92* (where the moment starts in the recording, and
+what it scored), then the first part of the edit's id, so two recordings with
+the same name never collide.
+The folder was made by the Mini inside the Studio folder, never shared on its
+own (see "Which Google account owns what" for why that matters).
+
+**What it makes for each recording** (the rules are step 4a,
+`workers/studio/editList.js`): one **full edit**, the whole recording with
+the cuts taken out, plus one **short** for each moment that scored at least
+60, best first, at most three. A recording whose moments all scored under 60
+gets a full edit and no shorts. That is an answer, not a fault: IMG_1962's two
+moments scored 42 and 31.
+
+**When it runs.** The scoring step queues a rough cut for a recording the
+moment its moments are saved. Rough cuts run last of all the Mini's steps, so
+a backlog never delays a new recording's transcription. Each edit is rendered
+from the working copy already on the Mini (the 720p proxy, or the Zoom
+file itself), uploaded, marked **review** with its Drive file id, read back,
+and only then is the copy on the Mini deleted.
+
+**Measured on 2026-11-18** (the Mac Mini, two real recordings):
+
+| Recording | Edit | Length | Size | Render | Upload |
+|---|---|---|---|---|---|
+| IMG_1962 (iPhone) | full | 2m03s (of 2m29s) | 8.0 MB | 3.9 s | 6.9 s |
+| Zoom 2026-10-30 16.55 | full | 12m33s (of 13m56s) | 37.7 MB | 22.8 s | 25.2 s |
+| Zoom 2026-10-30 16.55 | short, score 92 | 47 s | 1.6 MB | 5.3 s | 2.6 s |
+| Zoom 2026-10-30 16.55 | short, score 90 | 42 s | 1.3 MB | 4.3 s | 2.7 s |
+| Zoom 2026-10-30 16.55 | short, score 88 | 49 s | 1.4 MB | 4.7 s | 2.6 s |
+
+**About 2 to 4 MB per minute of rough cut** (iPhone 3.9, Zoom 1.7 to 3.0).
+The uploads count against **mentor24's** storage, because mentor24 is the
+account that uploads them. An hour-long recording's full edit is roughly 120
+to 240 MB. All 34 recordings in the catalog today come to about 2 to 4 GB,
+against the roughly 30 GB mentor24 had free when the folders moved.
+
+**When it stops, and why:**
+
+- **The disk is too full.** Before each render it checks there is room for the
+  rough cut plus 5 GB kept free. If not, nothing is rendered, the edits stay as
+  they were, and the job waits 15 minutes and tries again.
+- **ffmpeg refuses a render.** That edit is marked `failed` with ffmpeg's own
+  words, and the job is retried on the usual backoff. After five tries it is
+  blocked with the reason.
+- **Drive refuses an upload** (a full quota, an expired sign-in). The edit is
+  marked `failed`, **the finished render is kept on the Mini**, and the retry
+  uploads that file rather than rendering it again. It stops at the first
+  refusal rather than rendering the rest into nowhere.
+- **No working copy on the disk**, or no scored moments: the job is blocked
+  with the fix in its reason.
+
+**Catching up:** `npm run studio:backfill-roughcuts` (on the Mini) finds every
+scored recording with no edits yet, or with an edit still to render, and
+queues one rough cut each. It always prints the totals, e.g. *"rough cuts: 2
+scored recording(s) · 0 with no edits yet · 0 edit(s) still to render · 5
+edit(s) rendered"*. It is a dry run until you add `-- --apply`, and a second
+`--apply` queues nothing.
+
 ## Background music (Reel Spinner step 5a)
 
 Dane chose on 2026-11-16 that music is **"Picked for you"**: nobody chooses a
@@ -703,7 +772,12 @@ For an agent session working on this, not for day-to-day use.
     its own note in the same call), and the Mini finds those
     with `listEditsByStatus` because the website cannot reach its queue.
     Every move is guarded on the status it was read in.
-  Shared input rules: `lib/reelSpinnerInput.js`. Nothing calls these stores yet.
+  Shared input rules: `lib/reelSpinnerInput.js`. `video_edits` is written by
+  the Mini's rough-cut pass, `workers/studio/roughCutPass.js` (Reel Spinner
+  4b, SC-834), which creates the rows from `editList.js`'s plan, renders each
+  with ffmpeg and uploads it with `lib/googleDrive.js` `uploadFileResumable`
+  (a file read from disk in 8 MB pieces, never held in memory whole);
+  `scripts/studio_backfill_roughcuts.cjs` is its catch-up.
 - Music (Reel Spinner 5a, SC-837): the picker `workers/studio/music.js`
   (pure; tests `scripts/builder/studioMusic.test.js`), the committed manifest
   `workers/studio/music-shelf.json`, and the one-time builder
