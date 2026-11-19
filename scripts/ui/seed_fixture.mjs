@@ -2238,6 +2238,25 @@ async function seedYoutubeCreators(scope) {
   const seen = new Set(listed.map((c) => c.channelId));
   const missing = channels.filter((c) => !seen.has(c.channelId)).length;
   if (missing) throw new Error(`${missing} YouTube creator(s) were written but do not read back in this project`);
+  // Comments on the approved channel's videos, for Find conversations
+  // (SC-888), so its table has rows to measure at 1280/1440/1920: a long
+  // comment (cut between words, full text on hover), an unbroken run with no
+  // space in it, a long video title, and a video with no comments (its row
+  // keeps Comment on the video reachable). Dated hours ago on EVERY run,
+  // because the list drops a comment older than 14 days.
+  const approved = listed.find((c) => c.channelId === id(4));
+  if (approved) {
+    const ago = (h) => new Date(Date.now() - h * 3600 * 1000).toISOString();
+    const author = (n, name) => ({ authorName: name, authorChannelUrl: `https://www.youtube.com/channel/UCfixtureAuthor${n}`, authorChannelId: `UCfixtureAuthor${n}` });
+    must(await youtubeCreatorsStore.recordCommentsRead(approved.id, { videos: [
+      { videoId: 'fixtureCnv1', title: `${LONG}: what junior players ask about their first tournament, answered #JuniorTennisTournamentPrep`, publishedAt: ago(30), comments: [
+        { commentId: 'UgxFixture1', text: `Where does a nervous twelve-year-old put their attention between points? ${'My daughter freezes every time she loses a long rally and I never know what to tell her afterwards. '.repeat(3)}`, likes: 41, replies: 0, publishedAt: ago(5), ...author(1, `${LONG} Parent`) },
+        { commentId: 'UgxFixture2', text: '#consciousness/nonduality/awakening/self-inquiry/presence-in-sport-and-everyday-life', likes: 2, replies: 1, publishedAt: ago(9), ...author(2, 'Unbroken/Text/Viewer') },
+        { commentId: 'UgxFixture3', text: 'Great drills, thank you.', likes: 7, replies: 0, publishedAt: ago(20), ...author(3, 'Short Comment') },
+      ] },
+      { videoId: 'fixtureCnv2', title: 'Serve practice', publishedAt: ago(50), comments: [] },
+    ] }, scope), 'save YouTube conversations');
+  }
   return { total: channels.length };
 }
 

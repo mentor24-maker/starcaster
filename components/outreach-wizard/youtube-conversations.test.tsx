@@ -2,7 +2,10 @@
 import { act } from 'react-dom/test-utils';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import YoutubeConversations, { canAct, readNowNotice, replyLabel, type YtComment, type YtVideo } from './youtube-conversations';
+import YoutubeConversations, {
+  canAct, conversationRows, cutBetweenWords, emptyConversationsText, filterConversations, readNowNotice, replyLabel,
+  DEFAULT_CONVERSATION_FILTERS, type YtComment, type YtVideo,
+} from './youtube-conversations';
 
 /**
  * Outreach wizard 16/19 (86bcrmbtn). The ranking, the grouping and the server
@@ -82,8 +85,10 @@ async function render(props: { onChanged?: () => void } = {}) {
   await act(async () => { root!.render(<YoutubeConversations {...props} />); });
 }
 
-function button(label: string): HTMLButtonElement {
-  const found = [...container!.querySelectorAll('button')].find((b) => b.textContent === label);
+/** A button by its text, or a row icon by the start of its accessible label (SC-888). */
+function button(label: string, within: ParentNode = container!): HTMLButtonElement {
+  const all = [...within.querySelectorAll('button')];
+  const found = all.find((b) => b.textContent === label) || all.find((b) => (b.getAttribute('aria-label') || '').startsWith(label));
   if (!found) throw new Error(`no "${label}" button`);
   return found as HTMLButtonElement;
 }
@@ -92,10 +97,10 @@ describe('YouTube Find conversations', () => {
   it('shows each comment under its video with who wrote it and why it ranked', async () => {
     await render();
     const item = container!.querySelector('[data-comment-id="Ugz1"]')!;
-    expect(item.querySelector('a')!.getAttribute('href')).toBe('https://www.youtube.com/@ann');
+    expect(item.querySelector('.yt-conversation-author a')!.getAttribute('href')).toBe('https://www.youtube.com/@ann');
     expect(item.textContent).toContain('Ann Viewer');
-    expect(item.querySelector('.outreach-conversation-why')!.textContent).toBe('Asks a question nobody has answered yet, posted 3 hours ago.');
-    expect(container!.querySelector('[data-video-id="vid00000001"]')!.textContent).toContain('A video');
+    expect(item.querySelector('.yt-conversation-rank')!.getAttribute('title')).toBe('Asks a question nobody has answered yet, posted 3 hours ago.');
+    expect(item.querySelector('.yt-conversation-video-cell')!.textContent).toContain('A video');
   });
 
   it('Write replies sends the comment id clicked, opens the YouTube outreach screen and re-reads the stage', async () => {
@@ -110,7 +115,7 @@ describe('YouTube Find conversations', () => {
   it('Comment on the video and Save as contact send what they act on', async () => {
     await render();
     await act(async () => { button('Comment on the video').click(); });
-    await act(async () => { button('Save as contact').click(); });
+    await act(async () => { button('Save as Contact').click(); });
     expect(posts.map((p) => [p.path.split('/').pop(), p.body])).toEqual([['video', { videoId: 'vid00000001' }], ['contact', { commentId: 'Ugz1' }]]);
     expect(container!.textContent).toContain('Ann Viewer is saved to your contacts');
   });
@@ -124,7 +129,12 @@ describe('YouTube Find conversations', () => {
     expect(container!.querySelector('[data-blocked]')!.textContent).toContain('waiting for approval');
     expect(button('Open the replies').disabled).toBe(false);
     const bob = container!.querySelector('[data-comment-id="Ugz2"]')!;
-    expect((bob.querySelector('button') as HTMLButtonElement).disabled).toBe(true);
+    const bobWrite = button('Write replies', bob);
+    expect(bobWrite.disabled).toBe(true);
+    // The held button says why on its tooltip, and the sentence shows once,
+    // under the first of the video's rows.
+    expect(bobWrite.title).toContain('waiting for approval');
+    expect(container!.querySelectorAll('[data-blocked]').length).toBe(1);
     expect(button('Comment on the video').disabled).toBe(true);
   });
 
@@ -178,5 +188,118 @@ describe('YouTube Find conversations', () => {
     expect(said).not.toContain('no approved channels');
     expect(readNowNotice({ channels: 0, read: 0, comments: 0, failed: [], notReached: [], quota: null }))
       .toBe('There are no approved channels to read. Approve channels in Find creators first.');
+  });
+  it('every row action is a square icon naming its row; no text buttons or links remain in rows', async () => {
+    await render();
+    const row = container!.querySelector('[data-comment-id="Ugz1"]')!;
+    const actions = [...row.querySelectorAll('button, td.actions-col a')];
+    expect(actions.length).toBeGreaterThan(0);
+    for (const a of actions) {
+      expect(a.classList.contains('outreach-row-icon')).toBe(true);
+      expect(a.getAttribute('aria-label')).toBeTruthy();
+      expect(a.getAttribute('title')).toBe(a.getAttribute('aria-label'));
+      expect(a.textContent).toBe('');
+    }
+    expect(row.querySelector('[aria-label="Open Comment on YouTube: Ann Viewer"]')!.getAttribute('href')).toContain('lc=Ugz1');
+    expect(row.querySelector('[aria-label^="Comment on the video"]')).toBeTruthy();
+  });
+
+  it('a failed Write replies shows on a full-width line directly under its row', async () => {
+    listed = [video({ comments: [comment(), comment({ commentId: 'Ugz2', author: { name: 'Bob', channelUrl: '', channelId: '' }, score: 10 })] })];
+    (window as any).App.api.mockImplementation(async (path: string, options?: RequestInit) => {
+      if (!options) return { data: { videos: listed, newCount: 2, reading: { state: 'current', sentence: 'S.' }, skippedCount: 0, commentedCount: 0 } };
+      throw new Error('YouTube said no');
+    });
+    await render();
+    const bob = container!.querySelector('[data-comment-id="Ugz2"]')!;
+    await act(async () => { button('Write replies', bob).click(); });
+    const next = bob.nextElementSibling!;
+    expect(next.querySelector('[role="alert"]')!.textContent).toBe('No replies written: YouTube said no');
+    expect((next.querySelector('td') as HTMLTableCellElement).colSpan).toBe(8);
+  });
+
+  it('rows default to best rank first, and Likes and Posted sort both ways', async () => {
+    listed = [
+      video({ comments: [
+        comment({ commentId: 'a', score: 40, likes: 9, postedAt: '2026-10-28T10:00:00Z' }),
+        comment({ commentId: 'b', score: 90, likes: 1, postedAt: '2026-10-28T12:00:00Z' }),
+      ] }),
+      video({ videoId: 'vid00000002', title: 'B video', comments: [comment({ commentId: 'c', videoId: 'vid00000002', score: 60, likes: 5, postedAt: '2026-10-27T12:00:00Z' })] }),
+    ];
+    await render();
+    const order = () => [...container!.querySelectorAll('tr[data-comment-id]')].map((r) => r.getAttribute('data-comment-id'));
+    expect(order()).toEqual(['b', 'c', 'a']);
+    const head = (key: string) => container!.querySelector(`th[data-sort-key="${key}"]`) as HTMLElement;
+    await act(async () => { head('likes').click(); });
+    expect(order()).toEqual(['a', 'c', 'b']);
+    await act(async () => { head('likes').click(); });
+    expect(order()).toEqual(['b', 'c', 'a']);
+    await act(async () => { head('posted').click(); });
+    expect(order()).toEqual(['b', 'a', 'c']);
+    await act(async () => { head('posted').click(); });
+    expect(order()).toEqual(['c', 'a', 'b']);
+  });
+
+  it('the Video filter shows only that video\'s comments, and an empty result names the filter', async () => {
+    listed = [
+      video({ comments: [comment({ commentId: 'a' })] }),
+      video({ videoId: 'vid00000002', title: 'B video', comments: [comment({ commentId: 'c', videoId: 'vid00000002', text: 'Nice' })] }),
+    ];
+    await render();
+    const select = container!.querySelector('select[aria-label="Video"]') as HTMLSelectElement;
+    await act(async () => {
+      select.value = 'vid00000002';
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    expect([...container!.querySelectorAll('tr[data-comment-id]')].map((r) => r.getAttribute('data-comment-id'))).toEqual(['c']);
+    const reply = container!.querySelector('select[aria-label="Reply"]') as HTMLSelectElement;
+    await act(async () => {
+      reply.value = 'waiting';
+      reply.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    expect(container!.querySelector('[data-empty-filter]')!.textContent).toBe("No comments on 'B video' with a reply waiting.");
+  });
+});
+
+describe('Find conversations filters', () => {
+  const vids = [
+    video({ comments: [
+      comment({ commentId: 'none' }),
+      comment({ commentId: 'draft', replyStatus: 'draft', text: 'Tennis question', author: { name: 'Zed', channelUrl: '', channelId: '' } }),
+      comment({ commentId: 'posted', replyStatus: 'posted' }),
+    ] }),
+    video({ videoId: 'vid00000002', title: 'B', channel: { id: 'cr2', channelId: 'UC2', name: 'Channel B', url: '' }, comments: [comment({ commentId: 'other', videoId: 'vid00000002' })] }),
+  ];
+  const rows = conversationRows(vids);
+  const ids = (f: Partial<typeof DEFAULT_CONVERSATION_FILTERS>) => filterConversations(rows, { ...DEFAULT_CONVERSATION_FILTERS, ...f }).map((r) => r.key);
+
+  it('Reply: Not replied hides a reply waiting or posted; Waiting keeps only those waiting', () => {
+    expect(ids({ reply: 'not_replied' })).toEqual(['none', 'other']);
+    expect(ids({ reply: 'waiting' })).toEqual(['draft']);
+    expect(ids({ reply: 'all' })).toEqual(['none', 'draft', 'posted', 'other']);
+  });
+
+  it('search covers comment text and author; Channel and Video narrow to theirs', () => {
+    expect(ids({ search: 'tennis' })).toEqual(['draft']);
+    expect(ids({ search: 'zed' })).toEqual(['draft']);
+    expect(ids({ channel: 'cr2' })).toEqual(['other']);
+    expect(ids({ video: 'vid00000001' })).toEqual(['none', 'draft', 'posted']);
+  });
+
+  it('a video with no comments still has a row, so Comment on the video stays reachable', () => {
+    expect(conversationRows([video({ comments: [] })]).map((r) => r.key)).toEqual(['video:vid00000001']);
+  });
+
+  it('an empty result names every filter in force', () => {
+    expect(emptyConversationsText({ ...DEFAULT_CONVERSATION_FILTERS, search: 'yoga', channel: 'cr2', reply: 'not_replied' }, vids))
+      .toBe("No comments match 'yoga' on Channel B's videos without a reply waiting or posted.");
+    expect(emptyConversationsText(DEFAULT_CONVERSATION_FILTERS, vids)).toBe('No comments.');
+  });
+
+  it('a long comment is cut between words, never through one', () => {
+    const cut = cutBetweenWords('one two three four five', 14);
+    expect(cut).toBe('one two three…');
+    expect(cutBetweenWords('short', 14)).toBe('short');
+    expect(cutBetweenWords('Supercalifragilistic', 5)).toBe('Supercalifragilistic');
   });
 });

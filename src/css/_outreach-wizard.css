@@ -367,22 +367,105 @@
   white-space: pre-line;
 }
 
-/* ── YouTube: Find conversations (Outreach wizard 16/19) ─────────────
-   components/outreach-wizard/youtube-conversations.tsx. One box per video,
-   its comments inside it, reusing the Substack list's comment cards. */
+/* ── YouTube: Find conversations (Outreach wizard 16/19; a table since SC-888)
+   components/outreach-wizard/youtube-conversations.tsx. The table itself is
+   _tables.css (T11); this styles only the cells. Fixed column widths, the same
+   way Find creators does it: content wraps inside its column and can never
+   widen the table, so the Actions icons stay in the card at 1280. Comment has
+   no width and takes what is left. */
 
-.yt-conversation-video {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  min-width: 0;
-  padding: var(--space-3);
-  border: 1px solid var(--border-light);
-  border-radius: var(--radius-md);
+.yt-conversations-table-wrap {
+  margin-top: 0;
 }
 
-.yt-conversation-video .outreach-conversation {
-  border-style: dashed;
+.yt-conversations-table-wrap th[data-sort-key]:focus-visible {
+  outline: 2px solid var(--focus-ring-color);
+  outline-offset: -2px;
+}
+
+.yt-conversations-table {
+  table-layout: fixed;
+  width: 100%;
+  min-width: 68rem;
+}
+
+.yt-conversations-col-author { width: 11%; }
+.yt-conversations-col-video { width: 17%; }
+.yt-conversations-col-posted { width: 8%; }
+.yt-conversations-col-likes { width: 7%; }
+.yt-conversations-col-rank { width: 7%; }
+.yt-conversations-col-reply { width: 9%; }
+/* Four 36px icons, three 4px gaps, and the cell's own padding. */
+.yt-conversations-col-actions { width: 11.75rem; }
+
+.yt-conversations-table td {
+  overflow-wrap: anywhere;
+}
+
+.yt-conversations-table .table-actions-row {
+  gap: 4px;
+}
+
+.yt-conversation-text[title],
+.yt-conversation-rank[title] {
+  cursor: help;
+}
+
+.yt-conversation-video-line {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.yt-conversation-video-title {
+  min-width: 0;
+}
+
+.yt-conversation-channel {
+  display: block;
+  opacity: 0.75;
+  font-size: 0.9em;
+}
+
+.yt-conversation-posted,
+.yt-conversation-likes,
+.yt-conversation-rank {
+  white-space: nowrap;
+}
+
+.yt-conversation-likes,
+.yt-conversation-rank {
+  text-align: right;
+}
+
+.yt-conversations-filter-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.yt-conversations-table .table-filter-row select,
+.yt-conversations-table .table-filter-row input[type="search"] {
+  width: 100%;
+  min-width: 0;
+}
+
+/* A held video's sentence, or a row's own failure, on a full-width line
+   directly under the row it belongs to. */
+.yt-conversation-note-row td {
+  padding-top: 0;
+}
+
+.yt-conversation-note-row .outreach-wizard-error {
+  margin: 0;
+}
+
+.yt-conversations-empty-row td {
+  text-align: center;
+  opacity: 0.8;
 }
 
 /* ── Learn: lessons drafts are written with (Outreach wizard 13/19) ─────
