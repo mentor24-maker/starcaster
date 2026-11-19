@@ -452,6 +452,7 @@ test('a used-up YouTube quota leaves the channel approved and says when it reset
     assert.equal(res.body.data.status, 'approved');
     assert.equal(res.body.data.commentsRead.state, 'failed');
     assert.equal(res.body.data.commentsRead.quota, true);
+    assert.equal(res.body.data.commentsRead.noKey, false);
     const row = (await store.getCreatorById(c.id, SCOPE)).data;
     assert.equal(row.status, 'approved', 'the decision was saved');
     assert.match(row.commentsReadError, /quota/i, 'the row records the quota as the reason');
@@ -481,6 +482,8 @@ test('with no YouTube key the approval still stands and the row says the key is 
     assert.equal(res.statusCode, 200);
     assert.equal(res.body.data.status, 'approved');
     assert.match(res.body.data.commentsRead.error, /YOUTUBE_API_KEY/);
+    assert.equal(res.body.data.commentsRead.noKey, true, 'the screen is told no retry will happen');
+    assert.equal(res.body.data.commentsRead.quota, false);
     assert.match((await store.getCreatorById(c.id, SCOPE)).data.commentsReadError, /YOUTUBE_API_KEY/);
   } finally { restore(); }
 });

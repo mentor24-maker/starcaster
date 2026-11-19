@@ -37,6 +37,8 @@ let list: YoutubeCreator[];
 let findAnswer: Record<string, any>;
 let readAnswer: Record<string, any> | undefined;
 
+let refuseDecide = "";
+
 async function flush() {
   for (let i = 0; i < 5; i += 1) await act(async () => { await Promise.resolve(); });
 }
@@ -49,6 +51,7 @@ beforeEach(() => {
   list = [creator("1"), creator("2", { suggestion: null }), creator("3", { status: "rejected", decisionReasons: ["off topic"] })];
   findAnswer = { keywordsSearched: ["consciousness"], added: 2, merged: 0, cannotTell: "" };
   readAnswer = undefined;
+  refuseDecide = "";
   (window as any).App = {
     api: async (path: string, options: RequestInit = {}) => {
       const method = options.method || "GET";
@@ -59,6 +62,7 @@ beforeEach(() => {
       if (path.endsWith("/suggest")) return { data: { suggested: [{}], undecided: 2, fromCanonOnly: true } };
       const m = path.match(/creators\/([^/]+)\/decide$/);
       if (m) {
+        if (refuseDecide) throw new Error(refuseDecide);
         list = list.map((c) => (c.id === m[1] ? { ...c, status: body.status, decisionReasons: body.decisionReasons, note: body.note } : c));
         const saved = list.find((c) => c.id === m[1]);
         return { data: body.status === "approved" && readAnswer ? { ...saved, commentsRead: readAnswer } : saved };
@@ -126,8 +130,19 @@ describe("YouTube creators", () => {
     const card = host.querySelector('[data-status="candidate"]') as HTMLElement;
     await act(async () => { button("Agree", card).click(); });
     await flush();
-    expect(host.textContent).toContain("Channel 1 approved, because: consciousness. The approval is saved, but its comments could not be read: Cannot tell — YouTube quota used up");
+    expect(host.textContent).toContain("Channel 1 approved, because: consciousness. The approval is saved, but its comments were not read: Cannot tell — YouTube quota used up until Nov 20, 1:00 AM Mountain (midnight Pacific). Nothing can be read from YouTube before then");
     expect(host.querySelector('[role="alert"]')).toBeNull();
+  });
+
+  it("a refused approval drops the 'reading now' line and says only that it was not saved", async () => {
+    refuseDecide = "Database refused the write";
+    act(() => root.render(<YoutubeCreators />));
+    await flush();
+    const card = host.querySelector('[data-status="candidate"]') as HTMLElement;
+    await act(async () => { button("Agree", card).click(); });
+    await flush();
+    expect(host.textContent).toContain("The decision was not saved: Database refused the write");
+    expect(host.textContent).not.toContain("reading its newest videos now");
   });
 
   it("Reject asks why and saves the ticked reason and his sentence", async () => {
@@ -165,7 +180,19 @@ describe("YouTube creators", () => {
     expect(commentsReadText({ state: "read", comments: 1, videos: 1, error: "" })).toBe("Read: 1 comment on 1 video. They are in Find conversations now.");
     expect(commentsReadText({ state: "read", comments: 0, videos: 0, error: "" })).toMatch(/no videos in the last 14 days/);
     expect(commentsReadText({ state: "recent", comments: 4, videos: 2, error: "" })).toBe("Already read in the last hour: 4 comments on 2 videos.");
-    expect(commentsReadText({ state: "failed", comments: 0, videos: 0, error: "Backend Error" })).toMatch(/^The approval is saved, but its comments could not be read: Backend Error\. The scheduled read/);
+    expect(commentsReadText({ state: "failed", comments: 0, videos: 0, error: "Backend Error" })).toBe("The approval is saved, but its comments could not be read: Backend Error. The scheduled read tries again within three hours.");
+    expect(commentsReadText({ state: "read", comments: 0, videos: 3, error: "" })).toBe("Read 3 videos, but none has any comments yet, so there is nothing from it in Find conversations.");
+  });
+
+  it("words: a quota stop names its reset and a missing key promises no retry", () => {
+    const quota = commentsReadText({ state: "failed", comments: 0, videos: 0, quota: true, error: "Cannot tell — YouTube quota used up until Nov 20, 1:00 AM Mountain (midnight Pacific)." });
+    expect(quota).toBe("The approval is saved, but its comments were not read: Cannot tell — YouTube quota used up until Nov 20, 1:00 AM Mountain (midnight Pacific). Nothing can be read from YouTube before then; the first scheduled read after that picks it up.");
+    expect(quota).not.toMatch(/three hours/);
+    expect(quota).not.toMatch(/\.\./);
+    const noKey = commentsReadText({ state: "failed", comments: 0, videos: 0, noKey: true, error: "no YouTube API key is set up on the server (YOUTUBE_API_KEY)" });
+    expect(noKey).toBe("The approval is saved, but its comments were not read: no YouTube API key is set up on the server (YOUTUBE_API_KEY). Nothing can read them until a key is set up.");
+    expect(noKey).not.toMatch(/three hours|tries again/);
+    expect(noKey.match(/could not be read|were not read/g)?.length).toBe(1);
   });
 
   it("words: a hidden subscriber count is not 0; a canon-only run says so", () => {
