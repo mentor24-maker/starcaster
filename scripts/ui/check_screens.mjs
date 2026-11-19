@@ -53,6 +53,9 @@ const SHOT_DIR = path.join(ROOT, '.ui-check');
  * It must be a toggle carrying `aria-expanded`: navigation here does not reload
  * the page, so the step opens it only if it is not open already, and closes it
  * again after measuring so the plain entry at the next width sees it closed.
+ * `ready` (optional, with `open`) is what must then be visible — content that
+ * loads after the toggle opens, like the Find creators table (SC-887). If it
+ * never appears the screen is SKIPPED, never reported as fitting.
  *
  * `search` (optional) types `text` into `input`, presses Return, and measures
  * once `ready` appears — for results that only exist after a search, like the
@@ -116,6 +119,16 @@ const SCREENS = [
   { id: 'engageYoutubeOutreachPage', label: 'Engage: YouTube Outreach' },
   { id: 'engageSubstackNotesPage', label: 'Engage: Substack Notes' },
   { id: 'acquireSubstackPage', label: 'Acquire: Substack Miner' },
+  {
+    id: 'engageOutreachPage',
+    label: 'Engage: Outreach, YouTube Find creators table',
+    open: '[data-channel="youtube"] [data-stage="creators"] .outreach-wizard-stage-toggle',
+    ready: '[data-channel="youtube"] .yt-creators-table tbody tr',
+    // Approve / Reject live in the last column; at 1280 they were first off
+    // the right edge, behind a sideways scroll in the table's own box.
+    inReach: ['.yt-creators-table thead th.actions-col', '.yt-creators-table tbody td.actions-col'],
+    inReachFrom: 1280,
+  },
 ];
 
 function arg(name, fallback) {
@@ -160,6 +173,16 @@ try {
     if (String(how).startsWith('failed')) {
       console.log(`  (could not activate ${projectId}: ${how} — screens may render empty)`);
       blind.push(`the fixture project ${projectId} would not activate (${how}), so screens render empty`);
+    } else {
+      // Then reload, so every React island mounts under the fixture project.
+      // Without it Engage › Outreach kept the project it loaded with, and its
+      // Find creators table never appeared, so SC-887's width check skipped
+      // at every size (exit 2) on every run.
+      await page.evaluate((id) => {
+        window.localStorage.setItem(window.App?.CURRENT_PROJECT_ID_STORAGE_KEY || 'alphire.currentProjectId', id);
+      }, projectId);
+      await page.reload();
+      await page.waitForTimeout(4000);
     }
   } else {
     // An inactive project renders empty tables, which measure as "fits" and
@@ -200,6 +223,17 @@ try {
         }
         if ((await target.getAttribute('aria-expanded')) !== 'true') await target.click();
         await page.waitForTimeout(900);
+        if (screen.ready) {
+          const shown = await page.locator(screen.ready).first()
+            .waitFor({ state: 'visible', timeout: 8000 }).then(() => true, () => false);
+          if (!shown) {
+            console.log(`skip  ${String(width).padStart(4)}  ${screen.label} — opened, but ${screen.ready} never appeared (is the fixture seeded?)`);
+            skipped += 1;
+            const opened = page.locator(`${screen.open}[aria-expanded="true"]`).first();
+            if (await opened.count()) await opened.click();
+            continue;
+          }
+        }
       }
       if (screen.search) {
         const input = page.locator(screen.search.input).first();
