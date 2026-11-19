@@ -9,6 +9,14 @@ import { type PageAddressMap, resolvePageLinksInHtml, resolvePageLinksInSettings
 import { handleSectionJumpClick, useJumpToAddressSection } from "@/lib/section-jump";
 import { type HeadingAnchorAllocator, addHeadingAnchors, applyHeadingAnchors, planHeadingAnchors } from "@/lib/heading-anchors";
 import {
+  type PageHeading,
+  pickTableOfContentsEntries,
+  readPageHeadings,
+  resolveTableOfContentsSettings,
+  sameHeadings,
+  tableOfContentsEmptyNote
+} from "@/lib/table-of-contents";
+import {
   EMPTY_MEDIA_FILTERS,
   MEDIA_ASPECTS,
   mediaAssetMatchesFilters,
@@ -1878,6 +1886,106 @@ function CrmContactsTablePreview({
  * module's settings before it gets here. The defaults are the editor card's
  * (builder-module-card.tsx), so the two draw the same trail.
  */
+/**
+ * Table of Contents (task SC-863): the page's headings as jump links.
+ *
+ * It reads the headings the page SHOWS once they are on screen — every
+ * h2–h6 with an id inside this page, in order (the ids come from SC-856's
+ * heading anchors). Nothing is stored, so it always matches the page as
+ * published. It keeps watching, because a blog post's body arrives after the
+ * page has drawn; the re-read is cheap and changes nothing unless the
+ * headings did.
+ *
+ * Clicking a link needs nothing here: the page's own click handler
+ * (`handleSectionJumpClick`) glides to any `#id` on the page and puts it in
+ * the address, the same as a section anchor.
+ *
+ * Until the first reading, and on a live page that has no headings, it
+ * renders nothing at all — never a lone title over empty space (landmine 16).
+ */
+function TableOfContentsModule({
+  settings,
+  liveSite = false,
+  emailPreview = false
+}: {
+  settings: Record<string, string>;
+  liveSite?: boolean;
+  emailPreview?: boolean;
+}) {
+  const toc = resolveTableOfContentsSettings(settings);
+  const markerRef = useRef<HTMLSpanElement | null>(null);
+  const navRef = useRef<HTMLElement | null>(null);
+  const [headings, setHeadings] = useState<PageHeading[] | null>(null);
+
+  useEffect(() => {
+    if (emailPreview || typeof window === "undefined") return;
+    const self = navRef.current || markerRef.current;
+    const root: Element = self?.closest("[data-builder-page]") || document.body;
+    let frame = 0;
+    const read = () => {
+      frame = 0;
+      const next = readPageHeadings(root, navRef.current);
+      setHeadings((current) => (current && sameHeadings(current, next) ? current : next));
+    };
+    read();
+    const observer = typeof MutationObserver === "function"
+      ? new MutationObserver(() => {
+          if (!frame) frame = window.requestAnimationFrame(read);
+        })
+      : null;
+    observer?.observe(root, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ["id"] });
+    return () => {
+      observer?.disconnect();
+      if (frame) window.cancelAnimationFrame(frame);
+    };
+  }, [emailPreview]);
+
+  // An email cannot jump anywhere, and has no page to read.
+  if (emailPreview) return null;
+
+  const entries = headings ? pickTableOfContentsEntries(headings, toc) : [];
+  if (entries.length === 0) {
+    // A hidden marker, so the first reading can find which page it is on.
+    const marker = <span ref={markerRef} hidden data-table-of-contents="" />;
+    if (liveSite || headings === null) return marker;
+    return (
+      <>
+        {marker}
+        <BuilderOnlyNote liveSite={liveSite} className="builder-contact-form-stub">
+          {tableOfContentsEmptyNote(toc.levels, headings.length > 0)}
+        </BuilderOnlyNote>
+      </>
+    );
+  }
+
+  const color = toc.color || "#0f4f8f";
+  return (
+    <nav
+      aria-label={toc.title || "On this page"}
+      className="builder-preview-toc"
+      data-table-of-contents=""
+      ref={navRef}
+      style={{ textAlign: toc.alignment, fontSize: toc.fontSize }}
+    >
+      {toc.title ? <p className="builder-preview-toc-title">{toc.title}</p> : null}
+      <ul>
+        {entries.map((entry) => (
+          <li
+            className={`builder-preview-toc-item builder-preview-toc-depth-${entry.depth}`}
+            data-toc-depth={entry.depth}
+            key={entry.id}
+            style={entry.depth ? { paddingInlineStart: `${entry.depth * 1.25}em` } : undefined}
+          >
+            <a href={`#${encodeURIComponent(entry.id)}`} style={{ color }}>
+              {entry.text}
+            </a>
+          </li>
+        ))}
+      </ul>
+    </nav>
+  );
+}
+
 function BreadcrumbModulePreview({
   settings,
   liveSite = false
@@ -2194,6 +2302,8 @@ export function BuilderTemplatePreview({
     <SiteWideBugReportContext.Provider value={siteWideBugReportActive}>
     <HeadingAnchorContext.Provider value={headingAnchorPlan}>
     <div
+      // The page a Table of Contents reads its headings from (SC-863).
+      data-builder-page=""
       className={
         shellClassName
           ? pageOverlaySections.length > 0
@@ -3418,6 +3528,10 @@ function BuilderModulePreviewBody({
 
   if (module.type === "breadcrumb") {
     return <BreadcrumbModulePreview settings={module.settings} liveSite={liveSite} />;
+  }
+
+  if (module.type === "table-of-contents") {
+    return <TableOfContentsModule settings={module.settings} liveSite={liveSite} emailPreview={emailPreview} />;
   }
 
   if (module.type === "galaxy") {
