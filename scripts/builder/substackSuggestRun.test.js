@@ -199,6 +199,42 @@ test('a credit or key failure stops the run and says how many were not reached',
   } finally { restore(); }
 });
 
+test('no usable AI provider stops the run through the real door (SC-845)', async () => {
+  // The door's own no-key reply, not a stand-in's wording: the stop check
+  // once matched queryAnthropic's "Missing Anthropic API Key" and missed
+  // the door's "No AI provider could answer", so a pass with no key read
+  // every writer's posts and failed them one at a time.
+  const aiClient = require('../../lib/aiClient');
+  const { store, run, restore } = withDb();
+  try {
+    await history(store);
+    for (const h of ['f1', 'f2', 'f3']) await writer(store, h);
+    let fetched = 0;
+    const doorDeps = {
+      getKey: () => '',
+      fetchImpl: async () => { fetched += 1; throw new Error('no network call expected'); },
+      recordUsage: async () => {},
+      postBus: async () => ({ ok: true }),
+      order: () => aiClient.getAiProviderOrder({
+        env: { AI_PROVIDER_ORDER: 'anthropic,openai' },
+        readSettings: async () => ({ ok: true, data: { exists: false } }),
+      }),
+      now: () => 0,
+    };
+    let asked = 0;
+    const generate = async (system, prompt) => {
+      asked += 1;
+      return aiClient.generate({ feature: run.SUBSTACK.feature, scope: SCOPE, tier: run.TIER, system, messages: prompt }, doorDeps);
+    };
+    const res = await run.runSubstackSuggestions(SCOPE, {}, deps({ fetchJson: fakeFetch(), generate }));
+    assert.equal(res.ok, true);
+    assert.equal(fetched, 0, 'no provider was called');
+    assert.equal(asked, 1, 'one failure is enough to know');
+    assert.equal(res.data.notReached, 2);
+    assert.match(res.data.stoppedBecause || '', /No AI provider/);
+  } finally { restore(); }
+});
+
 test('the time budget leaves the rest for the next run, and says so', async () => {
   const { store, run, restore } = withDb();
   try {

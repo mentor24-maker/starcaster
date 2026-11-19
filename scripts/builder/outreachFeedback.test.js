@@ -76,7 +76,7 @@ function withDb({ withFeedback = true } = {}) {
   // Every fifth decision asks the AI to refresh the lessons (13/19); in a test
   // that must never be a real, paid call.
   const realAi = require.cache[aiPath];
-  require.cache[aiPath] = { id: aiPath, filename: aiPath, loaded: true, exports: { queryAnthropic: async () => ({ ok: false, error: 'no AI in tests' }) } };
+  require.cache[aiPath] = { id: aiPath, filename: aiPath, loaded: true, exports: { generate: async () => ({ ok: false, error: 'no AI in tests' }) } };
   for (const p of STORE_PATHS) delete require.cache[p];
   const [feedback, reddit, youtube, , substack] = STORE_PATHS.map((p) => require(p));
   function restore() {
