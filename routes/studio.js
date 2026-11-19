@@ -21,7 +21,11 @@
  *   POST /api/studio/pairs/:id/sound           Dane's choice of whose sound a
  *                                              pair uses (routes/studioPairs.js)
  *
- * Read-only but for the rescore flag and the choice of sound. The pipeline writes the catalog from
+ *   GET  /api/studio/rough-cuts                the rough cuts, and Dane's
+ *   POST …/rough-cuts/:id/review               verdict on each
+ *                                              (routes/studioRoughCuts.js)
+ *
+ * Read-only but for the rescore flag, the choice of sound and the verdict on a rough cut. The pipeline writes the catalog from
  * the Mac Mini (workers/studio/).
  *
  * WHERE THE PICTURES COME FROM. Nothing in the pipeline makes a thumbnail of
@@ -49,6 +53,7 @@ const googleDrive = require('../lib/googleDrive');
 const { checkEndpointLimit } = require('../lib/rateLimiter');
 const { handleMoments } = require('./studioMoments');
 const { handlePairs } = require('./studioPairs');
+const { handleRoughCuts } = require('./studioRoughCuts');
 const { listAudioPairs } = require('../lib/videoAudioPairsStore');
 
 /** The most rows one read takes. resolveLimit's own ceiling. */
@@ -384,6 +389,7 @@ async function handle(req, res, pathname, method) {
   // Reel Spinner's moments and a rescore request; a pair's choice of sound.
   if (await handleMoments(req, res, pathname, method)) return true;
   if (await handlePairs(req, res, pathname, method)) return true;
+  if (await handleRoughCuts(req, res, pathname, method)) return true;
   if (method !== 'GET') return false;
 
   if (pathname === '/api/studio/footage') {
