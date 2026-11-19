@@ -129,6 +129,20 @@ const SCREENS = [
     inReach: ['.yt-creators-table thead th.actions-col', '.yt-creators-table tbody td.actions-col'],
     inReachFrom: 1280,
   },
+  {
+    id: 'engageOutreachPage',
+    label: 'Engage: Outreach, Reddit Find conversations table',
+    shot: 'reddit-conversations',
+    // The channel tab is remembered, so the YouTube screens above would open
+    // on Reddit next time round unless the tab is put back afterwards.
+    tab: 'Reddit',
+    tabBack: 'YouTube',
+    open: '[data-channel="reddit"] [data-stage="conversations"] .outreach-wizard-stage-toggle',
+    ready: '[data-channel="reddit"] .reddit-conversations-table tbody tr',
+    // Expand / Write replies / Skip / Save as contact / Open are the last column (SC-891).
+    inReach: ['.reddit-conversations-table thead th.actions-col', '.reddit-conversations-table tbody td.actions-col'],
+    inReachFrom: 1280,
+  },
 ];
 
 function arg(name, fallback) {
@@ -214,6 +228,16 @@ try {
 
       await revealPanels(page, { revealSelfHidden: REVEAL_HIDDEN });
       await page.waitForTimeout(900);
+      if (screen.tab) {
+        const tab = page.getByRole('tab', { name: screen.tab, exact: true }).first();
+        if (!(await tab.count())) {
+          console.log(`skip  ${String(width).padStart(4)}  ${screen.label} — no "${screen.tab}" tab on the page`);
+          skipped += 1;
+          continue;
+        }
+        await tab.click();
+        await page.waitForTimeout(600);
+      }
       if (screen.open) {
         const target = page.locator(screen.open).first();
         if (!(await target.count())) {
@@ -307,6 +331,10 @@ try {
         if (await clear.count() && await clear.isEnabled()) await clear.click();
       }
       if (screen.select) await page.locator(screen.select).first().uncheck();
+      if (screen.tabBack) {
+        const back = page.getByRole('tab', { name: screen.tabBack, exact: true }).first();
+        if (await back.count()) { await back.click(); await page.waitForTimeout(300); }
+      }
 
       const problems = [];
       for (const what of outOfReach) problems.push(`${what} — out of reach without sliding the table sideways`);

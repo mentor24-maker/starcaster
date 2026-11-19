@@ -92,7 +92,7 @@ export function SortHeader<K extends string>({ label, sortKey, sort, onSort, fir
   );
 }
 
-export type RowIconGlyph = 'approve' | 'reject' | 'agree' | 'write' | 'skip' | 'contact' | 'open' | 'comment';
+export type RowIconGlyph = 'approve' | 'reject' | 'agree' | 'write' | 'skip' | 'contact' | 'open' | 'comment' | 'expand' | 'collapse';
 
 const GLYPHS: Record<RowIconGlyph, React.ReactElement> = {
   approve: <polyline points="4 12 10 18 20 6" />,
@@ -103,6 +103,8 @@ const GLYPHS: Record<RowIconGlyph, React.ReactElement> = {
   contact: <><circle cx="9" cy="8" r="3.5" /><path d="M3 20c0-3.5 2.7-6 6-6s6 2.5 6 6" /><line x1="19" y1="8" x2="19" y2="14" /><line x1="16" y1="11" x2="22" y2="11" /></>,
   open: <><path d="M14 4h6v6" /><line x1="20" y1="4" x2="11" y2="13" /><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" /></>,
   comment: <path d="M4 5h16v11H9l-5 4z" />,
+  expand: <polyline points="6 9 12 15 18 9" />,
+  collapse: <polyline points="6 15 12 9 18 15" />,
 };
 
 function Glyph({ glyph }: { glyph: RowIconGlyph }): React.ReactElement {
@@ -117,15 +119,17 @@ function Glyph({ glyph }: { glyph: RowIconGlyph }): React.ReactElement {
  * A small square icon action in a row. `label` names the action AND the row
  * ("Approve Dear Fellow INFJ"): it is both the tooltip and what a screen
  * reader says, so an icon is never a guess. Give `href` for a link (opens in
- * a new tab), `onClick` for a button.
+ * a new tab), `onClick` for a button. `expanded` makes it a show/hide toggle
+ * a screen reader announces as open or closed (Reddit's comments, SC-891).
  */
-export function RowIcon({ glyph, label, onClick, href, disabled, tone }: {
+export function RowIcon({ glyph, label, onClick, href, disabled, tone, expanded }: {
   glyph: RowIconGlyph;
   label: string;
   onClick?: () => void;
   href?: string;
   disabled?: boolean;
   tone?: 'primary' | 'danger';
+  expanded?: boolean;
 }): React.ReactElement {
   const className = `tiny-btn icon-btn outreach-row-icon${tone ? ` icon-btn-${tone}` : ''}`;
   const inner = <span className="icon-btn-glyph"><Glyph glyph={glyph} /></span>;
@@ -137,7 +141,7 @@ export function RowIcon({ glyph, label, onClick, href, disabled, tone }: {
     );
   }
   return (
-    <button type="button" className={className} title={label} aria-label={label} disabled={disabled} onClick={onClick} data-row-icon={glyph}>
+    <button type="button" className={className} title={label} aria-label={label} aria-expanded={expanded} disabled={disabled} onClick={onClick} data-row-icon={glyph}>
       {inner}
     </button>
   );

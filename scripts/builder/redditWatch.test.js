@@ -331,6 +331,7 @@ test('the ranked list: best first, a reason on every item, the promotion rule, a
     const ids = list.data.items.map((i) => i.postId);
     assert.deepEqual(ids, ['aaa1', 'ccc3'], 'too old, skipped and already-answered posts are left out; best first');
     assert.equal(list.data.newCount, 2);
+    assert.equal(list.data.items[0].redditScore, 20, "Reddit's own points survive ranking, which rewrites score (SC-891)");
     for (const item of list.data.items) {
       assert.ok(item.reason && item.reason.length > 10, 'every item names why it ranked');
       assert.equal(item.promotionRule, 'No self-promotion.');

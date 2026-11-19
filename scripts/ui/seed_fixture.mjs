@@ -47,6 +47,7 @@ const youtubeOutreachStore = require(path.join(ROOT, 'lib/youtubeOutreachStore.j
 const substackNotesStore = require(path.join(ROOT, 'lib/substackNotesStore.js'));
 const substackMinerStore = require(path.join(ROOT, 'lib/substackMinerStore.js'));
 const youtubeCreatorsStore = require(path.join(ROOT, 'lib/youtubeCreatorsStore.js'));
+const redditWatchStore = require(path.join(ROOT, 'lib/redditWatchStore.js'));
 const assetsStore = require(path.join(ROOT, 'lib/assetsStore.js'));
 const substackContactCapture = require(path.join(ROOT, 'lib/acquire/SubstackContactCapture.js'));
 const youtubeOutreachCommentsStore = require(path.join(ROOT, 'lib/youtubeOutreachCommentsStore.js'));
@@ -2220,6 +2221,49 @@ async function seedYoutubeCreators(scope) {
   return { total: channels.length };
 }
 
+/**
+ * Reddit's Find conversations (SC-891): two approved subreddits and posts in
+ * them, so the table has rows to measure at 1280/1440/1920 — a long title, an
+ * unbroken run with no space in it, a post with comments read (its expand
+ * icon shows rows beneath it) and one not read yet. Dated hours ago on EVERY
+ * run, because the list drops a post older than 14 days.
+ */
+async function seedRedditConversations(scope) {
+  const added = must(await redditWatchStore.addSubreddits([
+    { name: 'polymath', why: 'Generalists comparing notes.' },
+    { name: 'consciousness_studies', why: 'Long name, to fill the Subreddit column.' },
+  ], scope), 'add fixture subreddits');
+  const subs = must(await redditWatchStore.listSubreddits(1000, scope), 'list subreddits');
+  for (const name of ['polymath', 'consciousness_studies']) {
+    const sub = subs.find((x) => x.name === name);
+    if (!sub) throw new Error(`r/${name} was added but does not read back in this project (added: ${added.added.length})`);
+    if (sub.status !== 'approved') must(await redditWatchStore.decideSubreddit(sub.id, 'approved', scope), `approve r/${name}`);
+  }
+  const ago = (h) => new Date(Date.now() - h * 3600 * 1000).toISOString();
+  const posts = [
+    { postId: 'fixrd1', subreddit: 'polymath', title: `${LONG}: how do generalists decide what to learn next when everything is interesting?`, body: 'I keep starting things. '.repeat(20), author: 'curious_generalist', postedAt: ago(3), score: 214, numComments: 57, keyword: 'generalist' },
+    { postId: 'fixrd2', subreddit: 'consciousness_studies', title: '#consciousness/nonduality/awakening/self-inquiry/presence-in-everyday-life', body: '', author: 'Unbroken_Text_Poster_With_A_Long_Name', postedAt: ago(20), score: 9, numComments: 3, keyword: 'consciousness/nonduality/awakening' },
+    { postId: 'fixrd3', subreddit: 'polymath', title: 'Short one', body: 'Comments not read yet.', author: 'quiet', postedAt: ago(40), score: 1, numComments: 4, keyword: 'polymath' },
+  ];
+  must(await redditWatchStore.savePosts(posts, scope), 'save Reddit posts');
+  must(await redditWatchStore.saveComments('fixrd1', [
+    { id: 'fixc1', author: 'LongWindedCommenter', body: `Pick the thing that makes the other things easier. ${'Writing did that for me, because it forced me to notice what I actually understood. '.repeat(3)}`, score: 88 },
+    { id: 'fixc2', author: 'brief', body: 'Follow the itch.', score: 12 },
+  ], scope), 'save Reddit comments');
+  // Landmine 12: read the rows back through the project scope.
+  const listed = must(await redditWatchStore.listPosts(1000, scope), 'list Reddit posts');
+  const missing = posts.filter((p) => !listed.some((r) => r.postId === p.postId)).length;
+  if (missing) throw new Error(`${missing} Reddit post(s) were written but do not read back in this project`);
+  return { total: posts.length };
+}
+
+let redditSeeded = null;
+try {
+  redditSeeded = await seedRedditConversations({ projectId: project.id, userId });
+} catch (err) {
+  console.error(`  failed to seed Reddit conversations: ${err.message}`);
+}
+
 let creatorsSeeded = null;
 try {
   creatorsSeeded = await seedYoutubeCreators({ projectId: project.id, userId });
@@ -2276,5 +2320,10 @@ console.log(
   creatorsSeeded
     ? `YouTube creators seeded — ${creatorsSeeded.total} channel(s): undecided with each kind of suggestion, one approved, two rejected, one with no space to break at.`
     : 'WARNING: YouTube creators were NOT seeded; Engage › Outreach › Find creators will be empty and check:screens proves nothing there.'
+);
+console.log(
+  redditSeeded
+    ? `Reddit conversations seeded — ${redditSeeded.total} post(s) in two approved subreddits: a long title, an unbroken one, one with comments read.`
+    : 'WARNING: Reddit conversations were NOT seeded; Engage › Outreach › Reddit › Find conversations will be empty and check:screens proves nothing there.'
 );
 console.log(`export UI_HARNESS_PROJECT_ID=${project.id}`);
