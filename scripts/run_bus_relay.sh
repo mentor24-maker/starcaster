@@ -284,6 +284,19 @@ npm run --silent broken-links -- --check || true
 # nothing is said twice. Never allowed to fail the wake: 1 is a dead key and 2
 # is CANNOT TELL, both readings, not failures.
 npm run --silent ai-keys -- --check || true
+# THE TWELFTH — does OpenClaw on the Mini follow the AI switch? (SC-874)
+#
+# Dane, 2026-11-18: "We need to set up Openclaw so we can point it at any
+# active API in the system." Settings › APIs decides which AI provider every
+# website feature uses; OpenClaw on the Mini used the order its installer
+# wrote. This reads the switch (Outreach's own order once it has one) and, when
+# it differs from OpenClaw's, rewrites OpenClaw's models and restarts it,
+# never while something is talking to it. A switched-on provider OpenClaw has
+# no key or model for is posted, and an unreadable switch leaves OpenClaw alone
+# and says CANNOT TELL. Runs only where the `openclaw` role lives (it decides
+# that itself). Never allowed to fail the wake: 1 is a provider left out and 2
+# is CANNOT TELL, both readings, not failures.
+npm run --silent openclaw:sync -- --check || true
 
 # THE ONE REPAIR, on the idle wake (task 86bbtnk3k — audit Phase 4). The sweep
 # became reachable on 2026-09-02 and was then called by nothing, which is the

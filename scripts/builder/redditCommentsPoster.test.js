@@ -264,6 +264,51 @@ test('the browser is told the exact words, the account, the profile, and to clic
   assert.match(reply, /Click "Reply" under that comment/);
 });
 
+/**
+ * SC-894: after the 2026-11-18 post, Reddit's comment box above the thread
+ * showed the word "undefined". The instructions must never carry an unset
+ * value turned into text; "null" belongs only in the JSON answer shape.
+ */
+function strayWords(instructions) {
+  const before = instructions.slice(0, instructions.indexOf('Reply with ONLY this JSON'));
+  assert.ok(before.length > 0, 'the instructions end with the JSON answer shape');
+  return before.match(/\b(undefined|null|NaN)\b|\[object Object\]/g) || [];
+}
+
+test('SC-894: the browser instructions never say "undefined" or "null", for a reply to the post or to a comment', () => {
+  const rows = {
+    'a reply to the post': { text: WORDS, targetUrl: POST_URL, parentCommentId: '' },
+    'a reply to a comment': { text: WORDS, targetUrl: `${POST_URL}_/${PARENT_ID}/`, parentCommentId: PARENT_ID },
+  };
+  for (const [kind, item] of Object.entries(rows)) {
+    const said = reddit.buildPostInstructions({ item, profile: 'dane-of-earth', accountName: ACCOUNT });
+    assert.deepEqual(strayWords(said), [], `${kind}: no unset value reaches the browser`);
+    assert.match(said, /Once it is posted, type nothing more anywhere on the page/, `${kind}: told to type nothing after posting`);
+  }
+  const reply = reddit.buildPostInstructions({ item: rows['a reply to a comment'], profile: 'dane-of-earth', accountName: ACCOUNT });
+  assert.match(reply, /Leave the post's own comment box at the top of the page \("Join the conversation"\) empty/);
+  // The instrument can fail: a row missing its link is caught.
+  const broken = reddit.buildPostInstructions({ item: { text: WORDS, parentCommentId: '' }, profile: 'dane-of-earth', accountName: ACCOUNT });
+  assert.deepEqual(strayWords(broken), ['undefined']);
+});
+
+test('SC-894: what the worker really sends OpenClaw carries no unset value, for either kind of row', async () => {
+  for (const parentCommentId of ['', PARENT_ID]) {
+    const env = withDb();
+    try {
+      await approved(env, { parentCommentId });
+      const ins = standIns();
+      await onePass(adapterFor(env, ins));
+      const sent = ins.calls.find((c) => c.user === 'starcaster:reddit-comments-poster');
+      assert.ok(sent, 'the worker asked OpenClaw to post');
+      assert.deepEqual(strayWords(sent.input), [], `parentCommentId "${parentCommentId}": nothing unset`);
+      assert.ok(sent.input.includes(`<comment>${WORDS}</comment>`));
+    } finally {
+      env.restore();
+    }
+  }
+});
+
 test('a comment permalink is read for its post and comment; a post link is not a comment', () => {
   assert.deepEqual(reddit.parsePermalink(`https://www.reddit.com/r/Meditation/comments/${POST_ID}/comment/nw1x/`), { ok: true, postId: POST_ID, commentId: 'nw1x' });
   assert.deepEqual(reddit.parsePermalink(`https://www.reddit.com/r/Meditation/comments/${POST_ID}/how_do_you/nw1x/`), { ok: true, postId: POST_ID, commentId: 'nw1x' });
