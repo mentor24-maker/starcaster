@@ -21,7 +21,15 @@ import { RowIcon, SortHeader, filterRows, sortRows, type SortState, type SortVal
  *
  * A reading that has not come back says "Cannot tell" and names the writers —
  * an empty list is never drawn as "0 found" unless every approved writer was
- * read in the last 8 days (lib/substackConversations.js readingVerdict).
+ * read in the last 8 days (lib/substackConversations.js readingVerdict). A
+ * writer approved in the last day and not read yet is a wait, not a fault: the
+ * stage says when the next scheduled read is (SC-882).
+ *
+ * **Read now** (SC-882) runs the per-project read straight away
+ * (POST /api/acquire/substack-miner/read-notes, the same code the two-hourly
+ * read runs), then re-reads the list and says what it read. Outside the
+ * account's active hours the read refuses; that is said as the hours, never
+ * as a failure.
  *
  * The count above the list is the stage's sentence, which the wizard reads
  * from the overview. So every action that changes the list calls `onChanged`
@@ -31,6 +39,7 @@ import { RowIcon, SortHeader, filterRows, sortRows, type SortState, type SortVal
 
 export const CONVERSATIONS_PATH = '/api/outreach/substack/conversations';
 const MINER_CANDIDATES_PATH = '/api/acquire/substack-miner/candidates';
+export const READ_NOTES_PATH = '/api/acquire/substack-miner/read-notes';
 const NOTES_PAGE = 'engageSubstackNotesPage';
 
 export type Conversation = {
@@ -48,7 +57,7 @@ export type Conversation = {
   author: { handle: string; profileUrl: string };
 };
 
-export type Reading = { state: 'current' | 'cannot_tell' | 'no_writers'; sentence: string };
+export type Reading = { state: 'current' | 'not_read_yet' | 'cannot_tell' | 'no_writers'; sentence: string };
 
 export type ConversationsReply = {
   items: Conversation[];
@@ -84,6 +93,47 @@ export function replyLabel(c: Conversation): string {
 export function replyNotice(c: Conversation, reply: Record<string, any> | null | undefined): string {
   if (reply?.data?.drafted === false) return `Already drafted — open ${c.writer.name}'s reply on the Substack Notes screen.`;
   return `Replies written for ${c.writer.name}'s Note — choose one on the Substack Notes screen.`;
+}
+
+/** What the per-project read answers (lib/acquire/SubstackNotesReadRun.js). */
+export type ReadNotesReport = {
+  approved: number;
+  read: Array<{ name: string; notes: number }>;
+  skipped: Array<{ name: string; ago?: string }>;
+  failed: Array<{ name: string; reason: string }>;
+  notReached: Array<{ name: string; reason: string }>;
+};
+
+function plural(n: number, word: string): string {
+  return `${n} ${word}${n === 1 ? '' : 's'}`;
+}
+
+/**
+ * The one line Read now leaves behind: "Read 4 writers, 31 Notes.", then each
+ * writer not read by name and why. A writer skipped because it was read in the
+ * last 7 days is counted, so "Read 0 writers" never stands alone unexplained.
+ */
+export function readNowNotice(r: ReadNotesReport | null | undefined): string {
+  if (!r || !Array.isArray(r.read)) return 'The read finished but did not say what it read. The list has been reloaded.';
+  const notes = r.read.reduce((n, w) => n + (Number(w.notes) || 0), 0);
+  const bits = [`Read ${plural(r.read.length, 'writer')}, ${plural(notes, 'Note')}.`];
+  const skipped = r.skipped || [];
+  if (skipped.length) bits.push(`${plural(skipped.length, 'writer')} read in the last 7 days ${skipped.length === 1 ? 'was' : 'were'} left until next week.`);
+  for (const f of r.failed || []) bits.push(`${f.name} was not read: ${f.reason}.`.replace(/\.\.$/, '.'));
+  for (const f of r.notReached || []) bits.push(`${f.name}: ${f.reason}.`.replace(/\.\.$/, '.'));
+  return bits.join(' ');
+}
+
+/**
+ * A refused Read now. A 409 is the read declining outside the account's active
+ * hours: the server's own sentence names the hours, and it is a wait, not a
+ * fault, so it is shown as a notice (`calm: true`). Anything else is an error.
+ */
+export function readRefusal(err: unknown): { calm: boolean; message: string } {
+  const message = errorText(err, 'unknown error');
+  const status = (err as { status?: number } | null)?.status;
+  if (status === 409) return { calm: true, message };
+  return { calm: false, message: `Not read: ${message}` };
 }
 
 type Props = {
@@ -207,6 +257,9 @@ export default function SubstackConversations({ onChanged, version }: Props = {}
   const [skipping, setSkipping] = useState<Conversation | null>(null);
   const [filters, setFilters] = useState<ConversationFilters>(DEFAULT_FILTERS);
   const [sort, setSort] = useState<SortState<ConversationSortKey>>(DEFAULT_SORT);
+  const [readingNow, setReadingNow] = useState(false);
+  const [readError, setReadError] = useState('');
+  const readingRef = useRef(false);
   const seq = useRef(0);
 
   const load = useCallback(async () => {
@@ -250,6 +303,29 @@ export default function SubstackConversations({ onChanged, version }: Props = {}
     const api = getApp()?.api;
     if (typeof api !== 'function') throw new Error('the admin app is still loading');
     return api(path, { method, body: JSON.stringify(body) });
+  };
+
+  const readNow = async () => {
+    // The ref, not the state: two presses inside one render both see the
+    // state as false, and only one read may run at a time.
+    if (readingRef.current) return;
+    readingRef.current = true;
+    setReadingNow(true);
+    setReadError('');
+    setNotice('');
+    try {
+      const reply = await post(READ_NOTES_PATH, {});
+      setNotice(readNowNotice(reply?.data as ReadNotesReport));
+      await load();
+      onChanged?.();
+    } catch (err) {
+      const why = readRefusal(err);
+      if (why.calm) setNotice(why.message);
+      else setReadError(why.message);
+    } finally {
+      readingRef.current = false;
+      setReadingNow(false);
+    }
   };
 
   const writeReplies = async (c: Conversation) => {
@@ -310,6 +386,14 @@ export default function SubstackConversations({ onChanged, version }: Props = {}
       {/* No headline of its own: the stage's sentence above IS the headline —
           how many, or why it cannot tell (lib/outreachOverview.js
           conversationsStage) — so the two can never disagree. */}
+      {data.reading.state !== 'no_writers' ? (
+        <div className="outreach-wizard-stage-actions">
+          <button type="button" className="btn" disabled={readingNow} aria-busy={readingNow} onClick={() => void readNow()}>
+            {readingNow ? 'Reading…' : 'Read now'}
+          </button>
+        </div>
+      ) : null}
+      {readError ? <p className="outreach-wizard-error" role="alert">{readError}</p> : null}
       {data.canon && !data.canon.ok ? (
         <p className="outreach-wizard-muted">{`Ranked without your canon, so no Note scores for fitting it: ${data.canon.error}`}</p>
       ) : null}
