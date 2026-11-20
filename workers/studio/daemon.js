@@ -65,6 +65,9 @@ const { runRoughCut, STAGE_ROUGH_CUT } = require('./roughCutPass.js');
 const {
   runRecut, watchSentBack, STAGE_RECUT, STAGE_RECUT_WATCH, RECUT_WATCH_EVERY_MS,
 } = require('./recutPass.js');
+const {
+  runYoutubeCopy, watchYoutubeCopy, STAGE_YOUTUBE_COPY, STAGE_YOUTUBE_COPY_WATCH, YOUTUBE_COPY_WATCH_EVERY_MS,
+} = require('./youtubeCopyPass.js');
 const { sweepReadyOriginals } = require('./evict.js');
 
 /** How long to wait after a tick that found nothing to do. */
@@ -174,6 +177,13 @@ const STAGE_RUNNERS = {
     label: 're-cut',
     run: ({ queue, owner, env }) => runRecut({ queue, owner, env, max: 1 }),
   },
+  // Right behind a re-cut: one short AI call per rough cut, and the text is
+  // what Dane reads on the card he is about to approve
+  // (workers/studio/youtubeCopyPass.js, Reel Spinner 6a).
+  [STAGE_YOUTUBE_COPY]: {
+    label: 'YouTube text',
+    run: ({ queue, owner, env }) => runYoutubeCopy({ queue, owner, env, max: 1 }),
+  },
   // LAST, on purpose: a tick runs the first stage in this list with work due,
   // so a backlog of cut-marks jobs (the backfill queues ~28 at once) waits
   // behind any new recording's transcription rather than in front of it.
@@ -248,6 +258,13 @@ const WATCHERS = {
     label: 're-cut watch',
     everyMs: RECUT_WATCH_EVERY_MS,
     run: ({ queue, env }) => watchSentBack({ queue, env }),
+  },
+  // Clock-driven because an empty title box is a fact on the edit's row, and
+  // the website (where Dane clears one) cannot reach this queue.
+  [STAGE_YOUTUBE_COPY_WATCH]: {
+    label: 'YouTube text watch',
+    everyMs: YOUTUBE_COPY_WATCH_EVERY_MS,
+    run: ({ queue, env }) => watchYoutubeCopy({ queue, env }),
   },
 };
 
@@ -597,6 +614,7 @@ function formatWatch(w) {
   if (w.stage === STAGE_CACHE_SWEEP) return formatSweep(w.label, r);
   if (w.stage === STAGE_RESCORE_WATCH) return formatRescoreWatch(w.label, r);
   if (w.stage === STAGE_RECUT_WATCH) return formatRecutWatch(w.label, r);
+  if (w.stage === STAGE_YOUTUBE_COPY_WATCH) return formatYoutubeCopyWatch(w.label, r);
   if (r.blocked) return `${w.label} BLOCKED (${r.blocked.kind}): ${r.blocked.reason}`;
   const queued = Array.isArray(r.processed) ? r.processed.length : 0;
   const skipped = Array.isArray(r.skipped) ? r.skipped.length : 0;
@@ -626,6 +644,15 @@ function formatRecutWatch(label, r) {
   if (!r.ok) return `${label} COULD NOT TELL: ${r.error || 'no reason given'}`;
   const bits = [`${label} OK: ${(r.processed || []).length} re-cut(s) queued, ${(r.skipped || []).length} already waiting or blocked`];
   if (r.truncated) bits.push('more send-backs than one read takes; the rest are read next minute');
+  return bits.join(', ');
+}
+
+/** The YouTube-text watch's outcome, in the tick line. Same three words again. */
+function formatYoutubeCopyWatch(label, r) {
+  if (r.notConfigured) return `${label} OFF: ${r.notConfigured}`;
+  if (!r.ok) return `${label} COULD NOT TELL: ${r.error || 'no reason given'}`;
+  const bits = [`${label} OK: ${(r.processed || []).length} edit(s) queued for YouTube text, ${(r.skipped || []).length} already waiting or blocked`];
+  if (r.truncated) bits.push(`CANNOT TELL about edits past the first ${500} of a status`);
   return bits.join(', ');
 }
 
