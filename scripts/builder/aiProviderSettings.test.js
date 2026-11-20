@@ -11,10 +11,15 @@ const ai = require('../../lib/aiClient');
 const store = require('../../lib/aiProviderSettingsStore');
 const { screenRows } = require('../../routes/aiProviders');
 
-const ALL = ['anthropic', 'openai', 'gemini', 'kimi'];
+// Every built-in provider, in the code's own order (SC-903 added five).
+const ALL = Object.keys(ai.AI_PROVIDERS);
+// The providers that are on unless switched on: today's three.
+const ON_BY_DEFAULT = new Set(['anthropic', 'openai', 'gemini']);
+// ALL with OpenAI moved to the top: a real reordering, every provider once.
+const OPENAI_FIRST = ['openai', ...ALL.filter((id) => id !== 'openai')];
 function body(order = ALL, extra = {}) {
   return {
-    providers: order.map((id) => ({ id, enabled: id !== 'kimi', fast: ai.AI_PROVIDERS[id]?.models.fast || 'm-fast', strong: ai.AI_PROVIDERS[id]?.models.strong || 'm-strong' })),
+    providers: order.map((id) => ({ id, enabled: ON_BY_DEFAULT.has(id) || id.startsWith('custom-'), fast: ai.AI_PROVIDERS[id]?.models.fast || 'm-fast', strong: ai.AI_PROVIDERS[id]?.models.strong || 'm-strong' })),
     customProviders: [],
     ...extra,
   };
@@ -24,14 +29,14 @@ const saved = (input) => ({ ok: true, data: { exists: true, ...input } });
 // ── Validation ─────────────────────────────────────────────────────────────
 
 test('a full, ordered list with one provider on is accepted as sent', () => {
-  const v = store.validateInput(body(['openai', 'anthropic', 'gemini', 'kimi']));
+  const v = store.validateInput(body(OPENAI_FIRST));
   assert.equal(v.ok, true);
-  assert.deepEqual(v.data.providers.map((p) => p.id), ['openai', 'anthropic', 'gemini', 'kimi']);
+  assert.deepEqual(v.data.providers.map((p) => p.id), OPENAI_FIRST);
 });
 
 test('every provider must be listed once, so none drops off by being left out', () => {
   assert.match(store.validateInput(body(['openai', 'anthropic', 'gemini'])).error, /Kimi" is missing/);
-  assert.match(store.validateInput(body(['openai', 'openai', 'anthropic', 'gemini', 'kimi'])).error, /listed twice/);
+  assert.match(store.validateInput(body(['openai', ...OPENAI_FIRST])).error, /listed twice/);
   assert.match(store.validateInput(body([...ALL, 'nope'])).error, /not a provider/);
 });
 
@@ -103,7 +108,7 @@ test('the read-back comparison sees a changed order', () => {
 // ── The door's order ───────────────────────────────────────────────────────
 
 test('the saved order wins: OpenAI moved to the top is tried first, switched-off ones are skipped', async () => {
-  const v = store.validateInput(body(['openai', 'anthropic', 'gemini', 'kimi'])).data;
+  const v = store.validateInput(body(OPENAI_FIRST)).data;
   v.providers[2].enabled = false;
   const order = await ai.getAiProviderOrder({ env: {}, readSettings: async () => saved(v) });
   assert.equal(order.source, 'settings');
@@ -148,7 +153,7 @@ test('no saved row yet is today\'s behaviour, and says nothing is saved', async 
 test('the live reading is reused for a minute, then read again', async () => {
   const original = store.readSettings;
   let reads = 0;
-  const v = store.validateInput(body(['openai', 'anthropic', 'gemini', 'kimi'])).data;
+  const v = store.validateInput(body(OPENAI_FIRST)).data;
   // Swap the store's reader the way the door loads it (lazily, by module).
   require.cache[require.resolve('../../lib/aiProviderSettingsStore')].exports.readSettings = async () => { reads += 1; return saved(v); };
   try {
@@ -170,7 +175,7 @@ test('the live reading is reused for a minute, then read again', async () => {
 });
 
 test('generate() follows the saved order', async () => {
-  const v = store.validateInput(body(['openai', 'anthropic', 'gemini', 'kimi'])).data;
+  const v = store.validateInput(body(OPENAI_FIRST)).data;
   const sent = [];
   const res = await ai.generate({ feature: 't', messages: 'hi', tier: 'fast' }, {
     order: () => ai.getAiProviderOrder({ env: {}, readSettings: async () => saved(v) }),
@@ -198,7 +203,10 @@ test('nothing saved: the screen shows the fallback order on, then Kimi off, with
   });
   assert.deepEqual(rows.map((r) => [r.id, r.enabled, r.keySet]), [
     ['anthropic', true, true], ['openai', true, false], ['gemini', true, false], ['kimi', false, false],
+    ['deepseek', false, false], ['openrouter', false, false], ['xai', false, false], ['mistral', false, false], ['groq', false, false],
   ]);
+  assert.equal(rows.find((r) => r.id === 'deepseek').keyEnv, 'DEEPSEEK_API_KEY');
+  assert.equal(rows.find((r) => r.id === 'deepseek').defaultFast, 'deepseek-flash');
   assert.equal(rows[3].keyEnv, 'MOONSHOT_API_KEY');
   assert.equal(JSON.stringify(rows).includes('"key":'), false, 'no key value field is ever returned');
 });

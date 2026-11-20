@@ -52,6 +52,17 @@ export type ScreenState = {
 
 type Reading = { checkedAt: string; keys: AiKeyRow[] };
 
+/** One provider's "List models" answer (SC-903): the models its key can use, or why there are none. */
+export type ModelList = { busy?: boolean; models?: string[]; reason?: string };
+
+/** The line under "List models": how many were found, or why none were. */
+export function listStatusText(list: ModelList | undefined): string {
+  if (!list) return '';
+  if (list.busy) return 'Asking for its models…';
+  if (list.models && list.models.length) return `${list.models.length} model${list.models.length === 1 ? '' : 's'} listed: choose under each box`;
+  return list.reason || 'No models listed.';
+}
+
 function getAppApi(): AppApi | null {
   const app = (window as unknown as { App?: any }).App;
   return typeof app?.api === 'function' ? app.api : null;
@@ -106,11 +117,46 @@ const VERDICT_COLOR: Record<string, string> = {
 const cell: React.CSSProperties = { padding: '0.5rem 0.5rem 0.5rem 0', verticalAlign: 'top', overflowWrap: 'anywhere' };
 const smallInput: React.CSSProperties = { width: '100%', boxSizing: 'border-box' };
 
+/**
+ * A dropdown of the listed models under a model box. Choosing one fills the
+ * box; the box still takes a typed name. A name in the box that is not on the
+ * list is said so, because that is usually a typo or a retired model.
+ */
+export function ModelChooser({ label, tier, value, models, onPick }: {
+  label: string;
+  tier: 'fast' | 'strong';
+  value: string;
+  models: string[];
+  onPick: (model: string) => void;
+}): React.ReactElement {
+  const current = value.trim();
+  const onList = !current || models.includes(current);
+  return (
+    <>
+      <select
+        className="ai-provider-model-choice"
+        style={{ ...smallInput, marginTop: '0.25rem' }}
+        value={onList ? current : ''}
+        aria-label={`Choose ${label}'s ${tier} model from its list`}
+        onChange={(e) => { if (e.target.value) onPick(e.target.value); }}
+      >
+        <option value="">{`Choose from ${models.length} model${models.length === 1 ? '' : 's'}…`}</option>
+        {models.map((m) => <option key={m} value={m}>{m}</option>)}
+      </select>
+      {!onList && (
+        <div style={{ fontSize: '0.75rem', color: '#b26a00' }}>{`"${current}" is not in ${label}'s list`}</div>
+      )}
+    </>
+  );
+}
+
 /** The table alone, so a test can assert what Dane actually sees. */
-export function ProviderTable({ rows, reading, onChange }: {
+export function ProviderTable({ rows, reading, onChange, lists = {}, onList }: {
   rows: ProviderRow[];
   reading: Reading | null;
   onChange: (rows: ProviderRow[]) => void;
+  lists?: Record<string, ModelList>;
+  onList?: (id: string) => void;
 }): React.ReactElement {
   const set = (i: number, patch: Partial<ProviderRow>) => onChange(rows.map((r, j) => (j === i ? { ...r, ...patch } : r)));
   return (
@@ -127,6 +173,8 @@ export function ProviderTable({ rows, reading, onChange }: {
       <tbody>
         {rows.map((row, i) => {
           const r = readingFor(row, reading);
+          const list = lists[row.id];
+          const models = list?.models || [];
           return (
             <tr key={row.id} data-ai-provider={row.id} style={{ borderBottom: '1px solid var(--border)', opacity: row.enabled ? 1 : 0.6 }}>
               <td style={cell}>
@@ -150,6 +198,18 @@ export function ProviderTable({ rows, reading, onChange }: {
                   {row.enabled ? 'On' : 'Off'} · key setting {row.keyEnv}
                   {row.custom && row.baseUrl ? ` · ${row.baseUrl}` : ''}
                 </div>
+                {onList && (
+                  <div style={{ marginTop: '0.35rem' }}>
+                    <button type="button" className="btn" data-ai-list-models={row.id} disabled={Boolean(list?.busy)} onClick={() => onList(row.id)}>
+                      {models.length ? 'List again' : 'List models'}
+                    </button>
+                    {list && (
+                      <div data-ai-model-list-status={row.id} style={{ fontSize: '0.8rem', color: models.length ? 'var(--muted)' : '#b26a00' }}>
+                        {listStatusText(list)}
+                      </div>
+                    )}
+                  </div>
+                )}
               </td>
               <td style={cell}>
                 <strong style={{ color: VERDICT_COLOR[r.verdict] || 'inherit' }}>{r.verdict}</strong>
@@ -157,9 +217,11 @@ export function ProviderTable({ rows, reading, onChange }: {
               </td>
               <td style={cell}>
                 <input type="text" className="ai-provider-model" style={smallInput} value={row.fast} placeholder={row.defaultFast} aria-label={`${row.label} fast model`} onChange={(e) => set(i, { fast: e.target.value })} />
+                {models.length > 0 && <ModelChooser label={row.label} tier="fast" value={row.fast} models={models} onPick={(m) => set(i, { fast: m })} />}
               </td>
               <td style={cell}>
                 <input type="text" className="ai-provider-model" style={smallInput} value={row.strong} placeholder={row.defaultStrong} aria-label={`${row.label} strong model`} onChange={(e) => set(i, { strong: e.target.value })} />
+                {models.length > 0 && <ModelChooser label={row.label} tier="strong" value={row.strong} models={models} onPick={(m) => set(i, { strong: m })} />}
               </td>
             </tr>
           );
@@ -183,6 +245,25 @@ export default function AiProviderPanel(): React.ReactElement {
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
   const [adding, setAdding] = useState(EMPTY_SERVICE);
+  const [lists, setLists] = useState<Record<string, ModelList>>({});
+
+  // Ask one provider which models its key can use. The server asks with the
+  // key from Doppler; the key never comes to this page.
+  const listModels = useCallback(async (id: string) => {
+    const api = getAppApi();
+    if (!api) { setError('Admin app not ready.'); return; }
+    setLists((prev) => ({ ...prev, [id]: { ...prev[id], busy: true } }));
+    try {
+      const res = await api(`${PATH}/models?provider=${encodeURIComponent(id)}`);
+      const data = (res?.data || res) as { listed?: boolean; models?: string[]; reason?: string };
+      setLists((prev) => ({
+        ...prev,
+        [id]: data.listed ? { models: data.models || [] } : { reason: data.reason || 'No models listed.' },
+      }));
+    } catch (err) {
+      setLists((prev) => ({ ...prev, [id]: { reason: `Could not list its models: ${err instanceof Error ? err.message : 'no answer'}` } }));
+    }
+  }, []);
 
   const take = useCallback((next: ScreenState) => {
     setState(next);
@@ -276,7 +357,8 @@ export default function AiProviderPanel(): React.ReactElement {
       <p style={{ fontSize: '0.85rem', color: 'var(--muted)', margin: '0.4rem 0 0.75rem' }}>
         Every AI feature tries these from the top and uses the first one switched on that can pay. It moves to the
         next only when one is out of credit or its key is refused. Changes reach the website and the Mac Mini
-        within about a minute.
+        within about a minute. &ldquo;List models&rdquo; asks a provider which models its key can use, so you can
+        choose one instead of typing it; OpenRouter lists its models even before a key is added.
       </p>
 
       {state && (
@@ -288,7 +370,7 @@ export default function AiProviderPanel(): React.ReactElement {
       {notice && <p style={{ color: '#2e7d32' }}>{notice}</p>}
       {!state && !error && <p style={{ color: 'var(--muted)' }}>{busy ? 'Reading the AI provider settings…' : 'Not read yet.'}</p>}
 
-      {state && <ProviderTable rows={rows} reading={reading} onChange={setRows} />}
+      {state && <ProviderTable rows={rows} reading={reading} onChange={setRows} lists={lists} onList={(id) => { void listModels(id); }} />}
 
       {state && custom.length > 0 && (
         <div style={{ marginTop: '0.75rem', fontSize: '0.85rem' }}>
@@ -304,17 +386,17 @@ export default function AiProviderPanel(): React.ReactElement {
 
       {state && (
         <details style={{ marginTop: '1rem' }}>
-          <summary>Add an OpenAI-style service</summary>
+          <summary>Add another OpenAI-style service</summary>
           <p style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>
             For any service that copies OpenAI&apos;s chat API. Put its key in Doppler production under a setting of its
-            own, named AI_SERVICE_&lt;NAME&gt;_API_KEY (for Groq: AI_SERVICE_GROQ_API_KEY), and give that name here. Only
+            own, named AI_SERVICE_&lt;NAME&gt;_API_KEY (for Together AI: AI_SERVICE_TOGETHER_API_KEY), and give that name here. Only
             names starting AI_SERVICE_ are accepted, so an added service can never be handed a key that belongs to
             something else. Never type the key itself on this screen. It is added switched off.
           </p>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(12rem, 1fr))', gap: '0.5rem' }}>
-            <label>Name<input type="text" style={smallInput} value={adding.label} placeholder="Groq" onChange={(e) => setAdding({ ...adding, label: e.target.value })} /></label>
-            <label>Address<input type="text" style={smallInput} value={adding.baseUrl} placeholder="https://api.groq.com/openai/v1" onChange={(e) => setAdding({ ...adding, baseUrl: e.target.value })} /></label>
-            <label>Key Setting Name<input type="text" style={smallInput} value={adding.keyEnv} placeholder="AI_SERVICE_GROQ_API_KEY" autoComplete="off" onChange={(e) => setAdding({ ...adding, keyEnv: e.target.value })} /></label>
+            <label>Name<input type="text" style={smallInput} value={adding.label} placeholder="Together AI" onChange={(e) => setAdding({ ...adding, label: e.target.value })} /></label>
+            <label>Address<input type="text" style={smallInput} value={adding.baseUrl} placeholder="https://api.together.xyz/v1" onChange={(e) => setAdding({ ...adding, baseUrl: e.target.value })} /></label>
+            <label>Key Setting Name<input type="text" style={smallInput} value={adding.keyEnv} placeholder="AI_SERVICE_TOGETHER_API_KEY" autoComplete="off" onChange={(e) => setAdding({ ...adding, keyEnv: e.target.value })} /></label>
             <label>Fast Model<input type="text" style={smallInput} value={adding.fast} onChange={(e) => setAdding({ ...adding, fast: e.target.value })} /></label>
             <label>Strong Model<input type="text" style={smallInput} value={adding.strong} onChange={(e) => setAdding({ ...adding, strong: e.target.value })} /></label>
           </div>
