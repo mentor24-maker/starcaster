@@ -859,6 +859,48 @@ one costs 1. So upload count is the limit that matters, at 100 a day, far above
 what Reel Spinner will make. The project's own figures are on the Google Cloud
 console's Quotas page for `starcaster-498505` (a browser login).
 
+### Titles, descriptions and tags (Reel Spinner step 6a)
+
+Every rough cut gets a YouTube title, description and tags, written by the
+Mac Mini through the AI door (`generate()`, tier `strong`) and shown in boxes
+on its card on **Assets › Footage › Rough cuts**. He can change any of them;
+**Save text** keeps his words, and **Approve** sends what is in the boxes with
+the verdict.
+
+- **What it is written from:** only the words the edit keeps (not the whole
+  recording), his Reel Spinner notes on Assets › Context, and the project its
+  end card invites the viewer to (5b).
+- **How the description ends is not the AI's:** the end card's invitation
+  line and web address, word for word from the `Reel Spinner — end cards`
+  note, then — when the track's licence needs credit — the music shelf's
+  attribution line (5a). Code adds them, so they cannot be dropped or
+  reworded.
+- **YouTube's limits are held by code:** a title of at most 100 characters
+  (cut at a word), a description of at most 5,000 (the body gives way, never
+  the ending), no `<` or `>`, tags within 500 characters together.
+- **Never clickbait:** an answer asking for likes, subscribes or the bell, or
+  a title shouted in capitals, is refused by name and never written.
+- **His words are never overwritten.** The Mini writes each box ONLY while it
+  is empty, guarded on it still being empty at the moment of writing, so an
+  answer that lands after he typed leaves his box alone. A box he clears is
+  filled again within a few minutes.
+- **An empty box says why** ("YouTube text not written yet: no end card for
+  DEO in Reel Spinner — end cards", "no AI provider can pay right now"). A
+  missing note or end card is checked before the AI is paid, and tried again
+  every six hours, so filling in the note is all it takes. No AI provider
+  able to pay is the machine's fault: tried again hourly, and the bus hears
+  once per six hours (`reel-spinner-youtube-copy`).
+- **Music not picked yet:** no music is picked for a cut until 5c, so most
+  descriptions written today carry no music credit. 6c (the upload) must add
+  the credit for the track picked by then — `composeDescription` in
+  `workers/studio/youtubeCopy.js` does that without adding it twice.
+
+`npm run studio:youtube-copy-preview [-- --edit <id>]` writes one cut's text
+and prints it, writing nothing (one AI call). Files:
+`workers/studio/youtubeCopy.js` (the rules), `workers/studio/youtubeCopyPass.js`
+(the watcher and the job), `lib/videoEditsStore.js` `fillYoutubeCopy` (the
+empty-only write).
+
 ## Where the pieces live
 
 For an agent session working on this, not for day-to-day use.

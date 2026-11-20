@@ -9,9 +9,17 @@ import { clock, lengthText } from './moments-view';
  * Skip, Send back (which needs a note saying what to change). Nothing goes
  * further without his yes: the Mini only finishes an edit he approved.
  *
- * The screen writes only the verdict and his note
+ * The screen writes only the verdict, his note and the YouTube text
  * (POST /api/studio/rough-cuts/:id/review → lib/videoEditsStore.js
- * reviewEdit, which refuses a step out of order). After every verdict the list
+ * reviewEdit, which refuses a step out of order).
+ *
+ * THE YOUTUBE TEXT (Reel Spinner 6a, SC-839). Each card carries the title,
+ * description and tags the Mac Mini wrote, in boxes he can change. Save
+ * writes what he changed; Approve sends what he changed WITH the verdict, so
+ * what goes to YouTube is what was in the boxes. Only the boxes he changed are
+ * sent: a box he left alone keeps whatever the database holds, which may be
+ * text the Mini wrote after the screen was opened. The Mini only ever writes
+ * into an EMPTY box, so a word he typed is never overwritten. After every verdict the list
  * is read again from the database, so what is shown is what was saved — the
  * same picture a reload gives.
  *
@@ -42,8 +50,40 @@ export type RoughCut = {
   daneNote: string;
   recutCount: number;
   recutProblem?: string;
+  /** The YouTube text (6a). `missing` says why a box is empty, '' when all three are written. */
+  youtube?: YoutubeText;
   updatedAt: string;
 };
+
+export type YoutubeText = { title: string; description: string; tags: string[]; missing: string };
+
+/** YouTube's own limits; lib/videoEditsStore.js reviewEdit holds the same two. */
+export const TITLE_MAX = 100;
+export const DESCRIPTION_MAX = 5000;
+
+/** The statuses whose text he may still change here (the store refuses uploading and on_youtube). */
+const TEXT_EDITABLE = ['review', 'approved', 'finished'];
+
+/** "tennis, delray beach ,, kids" → ["tennis", "delray beach", "kids"]. */
+export function tagsFromText(value: string): string[] {
+  return value.split(',').map((t) => t.trim()).filter(Boolean);
+}
+
+export type TextChange = { youtubeTitle?: string; youtubeDescription?: string; youtubeTags?: string[] };
+
+/** Only the boxes that differ from what was loaded. */
+export function changedText(
+  loaded: YoutubeText | undefined,
+  boxes: { title: string; description: string; tags: string },
+): TextChange {
+  const was = loaded || { title: '', description: '', tags: [], missing: '' };
+  const out: TextChange = {};
+  if (boxes.title.trim() !== was.title.trim()) out.youtubeTitle = boxes.title.trim();
+  if (boxes.description.trim() !== was.description.trim()) out.youtubeDescription = boxes.description.trim();
+  const tags = tagsFromText(boxes.tags);
+  if (JSON.stringify(tags) !== JSON.stringify(was.tags)) out.youtubeTags = tags;
+  return out;
+}
 
 /** GET /api/studio/rough-cuts — lib/studioRoughCuts.js roughCutsView. */
 export type RoughCuts = {
@@ -137,7 +177,7 @@ function shortDate(iso: string): string {
   return new Date(t).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-type Verdict = { status: 'approved' | 'skipped' | 'sent_back'; daneNote?: string };
+type Verdict = ({ status: 'approved' | 'skipped' | 'sent_back' } | { status?: undefined }) & { daneNote?: string } & TextChange;
 
 function RoughCutItem({ edit, momentsError, onVerdict }: {
   edit: RoughCut;
@@ -148,6 +188,23 @@ function RoughCutItem({ edit, momentsError, onVerdict }: {
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState('');
+  const yt = edit.youtube;
+  const [title, setTitle] = useState(yt?.title || '');
+  const [description, setDescription] = useState(yt?.description || '');
+  const [tags, setTags] = useState((yt?.tags || []).join(', '));
+  // A fresh read (after a save, or the Mini writing) refills the boxes.
+  const loadedTitle = yt?.title || '';
+  const loadedDescription = yt?.description || '';
+  const loadedTags = (yt?.tags || []).join(', ');
+  useEffect(() => {
+    setTitle(loadedTitle);
+    setDescription(loadedDescription);
+    setTags(loadedTags);
+  }, [loadedTitle, loadedDescription, loadedTags]);
+  const boxes = { title, description, tags };
+  const changes = changedText(yt, boxes);
+  const changed = Object.keys(changes).length > 0;
+  const textEditable = TEXT_EDITABLE.includes(edit.status);
 
   const give = async (verdict: Verdict) => {
     setBusy(true);
@@ -204,9 +261,60 @@ function RoughCutItem({ edit, momentsError, onVerdict }: {
         </ul>
       ) : null}
       {verdict ? <p className="studio-roughcut-verdict" data-testid="studio-roughcut-verdict">{verdict}</p> : null}
+      <div className="studio-roughcut-youtube" data-testid="studio-roughcut-youtube">
+        {yt?.missing ? <p className="studio-moments-note" data-testid="studio-roughcut-youtube-missing">{yt.missing}</p> : null}
+        <label className="studio-footage-filter" htmlFor={`roughcut-title-${edit.id}`}>
+          <span>YouTube Title</span>
+          <span className="studio-roughcut-count">{`${title.trim().length} / ${TITLE_MAX}`}</span>
+        </label>
+        <input
+          id={`roughcut-title-${edit.id}`}
+          data-testid="studio-roughcut-title"
+          type="text"
+          maxLength={TITLE_MAX}
+          value={title}
+          readOnly={!textEditable}
+          onChange={(e) => setTitle(e.target.value)}
+        />
+        <label className="studio-footage-filter" htmlFor={`roughcut-description-${edit.id}`}>
+          <span>Description</span>
+          <span className="studio-roughcut-count">{`${description.trim().length} / ${DESCRIPTION_MAX}`}</span>
+        </label>
+        <textarea
+          id={`roughcut-description-${edit.id}`}
+          data-testid="studio-roughcut-description"
+          rows={8}
+          maxLength={DESCRIPTION_MAX}
+          value={description}
+          readOnly={!textEditable}
+          onChange={(e) => setDescription(e.target.value)}
+        />
+        <label className="studio-footage-filter" htmlFor={`roughcut-tags-${edit.id}`}>
+          <span>Tags</span>
+          <span className="studio-roughcut-count">Separated by Commas</span>
+        </label>
+        <input
+          id={`roughcut-tags-${edit.id}`}
+          data-testid="studio-roughcut-tags"
+          type="text"
+          value={tags}
+          readOnly={!textEditable}
+          onChange={(e) => setTags(e.target.value)}
+        />
+        {textEditable && edit.status !== 'review' ? (
+          <div className="studio-roughcut-actions">
+            <button type="button" className="btn btn-save" disabled={busy || !changed} onClick={() => void give({ ...changes })}>
+              Save text
+            </button>
+          </div>
+        ) : null}
+      </div>
       {edit.status === 'review' && !sendingBack ? (
         <div className="studio-roughcut-actions">
-          <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void give({ status: 'approved' })}>
+          <button type="button" className="btn btn-save" disabled={busy || !changed} onClick={() => void give({ ...changes })}>
+            Save text
+          </button>
+          <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void give({ status: 'approved', ...changes })}>
             Approve
           </button>
           <button type="button" className="btn" disabled={busy} onClick={() => void give({ status: 'skipped' })}>
@@ -296,7 +404,7 @@ export default function RoughCutsView(): React.ReactElement {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(verdict),
       });
-      if (!body?.ok || body?.data?.status !== verdict.status) {
+      if (!body?.ok || (verdict.status && body?.data?.status !== verdict.status)) {
         // Read the list again: a refusal (409, someone else's answer landed
         // first) means the buttons shown are stale.
         void load();
@@ -306,7 +414,9 @@ export default function RoughCutsView(): React.ReactElement {
       void load();
       return `Not saved: ${err instanceof Error ? err.message : 'the request failed'}`;
     }
-    const word = verdict.status === 'approved' ? 'Approved' : verdict.status === 'skipped' ? 'Skipped' : 'Sent back';
+    const word = verdict.status === 'approved' ? 'Approved'
+      : verdict.status === 'skipped' ? 'Skipped'
+        : verdict.status === 'sent_back' ? 'Sent back' : 'YouTube text saved';
     setDone(`${word}: ${editTitle(edit)} of ${edit.recordingName}.`);
     // Read the list again, so the screen shows what the database now holds.
     if (!(await load())) setDone((d) => `${d} The list could not be read again — Refresh to see it.`);
