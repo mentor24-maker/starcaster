@@ -795,6 +795,97 @@ npm run studio:cards -- seed --project <id> --notes-file <file> [--apply]
 Mini, run either from `~/Studio` under `doppler run` so it reads production.
 Exit 0 done, 1 refused, 2 could not tell.
 
+## The finished video (Reel Spinner step 5)
+
+When Dane presses **Approve** on a rough cut, the Mini makes the **finished
+video** (5c, SC-840): the same cuts as the rough cut, at the original's full
+quality, with the chosen sound, the picked music under the speech, and the
+title card before and the end card after. The card on Assets › Footage ›
+Rough cuts then reads **"Approved — finished, waiting to upload."**
+
+**How it gets there.** Approve is a status on the edit's row, which the Mini
+cannot be told about directly, so a watcher asks the database every minute
+for `approved` edits and queues one `final_render` job each. One render runs
+at a time. Files: `workers/studio/finalRender.js` (what ffmpeg is told to
+make) and `workers/studio/finalRenderPass.js` (the watcher and the job).
+
+**What a finished video is**, in order: 4 seconds of the title card (the
+cut's YouTube title), the kept stretches from the edit's row cut from the
+ORIGINAL at its own size, then 6 seconds of the end card. The music runs
+under all of it, fading in over 2 seconds and out over 4, looping if the
+track is shorter than the video. Voice and music are first brought to the
+same loudness (-16 LUFS, what YouTube plays speech at) and the music is then
+turned down 20 dB. Without that first step the gap depended on the recording:
+on the first real render a quiet Zoom recording had the music only 3 dB under
+the speech. Settings are YouTube's recommended ones: H.264 High, quality CRF 18,
+a keyframe every half second, AAC stereo 48 kHz at 384 kb/s.
+
+**Where the file goes.** `~/Studio/finished/<edit id>.mp4`, with
+`<edit id>.json` beside it saying what it was made from (length, music, end
+card, title). It is **not** put on Drive, because mentor24's storage is short;
+the YouTube upload (6c) takes it from there and deletes it after a confirmed
+upload. The picked track is stored on the edit (`music_track`) when it moves to
+`finished`.
+
+**The original comes back from Drive for the render, then goes again.** The
+cache sweep deletes each original once a recording is ready, so the job
+downloads it into `~/Studio/finished/.work/<edit id>/`, checks it against
+Drive's md5, renders, and deletes it, after a failure too. An original still
+in the cache is used where it is and left alone. Music tracks are fetched once
+into `~/Studio/music/` and kept.
+
+**Room on the disk is checked before anything is downloaded**: the original's
+size (from Drive) plus a generous estimate of the finished file plus the 5 GB
+always left free. Not enough room and it stops with the numbers ("6.0 GB free
+… it needs 8.7 GB — the original is 3.5 GB, the finished file about 0.2 GB,
+plus the 5.0 GB always left free"), downloads nothing, and tries again in 15
+minutes.
+
+**When it stops, and what the card shows meanwhile.** The edit stays
+`approved` whatever goes wrong, because the database's only way out of
+`failed` is back to a draft, which would throw away his Approve. So the card
+keeps reading "Approved — the Mac Mini will finish it." and the reason is in
+the worker's log (`~/Studio/logs/daemon.log`):
+
+- **no YouTube title yet**: the title card needs one. The YouTube-text step
+  writes it within minutes, or Dane types it; tried again every 15 minutes.
+- **no end card for the project, or the music shelf unusable**: blocked with
+  the reason, tried again every six hours, so fixing the Context note is
+  enough.
+- **ffmpeg missing, Drive or the database not answering, the disk too full**:
+  the machine's problem; tried again in 15 minutes, no attempt counted.
+- **ffmpeg refuses, the download arrives wrong, or the finished file is the
+  wrong length**: retried by the queue (five attempts, waiting longer each
+  time), then blocked — and it **stays** blocked until the edit itself
+  changes (sent back and approved again, a new title or track), because
+  nothing else would change the answer and every retry downloads the whole
+  original again. When the edit does change, the old blocked job is closed
+  before the new one is queued, so if the new one is then held for a reason
+  (no end card), fixing that note brings it back six hours later as usual.
+- **Dane sends the edit back while it renders**: the finished file and its
+  sidecar are deleted, because nothing would ever upload them and they would
+  sit on the disk counting against every later space check.
+
+A long render cannot keep its own lease alive (ffmpeg runs without
+interruption), so the lease is stretched to the render's full allowance right
+before ffmpeg starts, after the download and the cards have spent their time.
+
+**Measured on 2026-11-19**, on the Mini, on a real 47.5-second short from a
+Zoom recording (1728 × 1118, 25 frames a second): the 47 MB original
+downloaded in 6–7 seconds; the render took 8–11 seconds (three runs), which is
+**about 9–11 seconds per minute of finished video** at that size; the
+finished file was 57.48 seconds (the cards and kept stretches add up to
+57.46: half a frame) and 21.6 MB, about 3 Mbit/s. A 1080p iPhone recording has
+more pixels, so expect roughly half as long again. The disk check's estimate
+for that short was 72 MB, comfortably above the real 21.6 MB.
+
+**Two known limits.** An iPhone HDR recording is made in ordinary colour
+without tone-mapping (the Mini's ffmpeg has no `zscale`), so it can look a
+little flat; the job's report says `hdr` when it happens. And when an edit
+uses ANOTHER recording's sound (an iPhone picture with the Zoom sound, say),
+that sound comes from the partner's working copy (AAC 128 kb/s), not its
+original, so only one original is downloaded per render.
+
 ## YouTube (Reel Spinner step 6)
 
 Finished edits upload to the **Dane of Earth** channel (Dane's choice,
@@ -963,6 +1054,13 @@ For an agent session working on this, not for day-to-day use.
   (choosing, fitting, drawing; tests `scripts/builder/studioCards.test.js`),
   the template `workers/studio/card-template.html`, and
   `scripts/studio_cards.cjs` (`npm run studio:cards`).
+- The finished video (Reel Spinner 5c, SC-840): `workers/studio/finalRender.js`
+  (the pure ffmpeg plan: inputs, filter graph, YouTube settings, the length
+  check) and `workers/studio/finalRenderPass.js` (the `final_render.watch`
+  watcher and the `final_render` job; it reuses ingest.js's download and md5
+  check and roughCutPass.js's sound line-up). Tests
+  `scripts/builder/studioFinalRender.test.js`. 6c finds the file with
+  `finishedPathsFor`.
 - The pipeline: `workers/studio/` — `drive.js` (watcher), `ingest.js`,
   `probe.js`, `proxy.js`, `queue.js` (the local work list on the Mini, SQLite,
   deliberately not Supabase — the queue writes thousands of rows per video).

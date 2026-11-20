@@ -116,7 +116,8 @@ export const GROUPS: { id: Group; label: (n: number) => string }[] = [
 
 /** What the Mini has done since he approved it; '' while it just sits approved. */
 const AFTER_APPROVAL: Record<string, string> = {
-  finished: 'finished',
+  // The finished file waits on the Mac Mini for the YouTube upload (6c).
+  finished: 'finished, waiting to upload',
   uploading: 'uploading to YouTube',
   on_youtube: 'on YouTube',
 };

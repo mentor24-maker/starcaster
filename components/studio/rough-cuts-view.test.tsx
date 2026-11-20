@@ -160,6 +160,7 @@ describe("rough cuts: what each line says", () => {
   it("says what happened to one he has answered", () => {
     expect(verdictLine({ status: "approved", group: "approved", daneNote: "" })).toContain("Approved");
     expect(verdictLine({ status: "on_youtube", group: "approved", daneNote: "" })).toBe("Approved — on YouTube.");
+    expect(verdictLine({ status: "finished", group: "approved", daneNote: "" })).toBe("Approved — finished, waiting to upload.");
     expect(verdictLine({ status: "sent_back", group: "sent_back", daneNote: "trim the start" }))
       .toBe('Sent back: "trim the start"');
     expect(verdictLine({ status: "review", group: "waiting", daneNote: "" })).toBe("");
