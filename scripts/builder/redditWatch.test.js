@@ -672,7 +672,7 @@ test('Read now\'s ten-minute check reads ONLY the project that asked, at the nor
     assert.deepEqual(run.data.projects.map((p) => p.projectId), ['proj_a'], 'the other project was not read');
     assert.equal(run.data.read, due.SUBREDDITS_PER_PASS, 'still at most the normal two subreddits');
     assert.equal(browser.calls.filter((c) => /\/new\/ and wait/.test(c)).length, due.SUBREDDITS_PER_PASS);
-    assert.deepEqual(run.data.cleared, [{ projectId: 'proj_a', ok: true, error: '' }]);
+    assert.deepEqual(run.data.cleared, [{ projectId: 'proj_a', action: 'cleared', ok: true, error: '' }]);
     assert.equal(db.data.get('reddit_watch_read_requests').length, 0, 'the request is gone');
     assert.match(due.formatWatchLog(run.data), /Read now request for project proj_a cleared/);
   } finally { restore(); }
@@ -777,10 +777,11 @@ test('routes: POST read-now asks through the conversations module, GET is refuse
   } finally { restore(); }
 });
 
-test('the runner: --requested is silent on a quiet wake, and both schedules share one browser lock', () => {
+test('the runner: --requested is silent on a quiet wake, never beats, and both schedules share one browser lock', () => {
   const runner = fs.readFileSync(path.join(__dirname, '..', 'run_reddit_watch.sh'), 'utf8');
   assert.match(runner, /node scripts\/reddit_watch_due\.mjs \$MODE/);
-  assert.match(runner, /take_lock \|\| exit 4/, 'the ten-minute check gives up quietly while a pass reads');
+  assert.match(runner, /if \[ -n "\$MODE" \]; then exit 4; fi/, 'the ten-minute check gives up quietly while a pass reads');
+  assert.match(runner, /if \[ -z "\$MODE" \]; then npm run --silent heartbeat -- --beat/, 'only the four-hourly pass beats, so presses cannot mask a dead schedule');
   const script = fs.readFileSync(path.join(__dirname, '..', 'reddit_watch_due.mjs'), 'utf8');
   // With nothing waiting, it exits before OpenClaw is even configured.
   const quiet = script.indexOf('if (waiting.ok && !waiting.data.length) process.exit(NOTHING_READ);');
@@ -788,4 +789,139 @@ test('the runner: --requested is silent on a quiet wake, and both schedules shar
   const installer = fs.readFileSync(path.join(__dirname, '..', 'install_reddit_watch.sh'), 'utf8');
   assert.match(installer, /render_agent "\$REQ_LABEL" "--requested" 600/);
   assert.match(installer, /render_agent "\$LABEL" "" 14400/, 'the four-hourly pace is unchanged');
+});
+
+// ── Read now, after review (SC-883 round 2) ────────────────────────────────
+
+const LATER = (ms) => () => Date.now() + ms;
+
+test('Read now: a project the daily limit stopped before it read anything keeps its request, and the next wake reads and clears it', async () => {
+  const { db, store, due, restore } = withDb();
+  try {
+    await approve(store, ['polymath']);
+    await approve(store, ['stoicism'], OTHER);
+    await store.requestRead(SCOPE);
+    await store.requestRead(OTHER);
+    const sentence = 'The Mini has used its AI for today.';
+    const limited = await due.runRequestedReads({
+      callOpenClaw: async () => ({ ok: false, status: 429, code: 'MINI_AI_LIMIT', error: sentence }),
+      extractJson: () => null,
+      readKeywords: async () => ({ ok: true, data: ['generalist'] }), canonDocs: CANON,
+      now: LATER(1000),
+    });
+    assert.equal(limited.ok, true, limited.error);
+    assert.equal(limited.data.stoppedForToday, sentence);
+    assert.deepEqual(limited.data.cleared.map((c) => c.action), ['kept'], 'the stopped project is kept; the unreached one is not touched');
+    const rows = db.data.get('reddit_watch_read_requests');
+    assert.equal(rows.length, 2, 'neither request was dropped');
+    assert.ok(rows.every((r) => r.error == null), 'and both still wait');
+    assert.equal((await store.listReadRequests()).data.length, 2);
+
+    // The second wake: the limit has reset, so both are read and cleared.
+    const browser = quietListing();
+    const next = await due.runRequestedReads({
+      callOpenClaw: browser.callOpenClaw, extractJson: browser.extractJson,
+      readKeywords: async () => ({ ok: true, data: ['generalist'] }), canonDocs: CANON,
+      now: LATER(2000),
+    });
+    assert.equal(next.ok, true, next.error);
+    assert.deepEqual(next.data.cleared.map((c) => c.action), ['cleared', 'cleared']);
+    assert.equal(db.data.get('reddit_watch_read_requests').length, 0);
+  } finally { restore(); }
+});
+
+test('Read now: a read that could not start keeps its request with the reason, the list shows it, and a press asks again', async () => {
+  const { db, store, due, conv, restore } = withDb();
+  try {
+    await approve(store, ['polymath']);
+    await store.requestRead(SCOPE);
+    const run = await due.runRequestedReads({
+      callOpenClaw: async () => { throw new Error('no browser: the read never starts'); },
+      readKeywords: async () => ({ ok: true, data: [] }), canonDocs: [],
+      now: LATER(1000),
+    });
+    assert.equal(run.ok, true, run.error);
+    assert.deepEqual(run.data.cleared.map((c) => c.action), ['error']);
+    const rows = db.data.get('reddit_watch_read_requests');
+    assert.equal(rows.length, 1, 'the request was not dropped');
+    assert.match(rows[0].error, /no keywords and no canon words/);
+    assert.equal((await store.listReadRequests()).data.length, 0, 'an errored request waits no more');
+    assert.match(due.formatWatchLog(run.data), /kept, with why it could not start/);
+
+    const listed = await conv.listRedditConversations(SCOPE, { commentsStore: stubComments(), feedbackStore: stubFeedback(), canonDocs: CANON, now: () => Date.now() });
+    assert.equal(listed.data.readRequest.requestedAt, null, 'nothing is waiting');
+    assert.match(listed.data.readRequest.failedWhy, /no keywords and no canon words/);
+
+    const again = await conv.requestReadNow(SCOPE);
+    assert.equal(again.ok, true, again.error);
+    assert.equal(again.data.askedAgain, true);
+    assert.equal(again.data.sentence, 'Asked the Mini again. It picks this up within about 10 minutes.');
+    const after = db.data.get('reddit_watch_read_requests');
+    assert.equal(after.length, 1);
+    assert.equal(after[0].error, null);
+    assert.equal((await store.listReadRequests()).data.length, 1, 'it waits again');
+  } finally { restore(); }
+});
+
+test('Read now: a request waiting past 20 minutes reads as stale, and a press asks again with a new time', async () => {
+  const { db, store, conv, restore } = withDb();
+  try {
+    await approve(store, ['polymath']);
+    const t0 = Date.now();
+    const first = await conv.requestReadNow(SCOPE, { now: () => t0 });
+    assert.equal(first.ok, true, first.error);
+    const soon = await conv.requestReadNow(SCOPE, { now: () => t0 + 5 * 60 * 1000 });
+    assert.equal(soon.data.alreadyWaiting, true, 'a fresh request is left alone');
+    const opts = { commentsStore: stubComments(), feedbackStore: stubFeedback(), canonDocs: CANON };
+    assert.equal((await conv.listRedditConversations(SCOPE, { ...opts, now: () => t0 + 5 * 60 * 1000 })).data.readRequest.stale, false);
+    const late = t0 + store.READ_REQUEST_STALE_MS + 1000;
+    assert.equal((await conv.listRedditConversations(SCOPE, { ...opts, now: () => late })).data.readRequest.stale, true);
+    const again = await conv.requestReadNow(SCOPE, { now: () => late });
+    assert.equal(again.data.alreadyWaiting, false);
+    assert.equal(again.data.askedAgain, true);
+    assert.equal(Date.parse(again.data.requestedAt), late);
+    assert.equal(db.data.get('reddit_watch_read_requests').length, 1, 'still one row');
+  } finally { restore(); }
+});
+
+test('routes: POST read-now is rate limited like YouTube\'s', async () => {
+  const { restore } = withDb();
+  try {
+    const src = fs.readFileSync(path.join(__dirname, '..', '..', 'routes', 'outreach.js'), 'utf8');
+    const at = src.indexOf('`${base}/conversations/read-now`');
+    assert.ok(at > 0);
+    assert.match(src.slice(at, at + 400), /checkEndpointLimit\(req, res, 'outreach\.redditConversations\.readNow'\)/);
+    const limits = fs.readFileSync(path.join(__dirname, '..', '..', 'lib', 'rateLimiter.js'), 'utf8');
+    assert.match(limits, /'outreach\.redditConversations\.readNow': \{/, 'the limit is configured, not a default');
+  } finally { restore(); }
+});
+
+test('the runner\'s lock: one holder at a time, a non-waiting caller gets 75, and a holder that dies releases it', { skip: !fs.existsSync('/usr/bin/perl') && 'no /usr/bin/perl here' }, () => {
+  const { execFileSync, spawn, spawnSync } = require('child_process');
+  const os = require('os');
+  const runner = fs.readFileSync(path.join(__dirname, '..', 'run_reddit_watch.sh'), 'utf8');
+  const fn = runner.slice(runner.indexOf('LOCK_BUSY=75'), runner.indexOf('if [ -n "$MODE" ]; then\n  # A pass is already reading'));
+  assert.ok(fn.includes('with_lock()'), 'the lock function was found in the runner');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'reddit-lock-'));
+  const lib = path.join(dir, 'lock.sh');
+  fs.writeFileSync(lib, `LOCK="${dir}/reddit-watch.flock"\n${fn}\n`);
+  const run = (script) => spawnSync('/bin/bash', ['-c', `source "${lib}"; ${script}`], { encoding: 'utf8' });
+  try {
+    assert.equal(run('with_lock 0 true').status, 0, 'free: it runs');
+    assert.equal(run('with_lock 0 sh -c "exit 3"').status, 3, 'the command\'s own exit code comes back');
+    const holder = spawn('/bin/bash', ['-c', `source "${lib}"; with_lock 20 sleep 30`], { stdio: 'ignore' });
+    const until = Date.now() + 5000;
+    while (Date.now() < until && run('with_lock 0 true').status !== 75) execFileSync('sleep', ['0.1']);
+    assert.equal(run('with_lock 0 true').status, 75, 'held: a non-waiting caller is turned away');
+    assert.equal(run('with_lock 1 true').status, 75, 'held: a waiting caller gives up when its time runs out');
+    // Kill the whole holder (bash, perl and sleep): the kernel drops the lock.
+    spawnSync('pkill', ['-KILL', '-P', String(holder.pid)]);
+    holder.kill('SIGKILL');
+    const freed = Date.now() + 5000;
+    let st = 75;
+    while (Date.now() < freed && (st = run('with_lock 0 true').status) === 75) execFileSync('sleep', ['0.1']);
+    assert.equal(st, 0, 'a dead holder leaves no lock behind to take over');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });

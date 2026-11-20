@@ -256,6 +256,7 @@ async function handleReddit(req, res, pathname, method, reddit) {
   // the body's; a second press while one waits changes nothing.
   if (pathname === `${base}/conversations/read-now`) {
     if (method !== 'POST') return sendErr(res, 405, 'Method not allowed'), true;
+    if (checkEndpointLimit(req, res, 'outreach.redditConversations.readNow')) return true;
     return reply(res, await reddit.conversations().requestReadNow(scope)), true;
   }
   const verb = pathname.match(/^\/api\/outreach\/reddit\/conversations\/(reply|skip|contact)$/);

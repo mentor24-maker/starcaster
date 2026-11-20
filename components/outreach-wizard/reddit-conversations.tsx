@@ -24,8 +24,12 @@ import { RowIcon, SortHeader, filterRows, sortRows, type SortState, type SortVal
  *
  * **Read now** (SC-883) asks the Mini to read this project's subreddits on
  * its next ten-minute check — only its signed-in browser can read Reddit, so
- * the button leaves a request rather than reading. While a request waits the
- * button says so and holds itself; pressing again changes nothing.
+ * the button leaves a request rather than reading. While a fresh request
+ * waits the button says so and holds itself, and the list reloads every
+ * minute (and when the window comes back into focus) so a finished read
+ * shows. A request the Mini has not picked up in 20 minutes says so plainly —
+ * its check may not be running — and a press then asks again; so does a
+ * press after the Mini reported it could not start the read.
  *
  * Signed out or a read that did not come back is "Cannot tell" in the stage's
  * sentence above — never "0 found" — so this list draws no headline of its own.
@@ -71,17 +75,55 @@ export type RedditConversationsReply = {
   newCount: number;
   reading: { state: string; sentence: string };
   /** Read now's request still waiting for the Mini, if any (SC-883). */
-  readRequest?: { ok: boolean; requestedAt: string | null; error?: string };
+  readRequest?: {
+    ok: boolean;
+    /** When the waiting request was made; null when nothing waits. */
+    requestedAt: string | null;
+    /** Waiting so long that the Mini plainly has not picked it up. */
+    stale?: boolean;
+    /** The Mini tried and could not start the read: why. '' otherwise. */
+    failedWhy?: string;
+    failedAt?: string | null;
+    error?: string;
+  };
   canon?: { ok: boolean; words?: number; error?: string };
 };
 
+/** "just now", "4 minutes ago", "2 hours ago"; '' if the time cannot be read. */
+export function agoText(iso: string | null | undefined, now: number): string {
+  const at = Date.parse(iso || '');
+  if (!Number.isFinite(at)) return '';
+  const min = Math.max(0, Math.round((now - at) / 60000));
+  if (min < 1) return 'just now';
+  if (min < 60) return `${min} minute${min === 1 ? '' : 's'} ago`;
+  const h = Math.round(min / 60);
+  return `${h} hour${h === 1 ? '' : 's'} ago`;
+}
+
+/** Is a request waiting that a press should leave alone? (Fresh, not stale, not failed.) */
+export function readRequestHolds(r: RedditConversationsReply['readRequest']): boolean {
+  return Boolean(r && r.ok && r.requestedAt && !r.stale);
+}
+
 /** What Read now's area says, from the list's request state. '' when nothing is waiting. */
-export function readRequestNote(r: RedditConversationsReply['readRequest']): string {
+export function readRequestNote(r: RedditConversationsReply['readRequest'], now: number = Date.now()): string {
   if (!r) return '';
   if (!r.ok) return `Cannot tell whether a read is already waiting: ${r.error || 'it could not be read'}`;
+  if (r.failedWhy) {
+    const when = agoText(r.failedAt, now);
+    return `The Mini tried to read${when ? ` ${when}` : ''} and could not start: ${r.failedWhy} Press Read now to ask again.`;
+  }
   if (!r.requestedAt) return '';
-  return 'Asked the Mini to read. It picks this up within about 10 minutes.';
+  const when = agoText(r.requestedAt, now);
+  if (r.stale) {
+    return `Asked the Mini to read${when ? ` ${when}` : ''}, and it has not picked this up. Its Read now check may not be running `
+      + '(on the Mini: scripts/install_reddit_watch.sh --status). Press Read now to ask again.';
+  }
+  return `Asked the Mini to read${when ? ` ${when}` : ''}. It picks this up within about 10 minutes.`;
 }
+
+/** How often the list reloads while a request waits, so a finished read shows. */
+export const READ_REQUEST_POLL_MS = 60 * 1000;
 
 type ApiFn = (path: string, options?: RequestInit) => Promise<Record<string, any>>;
 type AppShape = { api?: ApiFn; setActivePage?: (pageId: string) => void };
@@ -248,6 +290,18 @@ export default function RedditConversations({ onChanged, version }: Props = {}):
 
   useEffect(() => { void load(); }, [load, version]);
 
+  // While a request waits, reload every minute and on focus: the Mini clears
+  // it when its read finishes, and a list that never looks again would hold
+  // the button and its promise for good.
+  const waitingFor = data?.readRequest?.ok && data.readRequest.requestedAt ? data.readRequest.requestedAt : '';
+  useEffect(() => {
+    if (!waitingFor) return undefined;
+    const timer = window.setInterval(() => { void load(); }, READ_REQUEST_POLL_MS);
+    const onFocus = () => { void load(); };
+    window.addEventListener('focus', onFocus);
+    return () => { window.clearInterval(timer); window.removeEventListener('focus', onFocus); };
+  }, [waitingFor, load]);
+
   const post = async (path: string, body: unknown) => {
     const api = getApp()?.api;
     if (typeof api !== 'function') throw new Error('the admin app is still loading');
@@ -255,7 +309,7 @@ export default function RedditConversations({ onChanged, version }: Props = {}):
   };
 
   const readNow = async () => {
-    if (asking || data?.readRequest?.requestedAt) return;
+    if (asking || readRequestHolds(data?.readRequest)) return;
     setAsking(true);
     setAskError('');
     try {
@@ -421,11 +475,11 @@ export default function RedditConversations({ onChanged, version }: Props = {}):
           <button
             type="button"
             className="btn"
-            disabled={asking || Boolean(data.readRequest?.requestedAt)}
+            disabled={asking || readRequestHolds(data.readRequest)}
             aria-busy={asking}
             onClick={() => void readNow()}
           >
-            {data.readRequest?.requestedAt ? 'Read asked for' : (asking ? 'Asking…' : 'Read now')}
+            {readRequestHolds(data.readRequest) ? 'Read asked for' : (asking ? 'Asking…' : 'Read now')}
           </button>
         </div>
       ) : null}

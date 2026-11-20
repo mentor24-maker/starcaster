@@ -1155,6 +1155,14 @@ function createFakeDb(schema, { idPrefix = 'row' } = {}) {
         continue;
       }
 
+      // `col=is.null` / `col=not.is.null` — PostgREST's NULL test.
+      const isNull = /^(not\.)?is\.null$/.exec(value);
+      if (isNull) {
+        const negate = Boolean(isNull[1]);
+        rows = rows.filter((row) => (row[key] === null || row[key] === undefined) !== negate);
+        continue;
+      }
+
       const match = /^eq\.(.*)$/.exec(value);
       if (!match) throw new Error(`sqlSchemaFake: unsupported filter ${key}=${value}`);
       const wanted = match[1];

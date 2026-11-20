@@ -33,7 +33,7 @@
 # day must not fill the log.
 #
 # ONE BROWSER PASS AT A TIME. Both schedules take the same lock
-# ($HOME/Library/Caches/reddit-watch.lock), because two passes at once would be
+# ($HOME/Library/Caches/reddit-watch.flock), because two passes at once would be
 # two browsers reading Dane's account together. The ten-minute check gives up
 # quietly when the lock is held (its request stays waiting for the next wake);
 # the four-hourly pass waits up to 30 minutes for a Read now pass to finish —
@@ -52,7 +52,7 @@ if [ "${1:-}" = "--requested" ]; then
   MODE="--requested"
   LOG="$HOME/Library/Logs/reddit-watch-requests.log"
 fi
-LOCK="${REDDIT_WATCH_LOCK:-$HOME/Library/Caches/reddit-watch.lock}"
+LOCK="${REDDIT_WATCH_LOCK:-$HOME/Library/Caches/reddit-watch.flock}"
 DOPPLER_SCOPE="${REDDIT_WATCH_DOPPLER_SCOPE:-$HOME/Studio}"
 DOPPLER_CONFIG="${REDDIT_WATCH_DOPPLER_CONFIG:-prd}"
 cd "$REPO" || exit 1
@@ -65,42 +65,61 @@ node -e '
 ' "$REPO" "$ROLE" || owns=$?
 if [ "$owns" -ne 0 ]; then exit "$owns"; fi
 
-# The lock is a folder (mkdir is atomic) holding the pid that took it. A pid
-# that is no longer running left it behind, and its lock is taken over.
-take_lock() {
+# The lock is a kernel lock (flock) on a file, held by a small perl wrapper
+# around the pass (perl ships with macOS; there is no flock command). The
+# kernel releases it the instant the holder dies, however it dies, so there
+# is no stale lock to take over and no takeover race: two waiters can never
+# both decide a lock is dead, and a death between taking it and writing a
+# pid cannot leave it held forever — the two faults the earlier mkdir lock
+# had (review of PR #1085).
+#
+# with_lock <seconds to wait, 0 = do not wait> <command...>
+#   exits 75 if the lock could not be taken in time; otherwise the command's
+#   own exit code.
+LOCK_BUSY=75
+with_lock() {
+  local wait="$1"; shift
   mkdir -p "$(dirname "$LOCK")"
-  if mkdir "$LOCK" 2>/dev/null; then echo $$ > "$LOCK/pid"; return 0; fi
-  local holder
-  holder="$(cat "$LOCK/pid" 2>/dev/null || true)"
-  if [ -n "$holder" ] && ! kill -0 "$holder" 2>/dev/null; then
-    rm -rf "$LOCK"
-    if mkdir "$LOCK" 2>/dev/null; then echo $$ > "$LOCK/pid"; return 0; fi
-  fi
-  return 1
+  /usr/bin/perl -MFcntl=:flock -e '
+    my ($file, $wait, @cmd) = @ARGV;
+    open(my $fh, ">>", $file) or do { print STDERR "reddit-watch: cannot open the lock $file: $!\n"; exit 75 };
+    if ($wait > 0) {
+      local $SIG{ALRM} = sub { exit 75 };
+      alarm $wait;
+      flock($fh, LOCK_EX) or exit 75;
+      alarm 0;
+    } else {
+      flock($fh, LOCK_EX | LOCK_NB) or exit 75;
+    }
+    my $rc = system(@cmd);
+    exit 127 if $rc == -1;
+    exit 128 + ($rc & 127) if $rc & 127;
+    exit $rc >> 8;
+  ' "$LOCK" "$wait" "$@"
 }
+
 if [ -n "$MODE" ]; then
   # A pass is already reading: the request waits for the next wake.
-  take_lock || exit 4
+  wait_for=0
 else
-  waited=0
-  until take_lock; do
-    if [ "$waited" -ge 1800 ]; then
-      echo "=== $ROLE: a Read now pass has held the browser for 30 minutes — this pass did not run"
-      npm run --silent report:failure -- --job "$ROLE" --status 6 --log "$LOG" || true
-      exit 6
-    fi
-    sleep 30
-    waited=$((waited + 30))
-  done
+  wait_for=1800
 fi
-trap 'rm -rf "$LOCK"' EXIT
 
 status=0
-doppler run --scope "$DOPPLER_SCOPE" --project starcaster --config "$DOPPLER_CONFIG" --no-check-version -- \
+with_lock "$wait_for" doppler run --scope "$DOPPLER_SCOPE" --project starcaster --config "$DOPPLER_CONFIG" --no-check-version -- \
   node scripts/reddit_watch_due.mjs $MODE || status=$?
 
+if [ "$status" -eq "$LOCK_BUSY" ]; then
+  if [ -n "$MODE" ]; then exit 4; fi
+  echo "=== $ROLE: a Read now pass has held the browser for 30 minutes — this pass did not run"
+  npm run --silent report:failure -- --job "$ROLE" --status 6 --log "$LOG" || true
+  exit 6
+fi
+
 if [ "$status" -eq 0 ]; then
-  npm run --silent heartbeat -- --beat --role "$ROLE" || true
+  # Only the four-hourly pass beats. A Read now pass beating under the same
+  # role would let presses mask a four-hourly schedule that has died.
+  if [ -z "$MODE" ]; then npm run --silent heartbeat -- --beat --role "$ROLE" || true; fi
 elif [ "$status" -eq 4 ]; then
   # Read now's check with nothing waiting: the usual case, and silent.
   if [ -z "$MODE" ]; then echo "=== $ROLE: nothing was read this pass — no beat recorded"; fi

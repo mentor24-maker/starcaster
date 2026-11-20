@@ -3,7 +3,7 @@ import { act } from 'react-dom/test-utils';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import RedditConversations, {
-  DEFAULT_REDDIT_FILTERS, readRequestNote, commentReplyLabel, commentsNote, emptyPostsText, filterPosts, rankPosts, redditSortValue, replyWord,
+  DEFAULT_REDDIT_FILTERS, readRequestNote, readRequestHolds, agoText, READ_REQUEST_POLL_MS, commentReplyLabel, commentsNote, emptyPostsText, filterPosts, rankPosts, redditSortValue, replyWord,
   type RedditConversation,
 } from './reddit-conversations';
 import { sortRows } from './outreach-table';
@@ -49,21 +49,26 @@ let root: Root | null = null;
 let listed: RedditConversation[] = [];
 let failNext = false;
 let requestedAt: string | null = null;
+let stale = false;
+let listCalls = 0;
 
 beforeEach(() => {
   posts.length = 0;
   listed = [item()];
   failNext = false;
   requestedAt = null;
+  stale = false;
+  listCalls = 0;
   (window as any).App = {
     setActivePage: vi.fn(),
     api: vi.fn(async (path: string, options?: RequestInit) => {
       if (!options) {
-        return { data: { items: listed, newCount: listed.length, reading: { state: 'current', sentence: 'S.' }, readRequest: { ok: true, requestedAt } } };
+        listCalls += 1;
+        return { data: { items: listed, newCount: listed.length, reading: { state: 'current', sentence: 'S.' }, readRequest: { ok: true, requestedAt, stale } } };
       }
       if (failNext) { failNext = false; throw new Error('the server said no'); }
       posts.push({ path, body: JSON.parse(String(options.body)) });
-      if (path.endsWith('/read-now')) requestedAt = requestedAt || '2026-11-19T20:00:00Z';
+      if (path.endsWith('/read-now') && (!requestedAt || stale)) { requestedAt = new Date().toISOString(); stale = false; }
       return { data: { drafted: true, created: true } };
     }),
   };
@@ -280,7 +285,7 @@ describe('Reddit conversations table helpers', () => {
     await act(async () => { readNow().click(); });
     await flush();
     expect(posts).toEqual([{ path: '/api/outreach/reddit/conversations/read-now', body: {} }]);
-    expect(container!.textContent).toContain('Asked the Mini to read. It picks this up within about 10 minutes.');
+    expect(container!.textContent).toContain('Asked the Mini to read just now. It picks this up within about 10 minutes.');
     expect(readNow().textContent).toBe('Read asked for');
     expect(readNow().disabled).toBe(true);
     await act(async () => { readNow().click(); });
@@ -299,6 +304,54 @@ describe('Reddit conversations table helpers', () => {
     expect(readRequestNote({ ok: false, requestedAt: null, error: 'table missing' })).toBe('Cannot tell whether a read is already waiting: table missing');
     expect(readRequestNote({ ok: true, requestedAt: null })).toBe('');
     expect(readRequestNote(undefined)).toBe('');
+  });
+
+  it('a request the Mini has not picked up in 20 minutes says so plainly, and a press asks again (SC-883 review)', async () => {
+    requestedAt = new Date(Date.now() - 25 * 60 * 1000).toISOString();
+    stale = true;
+    act(() => root!.render(<RedditConversations />));
+    await flush();
+    const readNow = () => [...container!.querySelectorAll('button')].find((b) => /Read now|Read asked for/.test(b.textContent || '')) as HTMLButtonElement;
+    expect(container!.textContent).toContain('Asked the Mini to read 25 minutes ago, and it has not picked this up. Its Read now check may not be running');
+    expect(container!.textContent).toContain('scripts/install_reddit_watch.sh --status');
+    expect(readNow().textContent).toBe('Read now');
+    expect(readNow().disabled).toBe(false);
+    await act(async () => { readNow().click(); });
+    await flush();
+    expect(posts.map((p) => p.path)).toEqual(['/api/outreach/reddit/conversations/read-now']);
+    expect(readNow().textContent).toBe('Read asked for');
+  });
+
+  it('while a request waits the list reloads, so a read the Mini finished frees the button (SC-883 review)', async () => {
+    vi.useFakeTimers();
+    try {
+      requestedAt = new Date().toISOString();
+      act(() => root!.render(<RedditConversations />));
+      await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+      const readNow = () => [...container!.querySelectorAll('button')].find((b) => /Read now|Read asked for/.test(b.textContent || '')) as HTMLButtonElement;
+      expect(readNow().textContent).toBe('Read asked for');
+      const before = listCalls;
+      requestedAt = null; // the Mini read it and cleared the request
+      await act(async () => { await vi.advanceTimersByTimeAsync(READ_REQUEST_POLL_MS); });
+      expect(listCalls).toBeGreaterThan(before);
+      expect(readNow().textContent).toBe('Read now');
+      expect(readNow().disabled).toBe(false);
+      // With nothing waiting, it stops reloading.
+      const settled = listCalls;
+      await act(async () => { await vi.advanceTimersByTimeAsync(READ_REQUEST_POLL_MS * 3); });
+      expect(listCalls).toBe(settled);
+    } finally { vi.useRealTimers(); }
+  });
+
+  it('a read the Mini could not start says why and lets a press ask again', () => {
+    const now = Date.parse('2026-11-19T20:30:00Z');
+    const failed = { ok: true, requestedAt: null, stale: false, failedWhy: 'There are no keywords.', failedAt: '2026-11-19T20:20:00Z' };
+    expect(readRequestNote(failed, now)).toBe('The Mini tried to read 10 minutes ago and could not start: There are no keywords. Press Read now to ask again.');
+    expect(readRequestHolds(failed)).toBe(false);
+    expect(readRequestHolds({ ok: true, requestedAt: '2026-11-19T20:25:00Z', stale: false })).toBe(true);
+    expect(readRequestHolds({ ok: true, requestedAt: '2026-11-19T20:00:00Z', stale: true })).toBe(false);
+    expect(agoText('2026-11-19T18:30:00Z', now)).toBe('2 hours ago');
+    expect(agoText('nope', now)).toBe('');
   });
 
   it('the empty sentence names every filter in force', () => {

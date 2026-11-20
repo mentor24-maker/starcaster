@@ -7,14 +7,18 @@
 -- leaves a request here instead; the Mini checks this table every ten minutes
 -- (scripts/run_reddit_watch.sh --requested), runs the normal watch for each
 -- project that asked, and deletes the request when that read finishes,
--- whether it read or failed.
+-- whether it read or failed. A project whose read could not even start (no
+-- keywords, an unreadable list) keeps its row with `error` filled in, so Find
+-- conversations says why instead of the request quietly vanishing.
 --
 --   reddit_watch_read_requests   at most one row per project: a request that
 --                                is still waiting. No row: nothing waiting.
 --
 -- ONE ROW PER PROJECT is the unique index below, and it is what makes a
 -- second press while the first is waiting change nothing: the insert is
--- refused, and the store reads that refusal as "already asked".
+-- refused, and the store reads that refusal as "already asked". A press on a
+-- row that has waited over 20 minutes, or that carries an error, asks again
+-- by moving requested_at to now and clearing the error.
 --
 -- BOTH tenant columns (CLAUDE.md landmine 12); project_id is text (DOCTRINE
 -- 5.13). owner_user_id is whoever pressed Read now — the Mini acts as them for
@@ -26,9 +30,14 @@ create table if not exists public.reddit_watch_read_requests (
   id                   uuid primary key default gen_random_uuid(),
   project_id           text not null,
   owner_user_id        text,
-  -- When Read now was pressed. The Mini clears only requests made before its
-  -- read started, so a press during a read is kept for the next one.
+  -- When Read now was pressed (or last pressed again). The Mini clears only
+  -- requests made before its read started, so asking again during a read is
+  -- kept for the next one.
   requested_at         timestamptz not null default now(),
+  -- Set when the Mini could not start this project's read at all; the row
+  -- then no longer waits, and the screen shows the reason. Null: waiting.
+  error                text,
+  error_at             timestamptz,
   created_at           timestamptz not null default now(),
   updated_at           timestamptz not null default now()
 );
