@@ -12,3 +12,5 @@ The safety rails:
 - **Can't read it, don't touch it.** If the switch cannot be read, OpenClaw stays exactly as it is and the check says CANNOT TELL; the bus hears of it once it has lasted an hour.
 
 The installer now writes the order the check last applied, so running it again does not quietly undo the switch, and it also copies the Google Gemini key from Doppler when Doppler has one, so switching Outreach to Gemini finds its key already there. Today production has nothing saved on Settings › APIs yet, so the check reports exactly that and leaves OpenClaw on OpenAI first, Anthropic second.
+
+**After review:** the check used to say "not this machine's job" and stop whenever it was not sure the machine owned OpenClaw — including when the Mini had simply lost the little file that tells it its own name. That would have looked like another machine was handling it while nothing was. Now only a real other owner is a quiet skip; a machine that cannot tell who it is says CANNOT TELL out loud, explains how to fix its name, and leaves OpenClaw alone.

@@ -132,9 +132,10 @@ function writePrivate(file, text) {
 
 // ── who runs it ──────────────────────────────────────────────────────────────
 const role = nodeRoles.checkRole('openclaw');
-if (!role.owned) {
-  say(`not this machine's job — lib/nodeRoles.js gives openclaw to ${role.owner}.`);
-  process.exit(0);
+const gate = sync.roleGate(role);
+if (!gate.run) {
+  for (const line of gate.lines) say(line);
+  process.exit(gate.exitCode);
 }
 
 // ── read ─────────────────────────────────────────────────────────────────────

@@ -223,3 +223,41 @@ test('the sync runs on the relay\'s wake, never fails it, and is gated on the op
   // A change waits while anything is talking to the gateway.
   assert.match(src, /busy !== false/);
 });
+
+test('a machine that cannot tell which node it is says CANNOT TELL out loud, never "another machine\'s job"', () => {
+  const nodeRoles = require('../../lib/nodeRoles');
+  // The Mini having lost its ~/.alphire-node file: owner is still mac-mini.
+  const lost = nodeRoles.checkRole('openclaw', { node: { name: 'stranger', source: 'file', file: '/x/.alphire-node' } });
+  assert.equal(lost.verdict, 'unidentified');
+  const gate = sync.roleGate(lost);
+  assert.equal(gate.run, false);
+  assert.equal(gate.exitCode, 2);
+  assert.match(gate.lines[0], /CANNOT TELL/);
+  assert.ok(!gate.lines.some((l) => /not this machine's job/.test(l)));
+  assert.ok(gate.lines.some((l) => /not been told which node it is/.test(l)));
+
+  const unknown = sync.roleGate(nodeRoles.checkRole('no-such-role', { node: { name: 'mac-mini', source: 'file', file: '/x' } }));
+  assert.deepEqual([unknown.run, unknown.exitCode], [false, 2]);
+
+  // Only a real other owner is a quiet skip.
+  const other = sync.roleGate({ owned: false, verdict: 'other-node', owner: 'mac-mini', message: 'm' });
+  assert.deepEqual([other.run, other.exitCode], [false, 0]);
+  assert.match(other.lines[0], /not this machine's job/);
+  assert.equal(sync.roleGate({ owned: true, verdict: 'owned' }).run, true);
+});
+
+test('the pass itself, on a machine with an unrecognised name, exits 2 and changes nothing', () => {
+  const { spawnSync } = require('node:child_process');
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'oc-sync-unidentified-'));
+  try {
+    fs.writeFileSync(path.join(home, '.alphire-node'), 'stranger\n');
+    const script = path.join(__dirname, '..', 'openclaw_switch_sync.mjs');
+    const res = spawnSync(process.execPath, [script, '--check'], { env: { ...process.env, HOME: home }, encoding: 'utf8', timeout: 30000 });
+    assert.equal(res.status, 2, res.stdout + res.stderr);
+    assert.match(res.stdout, /CANNOT TELL/);
+    assert.doesNotMatch(res.stdout, /not this machine's job/);
+    assert.ok(!fs.existsSync(path.join(home, '.openclaw')), 'nothing written for OpenClaw');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
