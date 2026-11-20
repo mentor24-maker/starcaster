@@ -120,10 +120,13 @@ function buildPostInstructions({ item, profile, accountName }) {
     ? [
       `Open ${item.targetUrl} and wait for it to load. That link shows one comment (the one being replied to) at the top.`,
       'Click "Reply" under that comment. If the comment is not there, or says [removed] or [deleted], stop and report that.',
+      // SC-894: after a post on 2026-11-18 the post's own box was left showing "undefined".
+      'Type only into the reply box that opened under that comment. Leave the post\'s own comment box at the top of the page ("Join the conversation") empty: never click it and never type into it.',
     ]
     : [
       `Open ${item.targetUrl} and wait for the post to load. If the page says the post is removed, deleted or locked, stop and report that.`,
       'Click the box for adding a comment to the post ("Join the conversation" or "Add a comment").',
+      'Type only into that one box. Never type into any other box on the page.',
     ];
   return [
     `Use the browser tool with profile "${profile}".`,
@@ -132,6 +135,7 @@ function buildPostInstructions({ item, profile, accountName }) {
     'Type EXACTLY the text between the <comment> tags below. Do not change, shorten, translate or add a single character.',
     `<comment>${item.text}</comment>`,
     'Click the "Comment" button once. Never click it twice.',
+    'Once it is posted, type nothing more anywhere on the page. If any comment box still shows text, leave it as it is and never click its "Comment" button.',
     'Wait for your posted comment to appear. Its time stamp (for example "just now") is a link to the comment on its own: read that link\'s full address. It has /comments/ and the comment\'s own id in it, and it is NOT the address of the post or of the comment you replied to.',
     'Take a screenshot of the posted comment and save it as a PNG file.',
     'Reply with ONLY this JSON and nothing else:',
