@@ -48,8 +48,13 @@
 # no longer runs, rather than installing a gateway on a machine whose every
 # other job just died.
 #
-# MODELS (SC-871). OpenClaw tries the models in lib/openclawModels.json in
-# order: OpenAI first, Anthropic as the backup. Until 2026-11-18 this script
+# MODELS (SC-871, SC-874). OpenClaw follows the AI provider switch on
+# Settings › APIs: scripts/openclaw_switch_sync.mjs, on the relay's wake,
+# rewrites the model order and restarts the gateway when the switch changes,
+# and records what it applied in ~/.openclaw/starcaster-model-order.json,
+# which this script then writes too. Without that record (a new machine, or
+# before the first sync) it is lib/openclawModels.json, in order: OpenAI
+# first, Anthropic as the backup. Until 2026-11-18 this script
 # named one Anthropic model, so when that key ran out of credit every outreach
 # pass stopped; the fix was made by hand on the Mini and a rebuilt Mini would
 # have gone straight back to Anthropic-only. Change the order in that file, not
@@ -100,6 +105,10 @@ PROFILE="dane-of-earth"
 CDP_PORT=18800
 CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 MODELS_LIB="$REPO/lib/openclawModels.js"
+# What scripts/openclaw_switch_sync.mjs last applied from the AI switch on
+# Settings › APIs (SC-874). When it is there, it is the order this script
+# writes, so installing again does not undo the switch.
+ORDER_FILE="$STATE_DIR/starcaster-model-order.json"
 
 # Where the Mini keeps its Doppler key for `prd` (install_studio_worker.sh,
 # DOPPLER_SCOPE: the repo folder's key is the read-only dev one the loops use).
@@ -183,8 +192,8 @@ PLIST_BODY
 # OpenClaw resolves from ~/.openclaw/.env at startup, never the value.
 render_config() {
   node -e '
-    const [port, profile, cdpPort, chrome, modelsLib] = process.argv.slice(1);
-    const models = require(modelsLib).load();
+    const [port, profile, cdpPort, chrome, modelsLib, orderFile] = process.argv.slice(1);
+    const models = require(modelsLib).loadEffective({ overrideFile: orderFile });
     const config = {
       gateway: {
         mode: "local",
@@ -214,7 +223,7 @@ render_config() {
       agents: { defaults: { model: { primary: models.primary, fallbacks: models.fallbacks } } },
     };
     process.stdout.write(JSON.stringify(config, null, 2) + "\n");
-  ' "$PORT" "$PROFILE" "$CDP_PORT" "$CHROME" "$MODELS_LIB"
+  ' "$PORT" "$PROFILE" "$CDP_PORT" "$CHROME" "$MODELS_LIB" "$ORDER_FILE"
 }
 
 # Does the live openclaw.json hold everything render_config writes? OpenClaw
@@ -251,14 +260,27 @@ config_matches() {
 # "<primary> (fallback <next>, then <next>)", from the one list.
 models_line() {
   node -e '
-    const m = require(process.argv[1]).load();
-    console.log(m.primary + (m.fallbacks.length ? ` (fallback ${m.fallbacks.join(", then ")})` : " (no fallback)"));
-  ' "$MODELS_LIB"
+    const m = require(process.argv[1]).loadEffective({ overrideFile: process.argv[2] });
+    const from = m.source === "switch" ? "the AI switch, as last synced" : "lib/openclawModels.json";
+    console.log(m.primary + (m.fallbacks.length ? ` (fallback ${m.fallbacks.join(", then ")})` : " (no fallback)") + `   (from ${from})` + (m.overrideNote ? `; ${m.overrideNote}` : ""));
+  ' "$MODELS_LIB" "$ORDER_FILE"
 }
 
 # The provider keys the model list needs, one per line.
 keys_needed() {
-  node -e 'for (const k of require(process.argv[1]).load().keysNeeded) console.log(k)' "$MODELS_LIB"
+  node -e 'for (const k of require(process.argv[1]).loadEffective({ overrideFile: process.argv[2] }).keysNeeded) console.log(k)' "$MODELS_LIB" "$ORDER_FILE"
+}
+
+# Keys for the OTHER providers OpenClaw can use (lib/openclawProviderMap.json)
+# that the current order does not need, one per line (SC-874). Copied when
+# Doppler prd has them and skipped when it does not, so switching Outreach to
+# one of them on Settings › APIs finds its key already on the Mini.
+keys_optional() {
+  node -e '
+    const need = new Set(require(process.argv[1]).loadEffective({ overrideFile: process.argv[2] }).keysNeeded);
+    const map = require(process.argv[3]).loadMap();
+    for (const p of Object.values(map.providers)) if (!need.has(p.key)) { need.add(p.key); console.log(p.key); }
+  ' "$MODELS_LIB" "$ORDER_FILE" "$REPO/lib/openclawSwitchSync.js"
 }
 
 is_loaded() {
@@ -312,7 +334,7 @@ status() {
   local installed
   installed="$(node -p 'require(process.argv[1]).version' "$APP_DIR/node_modules/openclaw/package.json" 2>/dev/null || true)"
   if [ -n "$installed" ]; then echo "openclaw: $installed in $APP_DIR (this script pins $OPENCLAW_VERSION)"; else echo "openclaw: not installed in $APP_DIR"; fi
-  echo "model:    $(models_line)   (lib/openclawModels.json)"
+  echo "model:    $(models_line)"
   local why
   if why="$(config_matches)"; then echo "config:   $CONFIG — matches what this script writes"
   elif [ ! -f "$CONFIG" ]; then echo "config:   not written yet ($CONFIG)"
@@ -389,7 +411,23 @@ write_secrets() {
     fi
     printf '%s=%s\n' "$name" "$key" >> "$tmp"
   done
+  # The keys the order does not need yet: copied if Doppler has them, and an
+  # absent one is said, not an error (the order does not depend on it).
+  local optional skipped=""
+  optional="$(keys_optional)" || optional=""
+  for name in $optional; do
+    if key="$(doppler secrets get "$name" --plain --scope "$DOPPLER_SCOPE" --project starcaster --config prd --no-check-version 2>/dev/null)" && [ -n "$key" ]; then
+      ( umask 077; grep -v "^$name=" "$tmp" > "$tmp.o" ) || true
+      chmod 600 "$tmp.o"
+      mv "$tmp.o" "$tmp"
+      printf '%s=%s\n' "$name" "$key" >> "$tmp"
+      names="$names $name"
+    else
+      skipped="$skipped $name"
+    fi
+  done
   key=""
+  [ -z "$skipped" ] || echo "secrets: $(echo $skipped | tr ' ' ',') not in Doppler prd; OpenClaw cannot use that provider until it is (nothing else depends on it)"
 
   if ! grep -q '^OPENCLAW_GATEWAY_TOKEN=.' "$tmp"; then
     # Generated and written in one step; nothing is printed.

@@ -1,0 +1,11 @@
+{
+  "_about": "Which OpenClaw model each provider on the AI switch (Settings › APIs) becomes on the Mini, and the key OpenClaw needs for it (SC-874). scripts/openclaw_switch_sync.mjs reads the switch's order and writes these into ~/.openclaw/openclaw.json. A provider not listed here (Kimi, any added service) is reported on the bus, never quietly dropped. Read through lib/openclawSwitchSync.js; the installer's own default list is lib/openclawModels.json.",
+  "providers": {
+    "openai": { "model": "openai/gpt-5.5", "key": "OPENAI_API_KEY" },
+    "anthropic": { "model": "anthropic/claude-sonnet-5-5", "key": "ANTHROPIC_API_KEY" },
+    "gemini": { "model": "google/gemini-3.1-pro-preview", "key": "GEMINI_API_KEY" }
+  },
+  "unsupported": {
+    "kimi": "OpenClaw needs its separate Moonshot plugin for Kimi, and it is not installed on the Mini"
+  }
+}
