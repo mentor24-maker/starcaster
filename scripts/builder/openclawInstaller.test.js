@@ -40,8 +40,16 @@ test('a list naming a provider with no key, or a malformed model, is refused', (
   assert.throws(() => models.validate({ primary: 'openai/a', fallbacks: ['openai/a'], keys: { openai: 'OPENAI_API_KEY' } }), /twice/);
 });
 
-test('the config the installer writes carries the list, and no allowlist that could block a fallback', () => {
-  const config = JSON.parse(execFileSync('bash', [SCRIPT, '--print-config'], { encoding: 'utf8' }));
+// A throwaway HOME, so a Mini where the sync has recorded an order (SC-874)
+// does not make these read that order instead of the committed one.
+function printConfig(home) {
+  return JSON.parse(execFileSync('bash', [SCRIPT, '--print-config'], { encoding: 'utf8', env: { ...process.env, HOME: home } }));
+}
+
+test('the config the installer writes carries the list, and no allowlist that could block a fallback', (t) => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'openclaw-home-'));
+  t.after(() => fs.rmSync(home, { recursive: true, force: true }));
+  const config = printConfig(home);
   const m = models.load();
   assert.deepEqual(config.agents.defaults.model, { primary: m.primary, fallbacks: m.fallbacks });
   assert.equal(config.agents.defaults.modelPolicy, undefined);
@@ -135,4 +143,30 @@ test('a first install generates the gateway token and copies both keys', (t) => 
   assert.match(env, /^OPENAI_API_KEY=k1$/m);
   assert.match(env, /^ANTHROPIC_API_KEY=k2$/m);
   assert.match(env, /^OPENCLAW_GATEWAY_TOKEN=[0-9a-f]{64}$/m);
+});
+
+test('the installer writes the order the AI switch sync last applied, so installing again does not undo it (SC-874)', (t) => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'openclaw-home-'));
+  t.after(() => fs.rmSync(home, { recursive: true, force: true }));
+  fs.mkdirSync(path.join(home, '.openclaw'));
+  fs.writeFileSync(path.join(home, '.openclaw', 'starcaster-model-order.json'), JSON.stringify({
+    primary: 'anthropic/claude-sonnet-5-5', fallbacks: ['openai/gpt-5.5'],
+    keys: { anthropic: 'ANTHROPIC_API_KEY', openai: 'OPENAI_API_KEY' },
+  }));
+  assert.deepEqual(printConfig(home).agents.defaults.model, { primary: 'anthropic/claude-sonnet-5-5', fallbacks: ['openai/gpt-5.5'] });
+});
+
+test('keys for the other providers OpenClaw can use are copied when Doppler has them, and skipped when not (SC-874)', (t) => {
+  const box = sandbox(t);
+  let r = writeSecrets(box, { OPENAI_API_KEY: 'k1', ANTHROPIC_API_KEY: 'k2', GEMINI_API_KEY: 'k3' });
+  assert.equal(r.code, 0, r.out);
+  assert.match(fs.readFileSync(box.env, 'utf8'), /^GEMINI_API_KEY=k3$/m);
+  assert.equal(fs.statSync(box.env).mode & 0o777, 0o600);
+  assert.doesNotMatch(r.out, /k3/);
+
+  const box2 = sandbox(t);
+  r = writeSecrets(box2, { OPENAI_API_KEY: 'k1', ANTHROPIC_API_KEY: 'k2' });
+  assert.equal(r.code, 0, r.out);
+  assert.doesNotMatch(fs.readFileSync(box2.env, 'utf8'), /GEMINI_API_KEY/);
+  assert.match(r.out, /GEMINI_API_KEY not in Doppler prd/);
 });
