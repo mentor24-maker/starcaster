@@ -33,14 +33,15 @@ const HOUR = 60 * 60 * 1000;
 const CANON = [{ docKey: 'DANE-OF-EARTH', title: 'Thesis', body: 'polymath polymath polymath curiosity curiosity curiosity renaissance renaissance renaissance' }];
 
 function withDb() {
-  const sql = fs.readFileSync(path.join(SQL_DIR, 'reddit_watch_setup.sql'), 'utf8');
+  const sql = ['reddit_watch_setup.sql', 'reddit_watch_read_requests.sql']
+    .map((f) => fs.readFileSync(path.join(SQL_DIR, f), 'utf8')).join('\n');
   const db = createFakeDb(parseSchemaText(sql));
   const realSupabase = require.cache[supabasePath];
   require.cache[supabasePath] = {
     id: supabasePath, filename: supabasePath, loaded: true,
     exports: {
       isConfigured: () => true,
-      tableConfig: () => ({ redditWatchSubreddits: 'reddit_watch_subreddits', redditWatchPosts: 'reddit_watch_posts' }),
+      tableConfig: () => ({ redditWatchSubreddits: 'reddit_watch_subreddits', redditWatchPosts: 'reddit_watch_posts', redditWatchReadRequests: 'reddit_watch_read_requests' }),
       sbQuery: db.sbQuery,
     },
   };
@@ -606,4 +607,185 @@ test('routes: the Reddit watch endpoints answer through the outreach router', as
     await route.handle(req, r3, '/api/outreach/reddit/nowhere', 'GET', { reddit });
     assert.equal(r3.statusCode, 404);
   } finally { restore(); }
+});
+
+// ── Read now (SC-883) ──────────────────────────────────────────────────────
+
+const quietListing = () => fakeBrowser({
+  listing: () => ({ signedIn: true, found: true, promotionRule: '', new: [{ id: 'gen1', title: 'How do generalists learn?', body: 'generalist', author: 'a', postedAt: new Date(NOW - HOUR).toISOString(), score: 1, comments: 0 }], rising: [] }),
+});
+
+test('Read now leaves ONE request per project, with both tenant columns; pressing again changes nothing', async () => {
+  const { db, store, conv, restore } = withDb();
+  try {
+    const none = await conv.requestReadNow(SCOPE);
+    assert.equal(none.ok, false, 'nothing approved: nothing to ask for');
+    assert.equal(none.status, 409);
+    await approve(store, ['polymath']);
+    const first = await conv.requestReadNow(SCOPE);
+    assert.equal(first.ok, true, first.error);
+    assert.equal(first.data.alreadyWaiting, false);
+    assert.equal(first.data.sentence, 'Asked the Mini to read. It picks this up within about 10 minutes.');
+    const second = await conv.requestReadNow(SCOPE);
+    assert.equal(second.ok, true, second.error);
+    assert.equal(second.data.alreadyWaiting, true);
+    assert.equal(second.data.requestedAt, first.data.requestedAt, 'the waiting request keeps its time');
+    const rows = db.data.get('reddit_watch_read_requests');
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].project_id, 'proj_a');
+    assert.equal(rows[0].owner_user_id, 'user_1');
+    // The list carries it, so a reload still shows the button asked.
+    const listed = await conv.listRedditConversations(SCOPE, { commentsStore: stubComments(), feedbackStore: stubFeedback(), canonDocs: CANON, now: () => NOW });
+    assert.equal(listed.data.readRequest.requestedAt, first.data.requestedAt);
+    // Another project's list says nothing is waiting.
+    assert.equal((await store.getReadRequest(OTHER)).data, null);
+  } finally { restore(); }
+});
+
+test('Read now\'s ten-minute check: nothing waiting reads nothing and touches no browser', async () => {
+  const { store, due, restore } = withDb();
+  try {
+    await approve(store, ['polymath']);
+    const run = await due.runRequestedReads({ now: () => NOW, callOpenClaw: async () => { throw new Error('the browser must not be called'); } });
+    assert.equal(run.ok, true, run.error);
+    assert.equal(run.data.requested, 0);
+    assert.equal(run.data.read, 0);
+    assert.deepEqual(run.data.projects, [], 'no project is watched when nobody asked');
+  } finally { restore(); }
+});
+
+test('Read now\'s ten-minute check reads ONLY the project that asked, at the normal pace, and clears its request', async () => {
+  const { db, store, due, restore } = withDb();
+  try {
+    await approve(store, ['polymath', 'philosophy', 'zen']);
+    await approve(store, ['stoicism'], OTHER);
+    const asked = await store.requestRead(SCOPE);
+    assert.equal(asked.ok, true, asked.error);
+    const browser = quietListing();
+    const run = await due.runRequestedReads({
+      callOpenClaw: browser.callOpenClaw, extractJson: browser.extractJson,
+      readKeywords: async () => ({ ok: true, data: ['generalist'] }), canonDocs: CANON,
+      now: () => Date.now() + 1000,
+    });
+    assert.equal(run.ok, true, run.error);
+    assert.equal(run.data.requested, 1);
+    assert.deepEqual(run.data.projects.map((p) => p.projectId), ['proj_a'], 'the other project was not read');
+    assert.equal(run.data.read, due.SUBREDDITS_PER_PASS, 'still at most the normal two subreddits');
+    assert.equal(browser.calls.filter((c) => /\/new\/ and wait/.test(c)).length, due.SUBREDDITS_PER_PASS);
+    assert.deepEqual(run.data.cleared, [{ projectId: 'proj_a', ok: true, error: '' }]);
+    assert.equal(db.data.get('reddit_watch_read_requests').length, 0, 'the request is gone');
+    assert.match(due.formatWatchLog(run.data), /Read now request for project proj_a cleared/);
+  } finally { restore(); }
+});
+
+test('Read now\'s check clears a request whose read failed, but keeps one made after the read started', async () => {
+  const { db, store, due, restore } = withDb();
+  try {
+    await approve(store, ['polymath']);
+    await store.requestRead(SCOPE);
+    const browser = fakeBrowser({ signedIn: false });
+    const run = await due.runRequestedReads({
+      callOpenClaw: browser.callOpenClaw, extractJson: browser.extractJson,
+      readKeywords: async () => ({ ok: true, data: ['generalist'] }), canonDocs: CANON,
+      now: () => Date.now() + 1000,
+    });
+    assert.equal(run.data.failed, 1, 'signed out is a failure, never "found nothing"');
+    assert.equal(db.data.get('reddit_watch_read_requests').length, 0, 'failed or read, the request is cleared');
+
+    await store.requestRead(SCOPE);
+    const early = await due.runRequestedReads({
+      callOpenClaw: browser.callOpenClaw, extractJson: browser.extractJson,
+      readKeywords: async () => ({ ok: true, data: ['generalist'] }), canonDocs: CANON,
+      now: () => Date.now() - 60 * 1000, // the read "started" before this press
+    });
+    assert.equal(early.data.requested, 1);
+    assert.equal(db.data.get('reddit_watch_read_requests').length, 1, 'a press during the read waits for the next check');
+  } finally { restore(); }
+});
+
+test('Read now not set up (no table) is a quiet check, and the button names the SQL to run', async () => {
+  const { due, restore } = withDb();
+  try {
+    const missing = { ok: false, status: 503, code: 'NOT_SET_UP', error: 'Read now is not set up yet — run docs/SQL/reddit_watch_read_requests.sql on Supabase.' };
+    const run = await due.runRequestedReads({ listRequests: async () => missing, callOpenClaw: async () => { throw new Error('no browser'); } });
+    assert.equal(run.ok, true);
+    assert.equal(run.data.requested, 0);
+    assert.match(run.data.notSetUp, /reddit_watch_read_requests\.sql/);
+    const broken = await due.runRequestedReads({ listRequests: async () => ({ ok: false, status: 502, error: 'network' }) });
+    assert.equal(broken.ok, false, 'any other refusal is a failure, never "nothing waiting"');
+  } finally { restore(); }
+});
+
+test('reading verdict: just approved and never read is calm; approved long ago, failed or overdue keep the fault wording', () => {
+  const { conv, restore } = withDb();
+  try {
+    const fresh = conv.readingVerdict([{ name: 'polymath', lastReadState: '', lastReadAt: null, decidedAt: new Date(NOW - 10 * 60 * 1000).toISOString() }], NOW);
+    assert.equal(fresh.state, 'not_read_yet');
+    assert.equal(fresh.sentence, 'r/polymath has not been read yet. The Mini reads 2 subreddits every four hours, or press Read now.');
+    assert.doesNotMatch(fresh.sentence, /Cannot tell|not running/);
+
+    const longAgo = conv.readingVerdict([{ name: 'polymath', lastReadState: '', lastReadAt: null, decidedAt: new Date(NOW - 40 * HOUR).toISOString() }], NOW);
+    assert.equal(longAgo.state, 'cannot_tell');
+    assert.match(longAgo.sentence, /its schedule is not running/);
+
+    const withFailed = conv.readingVerdict([
+      { name: 'polymath', lastReadState: '', lastReadAt: null, decidedAt: new Date(NOW - 10 * 60 * 1000).toISOString() },
+      { name: 'zen', lastReadState: 'failed', lastReadAt: new Date(NOW - HOUR).toISOString(), lastReadError: 'browser down' },
+    ], NOW);
+    assert.equal(withFailed.state, 'cannot_tell', 'a failure beside a fresh approval is still a fault');
+    assert.match(withFailed.sentence, /r\/polymath has not been read yet/);
+    assert.match(withFailed.sentence, /browser down/);
+  } finally { restore(); }
+});
+
+test('the overview stage: a calm not-read-yet is "waiting for the read", never red', async () => {
+  const { conv, restore } = withDb();
+  try {
+    const overview = require('../../lib/outreachOverview.js');
+    const reading = conv.readingVerdict([{ name: 'p', lastReadState: '', lastReadAt: null, decidedAt: new Date(NOW - 60 * 1000).toISOString() }], NOW);
+    const fake = (r, items = []) => ({ listRedditConversations: async () => ({ ok: true, data: { items, newCount: items.length, reading: r } }) });
+    const empty = await overview.redditConversationsStage(fake(reading), SCOPE);
+    assert.equal(empty.state, 'waiting_read');
+    assert.equal(empty.sentence, reading.sentence);
+    const some = await overview.redditConversationsStage(fake(reading, [{ postId: 'a' }]), SCOPE);
+    assert.equal(some.state, 'needs_you');
+  } finally { restore(); }
+});
+
+test('routes: POST read-now asks through the conversations module, GET is refused', async () => {
+  const { restore } = withDb();
+  try {
+    const route = require('../../routes/outreach.js');
+    const calls = [];
+    const reddit = {
+      store: () => ({}),
+      conversations: () => ({ requestReadNow: async (scope) => { calls.push(scope.projectId); return { ok: true, data: { alreadyWaiting: false } }; } }),
+      suggest: async () => ({ ok: true, data: {} }),
+    };
+    const res = () => {
+      const r = { statusCode: 0, body: '', headersSent: false, setHeader() {}, writeHead(c) { r.statusCode = c; }, end(b) { r.body = b; } };
+      return r;
+    };
+    const req = { projectContext: { project: { id: 'proj_a' } }, authUser: { id: 'user_1' }, headers: {} };
+    const r1 = res();
+    assert.equal(await route.handle(req, r1, '/api/outreach/reddit/conversations/read-now', 'POST', { reddit }), true);
+    assert.equal(r1.statusCode, 200);
+    assert.deepEqual(calls, ['proj_a']);
+    const r2 = res();
+    await route.handle(req, r2, '/api/outreach/reddit/conversations/read-now', 'GET', { reddit });
+    assert.equal(r2.statusCode, 405);
+  } finally { restore(); }
+});
+
+test('the runner: --requested is silent on a quiet wake, and both schedules share one browser lock', () => {
+  const runner = fs.readFileSync(path.join(__dirname, '..', 'run_reddit_watch.sh'), 'utf8');
+  assert.match(runner, /node scripts\/reddit_watch_due\.mjs \$MODE/);
+  assert.match(runner, /take_lock \|\| exit 4/, 'the ten-minute check gives up quietly while a pass reads');
+  const script = fs.readFileSync(path.join(__dirname, '..', 'reddit_watch_due.mjs'), 'utf8');
+  // With nothing waiting, it exits before OpenClaw is even configured.
+  const quiet = script.indexOf('if (waiting.ok && !waiting.data.length) process.exit(NOTHING_READ);');
+  assert.ok(quiet > 0 && quiet < script.indexOf('configureOpenClaw(process.env)'));
+  const installer = fs.readFileSync(path.join(__dirname, '..', 'install_reddit_watch.sh'), 'utf8');
+  assert.match(installer, /render_agent "\$REQ_LABEL" "--requested" 600/);
+  assert.match(installer, /render_agent "\$LABEL" "" 14400/, 'the four-hourly pace is unchanged');
 });

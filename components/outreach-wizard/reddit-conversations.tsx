@@ -22,6 +22,11 @@ import { RowIcon, SortHeader, filterRows, sortRows, type SortState, type SortVal
  * **Skip** asks why with the shared reason picker; **Save as contact** keeps
  * a commenter (or the post's author) as a lead.
  *
+ * **Read now** (SC-883) asks the Mini to read this project's subreddits on
+ * its next ten-minute check — only its signed-in browser can read Reddit, so
+ * the button leaves a request rather than reading. While a request waits the
+ * button says so and holds itself; pressing again changes nothing.
+ *
  * Signed out or a read that did not come back is "Cannot tell" in the stage's
  * sentence above — never "0 found" — so this list draws no headline of its own.
  */
@@ -65,8 +70,18 @@ export type RedditConversationsReply = {
   items: RedditConversation[];
   newCount: number;
   reading: { state: string; sentence: string };
+  /** Read now's request still waiting for the Mini, if any (SC-883). */
+  readRequest?: { ok: boolean; requestedAt: string | null; error?: string };
   canon?: { ok: boolean; words?: number; error?: string };
 };
+
+/** What Read now's area says, from the list's request state. '' when nothing is waiting. */
+export function readRequestNote(r: RedditConversationsReply['readRequest']): string {
+  if (!r) return '';
+  if (!r.ok) return `Cannot tell whether a read is already waiting: ${r.error || 'it could not be read'}`;
+  if (!r.requestedAt) return '';
+  return 'Asked the Mini to read. It picks this up within about 10 minutes.';
+}
 
 type ApiFn = (path: string, options?: RequestInit) => Promise<Record<string, any>>;
 type AppShape = { api?: ApiFn; setActivePage?: (pageId: string) => void };
@@ -205,6 +220,8 @@ export default function RedditConversations({ onChanged, version }: Props = {}):
   const [filters, setFilters] = useState<RedditFilters>(DEFAULT_REDDIT_FILTERS);
   const [sort, setSort] = useState<SortState<RedditSortKey>>(DEFAULT_REDDIT_SORT);
   const [open, setOpen] = useState<Set<string>>(() => new Set());
+  const [asking, setAsking] = useState(false);
+  const [askError, setAskError] = useState('');
   const seq = useRef(0);
 
   const load = useCallback(async () => {
@@ -235,6 +252,20 @@ export default function RedditConversations({ onChanged, version }: Props = {}):
     const api = getApp()?.api;
     if (typeof api !== 'function') throw new Error('the admin app is still loading');
     return api(path, { method: 'POST', body: JSON.stringify(body) });
+  };
+
+  const readNow = async () => {
+    if (asking || data?.readRequest?.requestedAt) return;
+    setAsking(true);
+    setAskError('');
+    try {
+      await post(`${REDDIT_CONVERSATIONS_PATH}/read-now`, {});
+      await load();
+    } catch (err) {
+      setAskError(`Not asked: ${errorText(err, 'unknown error')}`);
+    } finally {
+      setAsking(false);
+    }
   };
 
   const rowKey = (c: RedditConversation, comment?: RedditComment) => (comment ? `${c.postId}:${comment.id}` : c.postId);
@@ -385,6 +416,21 @@ export default function RedditConversations({ onChanged, version }: Props = {}):
 
   return (
     <div className="outreach-conversations" data-reading={data.reading.state}>
+      {data.reading.state !== 'no_subreddits' ? (
+        <div className="outreach-wizard-stage-actions">
+          <button
+            type="button"
+            className="btn"
+            disabled={asking || Boolean(data.readRequest?.requestedAt)}
+            aria-busy={asking}
+            onClick={() => void readNow()}
+          >
+            {data.readRequest?.requestedAt ? 'Read asked for' : (asking ? 'Asking…' : 'Read now')}
+          </button>
+        </div>
+      ) : null}
+      {readRequestNote(data.readRequest) ? <p className="outreach-wizard-muted" role="status">{readRequestNote(data.readRequest)}</p> : null}
+      {askError ? <p className="outreach-wizard-error" role="alert">{askError}</p> : null}
       {data.canon && !data.canon.ok ? (
         <p className="outreach-wizard-muted">{`Ranked without your canon, so no post scores for fitting it: ${data.canon.error}`}</p>
       ) : null}

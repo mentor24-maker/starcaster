@@ -50,6 +50,9 @@
  *   POST /api/outreach/reddit/subreddits/:id/decide  { status }
  *   GET  /api/outreach/reddit/conversations      Find conversations: the posts the
  *                                                Mini's watch kept, ranked, each with why
+ *   POST /api/outreach/reddit/conversations/read-now  Read now: ask the Mini to read
+ *                                                this project's subreddits within
+ *                                                about ten minutes (SC-883)
  *   POST /api/outreach/reddit/conversations/reply    { postId, commentId? } — Write replies
  *   POST /api/outreach/reddit/conversations/skip     { postId, reasons, note }
  *   POST /api/outreach/reddit/conversations/contact  { postId, author } — save as a contact
@@ -247,6 +250,13 @@ async function handleReddit(req, res, pathname, method, reddit) {
   if (pathname === `${base}/conversations`) {
     if (method !== 'GET') return sendErr(res, 405, 'Method not allowed'), true;
     return reply(res, await reddit.conversations().listRedditConversations(scope)), true;
+  }
+  // Read now (SC-883): only the Mini's browser reads Reddit, so this leaves a
+  // request it picks up within ten minutes. The scope is the session's, never
+  // the body's; a second press while one waits changes nothing.
+  if (pathname === `${base}/conversations/read-now`) {
+    if (method !== 'POST') return sendErr(res, 405, 'Method not allowed'), true;
+    return reply(res, await reddit.conversations().requestReadNow(scope)), true;
   }
   const verb = pathname.match(/^\/api\/outreach\/reddit\/conversations\/(reply|skip|contact)$/);
   if (verb) {

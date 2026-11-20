@@ -17,6 +17,14 @@
 # A SCHEDULED PASS, NOT A DAEMON. StartInterval 14400 (four hours) with
 # RunAtLoad; launchd never starts a second copy while one is running.
 #
+# AND READ NOW'S CHECK (SC-883). A second agent, $REQ_LABEL, runs
+# `run_reddit_watch.sh --requested` every ten minutes: it reads only the
+# projects that pressed Read now on Find conversations, and with nothing
+# waiting it exits at once having started no browser. Both are installed,
+# reported and removed together; the runner's lock keeps them from reading at
+# the same time. --print-plist prints the four-hourly one; --print-requests-plist
+# the ten-minute one.
+#
 # WHAT IT NEEDS, checked before installing: node, npm and doppler; and a
 # Doppler key for the prd config at ~/Studio (the Studio worker's install put
 # it there). The OpenClaw gateway token is the gateway's own, in
@@ -35,8 +43,22 @@ LABEL="com.starcaster.reddit-watch"
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
 ROLE="reddit-watch"
 LOG="$HOME/Library/Logs/reddit-watch.log"
+REQ_LABEL="com.starcaster.reddit-watch-requests"
+REQ_PLIST="$HOME/Library/LaunchAgents/$REQ_LABEL.plist"
+REQ_LOG="$HOME/Library/Logs/reddit-watch-requests.log"
 
 render_plist() {
+  render_agent "$LABEL" "" 14400 "$LOG"
+}
+
+render_requests_plist() {
+  render_agent "$REQ_LABEL" "--requested" 600 "$REQ_LOG"
+}
+
+# render_agent <label> <extra argument or ""> <seconds> <log>
+render_agent() {
+  local label="$1" extra="$2" interval="$3" log="$4" extra_line=""
+  if [ -n "$extra" ]; then extra_line="        <string>$extra</string>"; fi
   local p
   for p in "$REPO" "$HOME"; do
     if ! printf '%s' "$p" | grep -Eq '^[A-Za-z0-9/._+@-]+$'; then
@@ -50,16 +72,17 @@ render_plist() {
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>$LABEL</string>
+    <string>$label</string>
     <key>ProgramArguments</key>
     <array>
         <string>/bin/bash</string>
         <string>$REPO/scripts/run_reddit_watch.sh</string>
+$extra_line
     </array>
     <key>WorkingDirectory</key>
     <string>$REPO</string>
     <key>StartInterval</key>
-    <integer>14400</integer>
+    <integer>$interval</integer>
     <key>RunAtLoad</key>
     <true/>
     <key>EnvironmentVariables</key>
@@ -70,9 +93,9 @@ render_plist() {
         <string>$HOME</string>
     </dict>
     <key>StandardOutPath</key>
-    <string>$LOG</string>
+    <string>$log</string>
     <key>StandardErrorPath</key>
-    <string>$LOG</string>
+    <string>$log</string>
 </dict>
 </plist>
 PLIST_BODY
@@ -82,7 +105,7 @@ PLIST_BODY
 # pipefail the grep's early exit SIGPIPEs launchctl and reads as "not loaded"
 # (scripts/install_studio_worker.sh, is_loaded).
 is_loaded() {
-  launchctl list "$LABEL" >/dev/null 2>&1
+  launchctl list "${1:-$LABEL}" >/dev/null 2>&1
 }
 
 role_verdict() {
@@ -106,6 +129,9 @@ status() {
   else
     echo "log:      $LOG — not there, so the pass has never run on this machine"
   fi
+  if [ -f "$REQ_PLIST" ]; then echo "read now: INSTALLED at $REQ_PLIST (every 10 minutes)"; else echo "read now: not installed on this machine, so Read now on Find conversations is never picked up"; fi
+  if is_loaded "$REQ_LABEL"; then echo "          loaded: yes"; else echo "          loaded: no"; fi
+  if [ -f "$REQ_LOG" ]; then echo "          log: $REQ_LOG, last written $(date -r "$REQ_LOG" '+%Y-%m-%d %H:%M') (it writes only when a request was waiting)"; fi
   node -e '
     const { readBeat } = require(process.argv[1] + "/lib/nodeHeartbeat.js");
     const b = readBeat({ role: process.argv[2] });
@@ -117,8 +143,9 @@ status() {
 
 uninstall() {
   launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null || true
-  rm -f "$PLIST"
-  echo "Removed $LABEL from this machine."
+  launchctl bootout "gui/$(id -u)/$REQ_LABEL" 2>/dev/null || true
+  rm -f "$PLIST" "$REQ_PLIST"
+  echo "Removed $LABEL and $REQ_LABEL from this machine."
 }
 
 install_it() {
@@ -146,9 +173,13 @@ install_it() {
   fi
   mkdir -p "$HOME/Library/LaunchAgents" "$HOME/Library/Logs"
   render_plist > "$PLIST"
+  render_requests_plist > "$REQ_PLIST"
   launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null || true
+  launchctl bootout "gui/$(id -u)/$REQ_LABEL" 2>/dev/null || true
   launchctl bootstrap "gui/$(id -u)" "$PLIST"
+  launchctl bootstrap "gui/$(id -u)" "$REQ_PLIST"
   echo "Installed $LABEL — every 4 hours from $REPO."
+  echo "Installed $REQ_LABEL — Read now's check, every 10 minutes."
   echo
   status
 }
@@ -157,6 +188,7 @@ case "${1:-}" in
   --uninstall|--remove) uninstall ;;
   --status)             status ;;
   --print-plist)        render_plist ;;
+  --print-requests-plist) render_requests_plist ;;
   ""|--install)         install_it ;;
-  *) echo "usage: $0 [--install | --uninstall | --status | --print-plist]" >&2; exit 2 ;;
+  *) echo "usage: $0 [--install | --uninstall | --status | --print-plist | --print-requests-plist]" >&2; exit 2 ;;
 esac

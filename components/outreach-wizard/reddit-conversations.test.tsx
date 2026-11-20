@@ -3,7 +3,7 @@ import { act } from 'react-dom/test-utils';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import RedditConversations, {
-  DEFAULT_REDDIT_FILTERS, commentReplyLabel, commentsNote, emptyPostsText, filterPosts, rankPosts, redditSortValue, replyWord,
+  DEFAULT_REDDIT_FILTERS, readRequestNote, commentReplyLabel, commentsNote, emptyPostsText, filterPosts, rankPosts, redditSortValue, replyWord,
   type RedditConversation,
 } from './reddit-conversations';
 import { sortRows } from './outreach-table';
@@ -48,17 +48,22 @@ let container: HTMLDivElement | null = null;
 let root: Root | null = null;
 let listed: RedditConversation[] = [];
 let failNext = false;
+let requestedAt: string | null = null;
 
 beforeEach(() => {
   posts.length = 0;
   listed = [item()];
   failNext = false;
+  requestedAt = null;
   (window as any).App = {
     setActivePage: vi.fn(),
     api: vi.fn(async (path: string, options?: RequestInit) => {
-      if (!options) return { data: { items: listed, newCount: listed.length, reading: { state: 'current', sentence: 'S.' } } };
+      if (!options) {
+        return { data: { items: listed, newCount: listed.length, reading: { state: 'current', sentence: 'S.' }, readRequest: { ok: true, requestedAt } } };
+      }
       if (failNext) { failNext = false; throw new Error('the server said no'); }
       posts.push({ path, body: JSON.parse(String(options.body)) });
+      if (path.endsWith('/read-now')) requestedAt = requestedAt || '2026-11-19T20:00:00Z';
       return { data: { drafted: true, created: true } };
     }),
   };
@@ -264,6 +269,36 @@ describe('Reddit conversations table helpers', () => {
     expect(replyWord('idea')).toBe('none');
     expect(replyWord('draft')).toBe('draft — waiting');
     expect(replyWord('posted')).toBe('posted');
+  });
+
+  it('Read now asks the Mini once, then says so and holds itself (SC-883)', async () => {
+    act(() => root!.render(<RedditConversations />));
+    await flush();
+    const readNow = () => [...container!.querySelectorAll('button')].find((b) => /Read now|Read asked for/.test(b.textContent || '')) as HTMLButtonElement;
+    expect(readNow().textContent).toBe('Read now');
+    expect(readNow().disabled).toBe(false);
+    await act(async () => { readNow().click(); });
+    await flush();
+    expect(posts).toEqual([{ path: '/api/outreach/reddit/conversations/read-now', body: {} }]);
+    expect(container!.textContent).toContain('Asked the Mini to read. It picks this up within about 10 minutes.');
+    expect(readNow().textContent).toBe('Read asked for');
+    expect(readNow().disabled).toBe(true);
+    await act(async () => { readNow().click(); });
+    await flush();
+    expect(posts.length).toBe(1);
+  });
+
+  it('Read now that fails says why, and a request that could not be read is not shown as none', async () => {
+    failNext = true;
+    act(() => root!.render(<RedditConversations />));
+    await flush();
+    const readNow = [...container!.querySelectorAll('button')].find((b) => b.textContent === 'Read now') as HTMLButtonElement;
+    await act(async () => { readNow.click(); });
+    await flush();
+    expect(container!.querySelector('[role="alert"]')!.textContent).toBe('Not asked: the server said no');
+    expect(readRequestNote({ ok: false, requestedAt: null, error: 'table missing' })).toBe('Cannot tell whether a read is already waiting: table missing');
+    expect(readRequestNote({ ok: true, requestedAt: null })).toBe('');
+    expect(readRequestNote(undefined)).toBe('');
   });
 
   it('the empty sentence names every filter in force', () => {
