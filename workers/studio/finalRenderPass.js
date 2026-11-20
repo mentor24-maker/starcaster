@@ -42,7 +42,11 @@
  * under spawnSync, so nothing else runs on this process while it renders.
  * That also means this process cannot beat while ffmpeg works, so the lease
  * is stretched up front to cover the download, the render and the writes
- * around them (the rule proxyPass.js explains).
+ * around them (the rule proxyPass.js explains). The download's own progress
+ * beats carry that same stretch (a bare beat would cut the lease back to the
+ * queue's five minutes), and the lease is stretched again right before ffmpeg
+ * starts, to the render's own allowance, because ffmpeg runs after the
+ * download, the music and the cards have all spent some of it.
  *
  * WHAT IS CHARGED TO THE EDIT, AND WHAT IS NOT (the line every Studio pass
  * draws). ffmpeg or the card browser missing, the catalog or Drive
@@ -54,6 +58,18 @@
  * store's only way out of `failed` is back to a draft, which would throw away
  * Dane's Approve). No end card or no usable music: blocked with the reason,
  * and the watcher tries again six hours later, so fixing the note is enough.
+ * A render that FAILED every attempt the queue allows is different: nothing
+ * outside the edit will change the answer, and each retry downloads the whole
+ * original again. It stays held until the edit itself changes (its row's
+ * updated_at moves past the job's: Dane sends it back and approves it again,
+ * a new title, a new track).
+ *
+ * WHAT HAPPENS TO THE FINISHED FILE. It is kept for 6c only when the edit
+ * reaches `finished`. If the edit moved on while it rendered (Dane sent it
+ * back), the file and its sidecar are deleted: nothing would ever upload or
+ * remove them, and they would count against every later disk check. A job
+ * whose lease was lost leaves the working folder alone, because it is named
+ * after the edit and now belongs to whoever holds the job.
  */
 
 const fs = require('node:fs');
@@ -67,6 +83,7 @@ const cards = require('./cards.js');
 const music = require('./music.js');
 const rough = require('./roughCutPass.js');
 const { runFfmpeg, encodeTimeoutMs, FAILURES } = require('./proxy.js');
+const { DEFAULT_MAX_ATTEMPTS } = require('./queue.js');
 const videoEditsStore = require('../../lib/videoEditsStore.js');
 const videoSourcesStore = require('../../lib/videoSourcesStore.js');
 const videoMomentsStore = require('../../lib/videoMomentsStore.js');
@@ -214,11 +231,27 @@ function enqueueFinalRender(queue, { editId, why = '' }) {
 }
 
 /**
+ * Did this blocked job get there by FAILING every attempt the queue allows,
+ * rather than by being blocked with a reason? Only failures spend attempts.
+ */
+function exhaustedFailure(job, maxAttempts = DEFAULT_MAX_ATTEMPTS) {
+  return Number(job && job.attempts) >= Math.max(1, Number(maxAttempts) || DEFAULT_MAX_ATTEMPTS);
+}
+
+/** The edit's last change, in ms, or null when the row's updated_at does not read as a time. */
+function editChangedAt(edit) {
+  const at = Date.parse(text(edit && edit.updatedAt));
+  return Number.isFinite(at) ? at : null;
+}
+
+/**
  * The watcher. An edit whose job was BLOCKED in the last six hours is left
  * alone: its reason is in the queue, and queueing it every minute would read
- * the same notes for the same answer.
+ * the same notes for the same answer. An edit whose render FAILED every
+ * attempt is left alone until the edit itself changes: retrying it every six
+ * hours re-downloads the whole original to fail the same way again.
  */
-async function watchApproved({ queue, env = process.env, options = {}, catalog = realCatalog(), now = Date.now } = {}) {
+async function watchApproved({ queue, env = process.env, options = {}, catalog = realCatalog(), now = Date.now, maxAttempts = DEFAULT_MAX_ATTEMPTS } = {}) {
   const scope = scopeFor(options, env);
   if (!scope) return { ok: true, processed: [], skipped: [], failed: [], notConfigured: 'STUDIO_PROJECT_ID is not set' };
   const approved = await catalog.listEditsByStatus(WATCH_LIMIT, ['approved'], scope);
@@ -228,8 +261,19 @@ async function watchApproved({ queue, env = process.env, options = {}, catalog =
   const skipped = [];
   for (const edit of approved.data) {
     const id = text(edit.id);
-    const held = blocked.find((j) => text(j.subjectId).toLowerCase() === id.toLowerCase()
-      && now() - Number(j.updatedAt) < RETRY_BLOCKED_AFTER_MS);
+    const mine = blocked.filter((j) => text(j.subjectId).toLowerCase() === id.toLowerCase());
+    const changedAt = editChangedAt(edit);
+    const gaveUp = mine.find((j) => exhaustedFailure(j, maxAttempts)
+      && (changedAt == null || changedAt <= Number(j.updatedAt)));
+    if (gaveUp) {
+      skipped.push({
+        editId: id,
+        why: `its job ${gaveUp.id} failed all ${gaveUp.attempts} attempts (${gaveUp.lastError}); it is not tried again until the edit changes`
+          + (changedAt == null ? ' (and the edit\'s last change could not be read, so it stays held)' : ''),
+      });
+      continue;
+    }
+    const held = mine.find((j) => !exhaustedFailure(j, maxAttempts) && now() - Number(j.updatedAt) < RETRY_BLOCKED_AFTER_MS);
     if (held) {
       skipped.push({ editId: id, why: `its job ${held.id} is blocked: ${held.lastError}` });
       continue;
@@ -326,6 +370,11 @@ async function finalRenderJob({
   const finishedDir = resolveFinishedDir(options, env);
   const musicDir = resolveMusicDir(options, env);
 
+  let leaseLost = false;
+  const lostIt = (reason) => {
+    leaseLost = true;
+    return { ...base, outcome: 'lost', jobAction: 'none', reason };
+  };
   const completeIt = (outcome, reason, extra = {}) => {
     const completed = queue.complete(job.id, owner);
     return { ...base, ...extra, outcome, jobAction: completed ? 'completed' : 'none', reason };
@@ -450,6 +499,9 @@ async function finalRenderJob({
   }
 
   // ── 2. Room on the disk, before anything is downloaded ──────────────────
+  const renderTimeoutMs = RENDER_TIMEOUT_FACTOR * encodeTimeoutMs(plan.expectedLengthS(ranges));
+  const renderLeaseMs = renderTimeoutMs + LEASE_MARGIN_MS;
+  let leaseMs = renderLeaseMs;
   const cached = text(source.localPath);
   const driveFileId = text(source.driveFileId);
   let originalPath = '';
@@ -486,10 +538,10 @@ async function finalRenderJob({
     }
 
     // The lease covers the download, the render and the writes around them.
-    const leaseMs = (originalPath ? 0 : Math.max(DOWNLOAD_FLOOR_MS, Math.ceil(originalBytes / DOWNLOAD_SLOWEST_BYTES_PER_MS)))
-      + RENDER_TIMEOUT_FACTOR * encodeTimeoutMs(plan.expectedLengthS(ranges)) + LEASE_MARGIN_MS;
+    leaseMs = (originalPath ? 0 : Math.max(DOWNLOAD_FLOOR_MS, Math.ceil(originalBytes / DOWNLOAD_SLOWEST_BYTES_PER_MS)))
+      + renderLeaseMs;
     if (!queue.heartbeat(job.id, owner, { leaseMs })) {
-      return { ...base, outcome: 'lost', jobAction: 'none', reason: `the lease on job ${job.id} was no longer this worker's, so the render was left to whoever holds it` };
+      return lostIt(`the lease on job ${job.id} was no longer this worker's, so the render was left to whoever holds it`);
     }
   }
 
@@ -504,10 +556,11 @@ async function finalRenderJob({
         const started = clock();
         const got = await fetchFromDrive({
           driveMedia, driveFileId, dest, io,
-          onProgress: async () => queue.heartbeat(job.id, owner) !== false,
+          // Each beat keeps the whole stretch: a bare beat resets the lease to the queue's default.
+          onProgress: async () => queue.heartbeat(job.id, owner, { leaseMs }) !== false,
         });
         if (!got.ok) {
-          if (got.leaseLost) return { ...base, outcome: 'lost', jobAction: 'none', reason: `the lease on job ${job.id} was lost during the download` };
+          if (got.leaseLost) return lostIt(`the lease on job ${job.id} was lost during the download`);
           if (got.gone) return blockIt(`the original of source ${sourceId} could not be fetched: ${got.why}`);
           if (got.machine) return releaseIt(`the original of source ${sourceId} could not be downloaded: ${got.why}. The partial download was deleted`);
           return failIt(`the original of source ${sourceId} arrived wrong: ${got.why}`);
@@ -542,10 +595,15 @@ async function finalRenderJob({
       const inputs = plan.inputsFor({ picturePath: originalPath, soundPath, titleCardPath: paths.titleCard, endCardPath: paths.endCard, musicPath, rate: picture.rate });
       io.writeFileSync(paths.script, plan.filterScript({ ranges, shiftS: shift.shiftS, width: picture.width, height: picture.height, rate: picture.rate, inputs }));
       rough.removeQuietly(paths.part, io);
+      // ffmpeg runs under spawnSync and cannot beat, so the lease is sized to
+      // the render NOW, after the download, the music and the cards.
+      if (!queue.heartbeat(job.id, owner, { leaseMs: renderLeaseMs })) {
+        return lostIt(`the lease on job ${job.id} was lost before the render started, so it was left to whoever holds it`);
+      }
       const ran = ffmpeg(plan.renderArgs({
         picturePath: originalPath, soundPath, titleCardPath: paths.titleCard, endCardPath: paths.endCard, musicPath,
         scriptPath: paths.script, outPath: paths.part, rate: picture.rate, fps: picture.fps,
-      }), { timeoutMs: RENDER_TIMEOUT_FACTOR * encodeTimeoutMs(plan.expectedLengthS(ranges)) });
+      }), { timeoutMs: renderTimeoutMs });
       if (!ran.ok) {
         if (ran.reason === FAILURES.FFMPEG_MISSING) return releaseIt('ffmpeg went missing mid-run. Fix: brew install ffmpeg.');
         const detail = text(ran.detail);
@@ -570,18 +628,31 @@ async function finalRenderJob({
     // ── 5. The edit moves to finished, and is read back ────────────────────
     const moved = await catalog.moveEdit(editId, 'finished', { musicTrack: trackId }, scope);
     if (!moved.ok) {
-      if (moved.status === 409) return completeIt('moved_on', `edit ${editId} moved while it was being finished (${moved.error}); the finished file is kept at ${paths.video}`);
+      if (moved.status === 409) {
+        // Nothing uploads or deletes a finished file whose edit is not
+        // `finished`, so it goes now rather than filling the disk forever.
+        rough.removeQuietly(paths.video, io);
+        rough.removeQuietly(paths.sidecar, io);
+        return completeIt('moved_on', `edit ${editId} moved while it was being finished (${moved.error}); the finished file was deleted, since nothing would ever upload it`);
+      }
       return releaseIt(`the finished video is made (${paths.video}), but edit ${editId} could not be marked finished: ${moved.error}. The file is kept and reused`);
     }
     const back = await catalog.getEditById(editId, scope);
-    if (!back.ok || !back.data || back.data.status !== 'finished' || text(back.data.musicTrack) !== trackId) {
-      const why = !back.ok ? back.error : `it read back as "${text(back.data && back.data.status)}" with music "${text(back.data && back.data.musicTrack)}"`;
+    if (!back.ok) {
+      // The write went through; only the read-back did not answer. That is the
+      // machine's, not the edit's: the retry finds the edit finished and stops.
+      return releaseIt(`edit ${editId} was marked finished, but reading it back failed: ${back.error}. The file is kept at ${paths.video}`);
+    }
+    if (!back.data || back.data.status !== 'finished' || text(back.data.musicTrack) !== trackId) {
+      const why = `it read back as "${text(back.data && back.data.status)}" with music "${text(back.data && back.data.musicTrack)}"`;
       return failIt(`edit ${editId} was marked finished but did not read back that way: ${why}. The file is kept at ${paths.video}`);
     }
     return completeIt('finished', `finished video ready for YouTube: ${paths.video}`);
   } finally {
     // ── 6. The downloaded original goes, after a render and after a failure ─
-    if (originalIsOurs) {
+    if (leaseLost) {
+      // The working folder is named after the edit, so it is the new holder's now.
+    } else if (originalIsOurs) {
       io.rmSync(paths.work, { recursive: true, force: true });
       // And the `.work` folder itself once nothing else is in it.
       try { io.rmdirSync(path.dirname(paths.work)); } catch { /* another job's folder is in it, or it is gone */ }
@@ -634,6 +705,7 @@ module.exports = {
   resolveFinishedDir,
   resolveMusicDir,
   previousTrackOf,
+  exhaustedFailure,
   realCatalog,
   realProbe,
   realPictureDuration,

@@ -12,3 +12,11 @@ afterwards, even when something goes wrong, so the Mini's disk does not fill
 up. A trial on a real 47-second short took about 10 seconds to render. The
 first trial showed the music was nearly as loud as a quiet Zoom voice, so both
 are now evened out first and the music is set 20 dB lower.
+
+Review sent it back with five fixes, all made: a long render now keeps its
+claim on the job for the whole render (before, the download quietly cut it back
+to five minutes, so a second copy could start on the same video); a video Dane
+sends back mid-render no longer leaves its finished file on the disk forever; a
+video that fails every try stops re-downloading its original every six hours
+and waits until the edit changes; and two smaller cases no longer delete
+another worker's files or blame the video for a network hiccup.

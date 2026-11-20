@@ -856,7 +856,17 @@ the worker's log (`~/Studio/logs/daemon.log`):
   the machine's problem; tried again in 15 minutes, no attempt counted.
 - **ffmpeg refuses, the download arrives wrong, or the finished file is the
   wrong length**: retried by the queue (five attempts, waiting longer each
-  time), then blocked.
+  time), then blocked — and it **stays** blocked until the edit itself
+  changes (sent back and approved again, a new title or track), because
+  nothing else would change the answer and every retry downloads the whole
+  original again.
+- **Dane sends the edit back while it renders**: the finished file and its
+  sidecar are deleted, because nothing would ever upload them and they would
+  sit on the disk counting against every later space check.
+
+A long render cannot keep its own lease alive (ffmpeg runs without
+interruption), so the lease is stretched to the render's full allowance right
+before ffmpeg starts, after the download and the cards have spent their time.
 
 **Measured on 2026-11-19**, on the Mini, on a real 47.5-second short from a
 Zoom recording (1728 × 1118, 25 frames a second): the 47 MB original

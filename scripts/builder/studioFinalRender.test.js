@@ -66,13 +66,16 @@ function setup(t, { title = 'How the river learned to sing', cachedOriginal = fa
 
   const edit = {
     id: EDIT, sourceId: SRC, kind: 'short', momentIndex: 0, keepRanges: RANGES, audioSourceId: null,
-    status: 'approved', musicTrack: '', youtubeTitle: title, error: '', ...editPatch,
+    status: 'approved', musicTrack: '', youtubeTitle: title, error: '', updatedAt: '2026-11-19T19:00:00Z', ...editPatch,
   };
   const catalog = {
     edit,
     moves: [],
     refuseMoveTo: '',
-    getEditById: async (id) => ({ ok: true, status: 200, data: id === edit.id ? { ...edit } : null }),
+    failReadAfterMove: false,
+    getEditById: async (id) => (catalog.failReadAfterMove && catalog.moves.length
+      ? { ok: false, status: 0, error: 'fetch failed: ECONNRESET' }
+      : { ok: true, status: 200, data: id === edit.id ? { ...edit } : null }),
     listEditsByStatus: async (limit, statuses) => ({ ok: true, status: 200, data: statuses.includes(edit.status) ? [{ ...edit }] : [] }),
     listEditsForSource: async () => ({ ok: true, status: 200, data: [{ ...edit }] }),
     moveEdit: async (id, to, patch = {}) => {
@@ -118,12 +121,13 @@ function setup(t, { title = 'How the river learned to sing', cachedOriginal = fa
     if (args.includes('-version')) return ffmpeg.missing ? { ok: false, reason: FAILURES.FFMPEG_MISSING, detail: 'no ffmpeg' } : { ok: true, ms: 1 };
     // The original must still be on disk while ffmpeg reads it.
     ffmpeg.originalPresent.push(fs.existsSync(args[args.indexOf('-i') + 1]));
+    if (ffmpeg.onRender) ffmpeg.onRender();
     ffmpeg.scripts.push(fs.readFileSync(args[args.indexOf('-/filter_complex') + 1], 'utf8'));
     if (ffmpeg.refuse) return { ok: false, reason: FAILURES.FFMPEG_FAILED, detail: ffmpeg.refuse, ms: 5 };
     fs.writeFileSync(args[args.length - 1], Buffer.alloc(2048, 1));
     return { ok: true, ms: 61000 };
   };
-  Object.assign(ffmpeg, { scripts: [], originalPresent: [], refuse: '', missing: false });
+  Object.assign(ffmpeg, { scripts: [], originalPresent: [], refuse: '', missing: false, onRender: null });
 
   const drawn = [];
   const options = {
@@ -326,6 +330,95 @@ test('a render whose catalog write failed is kept, and the retry only writes it'
   assert.equal(again.finished.length, 1, JSON.stringify(again));
   assert.equal(renders(s.ffmpegCalls).length, 1, 'not rendered a second time');
   assert.equal(s.driveMedia.opened.filter((id) => id === 'drive-original').length, 1, 'and not downloaded a second time');
+});
+
+// ── The send-back of 2026-11-19 ─────────────────────────────────────────────
+
+test('the lease still covers the whole render after the download has beaten on it', async (t) => {
+  const s = setup(t);
+  pass.enqueueFinalRender(s.queue, { editId: EDIT });
+  const beats = [];
+  const realBeat = s.queue.heartbeat;
+  const queue = { ...s.queue, heartbeat: (id, owner, opts) => { beats.push(opts || null); return realBeat(id, owner, opts); } };
+  let leftAtRender = null;
+  let renderTimeout = null;
+  s.ffmpeg.onRender = () => {
+    const job = s.queue.listJobs({ stage: pass.STAGE_FINAL_RENDER })[0];
+    leftAtRender = job.leaseExpiresAt - s.now();
+  };
+  const r = await s.run({ queue });
+  renderTimeout = renders(s.ffmpegCalls)[0].opts.timeoutMs;
+
+  assert.equal(r.finished.length, 1, JSON.stringify(r));
+  assert.ok(beats.length >= 3, `the up-front stretch, a download beat and the pre-render stretch (got ${beats.length})`);
+  assert.ok(beats.every((b) => b && Number(b.leaseMs) > 0), 'no beat falls back to the queue\'s five-minute default');
+  assert.ok(leftAtRender >= renderTimeout, `when ffmpeg starts the lease has ${leftAtRender} ms left, and the render may take ${renderTimeout}`);
+});
+
+test('an edit that moved on while it rendered leaves no finished file behind', async (t) => {
+  const s = setup(t);
+  s.ffmpeg.onRender = () => { s.catalog.edit.status = 'skipped'; };
+  pass.enqueueFinalRender(s.queue, { editId: EDIT });
+  const r = await s.run();
+
+  assert.equal(r.movedOn.length, 1, JSON.stringify(r));
+  assert.match(r.movedOn[0].reason, /the finished file was deleted/);
+  assert.equal(fs.existsSync(s.paths.video), false, 'nothing would ever upload it, so it does not wait on the disk');
+  assert.equal(fs.existsSync(s.paths.sidecar), false, 'and neither does its sidecar');
+  assert.equal(fs.existsSync(s.paths.work), false, 'the original still goes');
+});
+
+test('a render that failed every attempt is not queued again until the edit changes', async (t) => {
+  const s = setup(t);
+  s.ffmpeg.refuse = 'Output file does not contain any stream';
+  await pass.watchApproved({ queue: s.queue, env: s.options.env, catalog: s.catalog, now: s.now });
+  for (let n = 0; n < 5; n += 1) {
+    await s.run();
+    s.advance(24 * 60 * 60 * 1000);
+  }
+  const job = s.queue.listJobs({ stage: pass.STAGE_FINAL_RENDER })[0];
+  assert.equal(job.state, 'blocked', 'five failures is the queue\'s ceiling');
+  assert.equal(job.attempts, 5);
+  const downloads = s.driveMedia.opened.filter((id) => id === 'drive-original').length;
+
+  s.advance(pass.RETRY_BLOCKED_AFTER_MS * 4);
+  const later = await pass.watchApproved({ queue: s.queue, env: s.options.env, catalog: s.catalog, now: s.now });
+  assert.equal(later.processed.length, 0, 'a day on, it is still held: retrying would fail the same way');
+  assert.match(later.skipped[0].why, /failed all 5 attempts .*not tried again until the edit changes/);
+  await s.run();
+  assert.equal(s.driveMedia.opened.filter((id) => id === 'drive-original').length, downloads, 'and the original is not downloaded again');
+
+  s.catalog.edit.updatedAt = new Date(s.now()).toISOString();
+  const changed = await pass.watchApproved({ queue: s.queue, env: s.options.env, catalog: s.catalog, now: s.now });
+  assert.equal(changed.processed.length, 1, 'once the edit changes (sent back and approved again), it is tried again');
+});
+
+test('a job whose lease was lost leaves the working folder to the new holder', async (t) => {
+  const s = setup(t);
+  pass.enqueueFinalRender(s.queue, { editId: EDIT });
+  let stolen = false;
+  const realBeat = s.queue.heartbeat;
+  const queue = { ...s.queue, heartbeat: (...args) => (stolen ? false : realBeat(...args)) };
+  const draw = s.options.drawCards;
+  const r = await s.run({ queue, drawCards: async (a) => { const out = await draw(a); stolen = true; return out; } });
+
+  assert.equal(r.lost.length, 1, JSON.stringify(r));
+  assert.match(r.lost[0].reason, /lost before the render started/);
+  assert.equal(renders(s.ffmpegCalls).length, 0, 'it does not render a job that is not its own');
+  assert.ok(fs.existsSync(s.paths.work), 'the folder is named after the edit, so it belongs to whoever holds the job now');
+});
+
+test('a read-back that does not answer after a good write is the machine\'s, not the edit\'s', async (t) => {
+  const s = setup(t);
+  s.catalog.failReadAfterMove = true;
+  pass.enqueueFinalRender(s.queue, { editId: EDIT });
+  const r = await s.run();
+
+  assert.equal(r.released.length, 1, JSON.stringify(r));
+  assert.match(r.released[0].reason, /reading it back failed: fetch failed/);
+  const job = s.queue.listJobs({ stage: pass.STAGE_FINAL_RENDER })[0];
+  assert.equal(job.attempts, 0, 'no attempt is charged to the edit');
+  assert.ok(fs.existsSync(s.paths.video), 'the finished file is kept: the edit IS finished');
 });
 
 test('the watcher queues each approved edit once, and leaves a recently blocked one alone', async (t) => {
