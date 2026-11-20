@@ -710,7 +710,7 @@ incidents behind each step: `docs/LOOP_ENGINEERING.md`, "The fast-track lane".
    Leave the priority alone. Two statuses are claimable now, `Rework` and
    `Queued`; a send-back lands in `Rework`, and `queue --claimable` lists them
    in the order they must be drained (all rework first, oldest first).
-4. `npm run clickup -- build-start --task <id>` — it asks whether this ticket
+4. `npm run build-start -- --task <id>` — it asks whether this ticket
    was already started, and it looks at DISKS as well as at pull requests, so
    exit 3 now comes in two flavours and the printed line says which.
    **`CONTINUE`** — work exists here, in one of **three** shapes, and only the

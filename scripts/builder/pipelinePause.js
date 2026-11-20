@@ -1023,7 +1023,7 @@ function sweptTicketNote({ at, by, kind = 'a build', destination = 'Queued', why
     'handing it on, which leaves it invisible to the loops (they only claim from Rework and Queued). ' +
     `It went to **${where}**${why ? ` because ${why}` : ''}. ` +
     'Nothing has been undone: **check for an existing branch and PR before building** ' +
-    '(`npm run clickup -- build-start --task <id>`), because part of the work may already be pushed.' +
+    '(`npm run build-start -- --task <id>`), because part of the work may already be pushed.' +
     signature;
 }
 

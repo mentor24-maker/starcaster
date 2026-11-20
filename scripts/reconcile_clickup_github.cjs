@@ -1288,7 +1288,7 @@ async function checkClaimableTasks(tasks, clean, repaired, unchecked, deps = {})
               + `${authoritative.url}\n\n`
               + 'That combination is what lets the same work get built twice, on two branches, against each other '
               + '(2026-08-20). The atomic claim cannot prevent it: the ticket itself is advertising as unstarted.\n\n'
-              + '**Before building this, run `npm run clickup -- build-start --task ' + task.id + '`** — it will find '
+              + '**Before building this, run `npm run build-start -- --task ' + task.id + '`** — it will find '
               + 'that pull request and tell you to continue it rather than open a second one. If the pull request is '
               + 'the stale one, close it and say so here.\n\n'
               + '(Automatic — npm run reconcile. Posted once; it will not repeat while nothing changes.)',

@@ -1511,7 +1511,7 @@ test('CLAIMABLE + OPEN PR: flagged to the bus AND onto the ticket, and never mov
   assert.match(bus[0], /is "queued" — a status loop-build CLAIMS FROM — but its own PR #449 is still OPEN/);
   assert.equal(ticketComments.length, 1, 'the durable half lands on the ticket the next claimer reads');
   assert.equal(ticketComments[0].id, 't1');
-  assert.match(ticketComments[0].text, /build-start --task t1/);
+  assert.match(ticketComments[0].text, /npm run build-start -- --task t1/);
   assert.equal(clean.length, 0, 'this is drift, not clean');
 });
 
