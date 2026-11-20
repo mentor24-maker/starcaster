@@ -159,7 +159,7 @@ async function tryCall(method, path, body) {
 /**
  * Has anything already been BUILT for this stranded ticket?
  *
- * The same question `npm run clickup -- build-start` answers, through the same
+ * The same question `npm run build-start` answers, through the same
  * module, so the sweep and the next build pass cannot reach different
  * conclusions about the same ticket. Two readings: the ticket's comments (for
  * the `PR opened:` trail loop-build writes) and `gh` (for that PR's state).
