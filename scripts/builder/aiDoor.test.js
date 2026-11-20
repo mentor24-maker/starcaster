@@ -54,6 +54,11 @@ function harness({ order = 'anthropic,openai,gemini', keys = { anthropic: 'k-a',
     if (url.includes('openai.com')) return 'openai';
     if (url.includes('googleapis.com')) return 'gemini';
     if (url.includes('moonshot.ai')) return 'kimi';
+    if (url.includes('deepseek.com')) return 'deepseek';
+    if (url.includes('openrouter.ai')) return 'openrouter';
+    if (url.includes('x.ai')) return 'xai';
+    if (url.includes('mistral.ai')) return 'mistral';
+    if (url.includes('groq.com')) return 'groq';
     return 'unknown';
   };
   const deps = {
@@ -231,6 +236,100 @@ test('Kimi is an OpenAI-style service: its own address, OpenAI chat shape, max_c
 
 test('Kimi is off unless the order names it', () => {
   assert.equal(envProviderOrder({ env: {} }).providers.some((p) => p.id === 'kimi'), false);
+});
+
+// ── DeepSeek and the other services added 2026-11-19 (SC-903) ──────────────
+
+test('DeepSeek: its own address, max_tokens (the only length setting it takes), its current models', async () => {
+  const h = harness({ order: 'deepseek', keys: { deepseek: 'k-d' }, script: { deepseek: () => REPLIES.openaiOk('deepseek says hi') } });
+  const r = await generate({ ...ASK, tier: 'strong', maxTokens: 90 }, h.deps);
+  assert.equal(r.ok, true);
+  assert.equal(r.provider, 'deepseek');
+  assert.equal(r.text, 'deepseek says hi');
+  assert.equal(h.sent[0].url, 'https://api.deepseek.com/chat/completions');
+  assert.equal(h.sent[0].headers.authorization, 'Bearer k-d');
+  assert.equal(h.sent[0].body.model, 'deepseek-v4-pro');
+  assert.equal(h.sent[0].body.max_tokens, 90);
+  assert.equal('max_completion_tokens' in h.sent[0].body, false, 'DeepSeek documents only max_tokens');
+  // The strong tier keeps DeepSeek's default thinking.
+  assert.equal('thinking' in h.sent[0].body, false);
+});
+
+test('DeepSeek fast tier switches its default thinking off, so a fast call is fast', () => {
+  const fast = buildRequest(AI_PROVIDERS.deepseek, 'deepseek-flash', 'k', { messages: 'm', maxTokens: 50, tier: 'fast' });
+  assert.deepEqual(fast.body.thinking, { type: 'disabled' });
+  assert.equal(fast.body.model, 'deepseek-flash');
+  const strong = buildRequest(AI_PROVIDERS.deepseek, 'deepseek-v4-pro', 'k', { messages: 'm', maxTokens: 50, tier: 'strong' });
+  assert.equal('thinking' in strong.body, false);
+});
+
+test('each new service is sent the length setting its own docs name', () => {
+  const ask = { messages: 'm', maxTokens: 64, tier: 'fast' };
+  const expected = { deepseek: 'max_tokens', openrouter: 'max_tokens', mistral: 'max_tokens', xai: 'max_completion_tokens', groq: 'max_completion_tokens', openai: 'max_completion_tokens', kimi: 'max_completion_tokens' };
+  for (const [id, param] of Object.entries(expected)) {
+    const req = buildRequest(AI_PROVIDERS[id], AI_PROVIDERS[id].models.fast, 'k', ask);
+    const other = param === 'max_tokens' ? 'max_completion_tokens' : 'max_tokens';
+    assert.equal(req.body[param], 64, `${id} should get ${param}`);
+    assert.equal(other in req.body, false, `${id} must not also get ${other}`);
+    assert.equal(req.url, `${AI_PROVIDERS[id].baseUrl}/chat/completions`);
+  }
+});
+
+test('asking for JSON names JSON in the prompt, which DeepSeek, Mistral and Groq require', () => {
+  for (const id of ['deepseek', 'mistral', 'groq']) {
+    const req = buildRequest(AI_PROVIDERS[id], 'm', 'k', { system: 'Be brief.', messages: 'm', json: true, maxTokens: 50, tier: 'strong' });
+    assert.deepEqual(req.body.response_format, { type: 'json_object' });
+    assert.match(req.body.messages[0].content, /JSON/);
+  }
+});
+
+test('OpenRouter: vendor/model ids, its reasoning text not downloaded', () => {
+  const req = buildRequest(AI_PROVIDERS.openrouter, AI_PROVIDERS.openrouter.models.strong, 'k', { messages: 'm', maxTokens: 50, tier: 'strong' });
+  assert.equal(req.url, 'https://openrouter.ai/api/v1/chat/completions');
+  assert.equal(req.body.model, '~deepseek/deepseek-pro-latest');
+  assert.deepEqual(req.body.reasoning, { exclude: true });
+});
+
+test('Mistral answering as a list of pieces: the answer is the text pieces, never the thinking', async () => {
+  const pieces = { status: 200, body: { model: 'mistral-large-4', choices: [{ message: { content: [
+    { type: 'thinking', thinking: [{ type: 'text', text: 'let me think about it' }] },
+    { type: 'text', text: 'The answer ' },
+    { type: 'text', text: 'is 4.' },
+  ] }, finish_reason: 'stop' }], usage: { prompt_tokens: 5, completion_tokens: 9, total_tokens: 14 } } };
+  const h = harness({ order: 'mistral', keys: { mistral: 'k-m' }, script: { mistral: () => pieces } });
+  const r = await generate({ ...ASK }, h.deps);
+  assert.equal(r.ok, true);
+  assert.equal(r.text, 'The answer is 4.');
+  assert.equal(h.sent[0].url, 'https://api.mistral.ai/v1/chat/completions');
+  assert.equal(h.sent[0].body.max_tokens, 4096);
+});
+
+test('a refused DeepSeek key falls through to the next provider like any other', async () => {
+  const h = harness({
+    order: 'deepseek,openai',
+    keys: { deepseek: 'k-d', openai: 'k-o' },
+    script: {
+      deepseek: () => ({ status: 401, body: { error: { message: 'Authentication Fails, Your api key: ****abcd is invalid', type: 'authentication_error' } } }),
+      openai: () => REPLIES.openaiOk('from gpt'),
+    },
+  });
+  const r = await generate({ ...ASK }, h.deps);
+  assert.equal(r.ok, true);
+  assert.equal(r.provider, 'openai');
+  assert.equal(r.skipped[0].provider, 'deepseek');
+  assert.equal(r.skipped[0].verdict, 'INVALID');
+});
+
+test('the five new services are off unless switched on, and each names its own key setting', () => {
+  const ids = ['deepseek', 'openrouter', 'xai', 'mistral', 'groq'];
+  const { providers } = envProviderOrder({ env: {} });
+  for (const id of ids) {
+    assert.equal(providers.some((p) => p.id === id), false, `${id} must be off by default`);
+    assert.match(AI_PROVIDERS[id].keyEnv, /^[A-Z]+_API_KEY$/);
+    assert.equal(AI_PROVIDERS[id].kind, 'openai-style');
+    assert.match(AI_PROVIDERS[id].baseUrl, /^https:\/\//);
+  }
+  assert.equal(new Set(Object.values(AI_PROVIDERS).map((p) => p.keyEnv)).size, Object.keys(AI_PROVIDERS).length, 'no two providers share a key setting');
 });
 
 // ── The order and its models ───────────────────────────────────────────────

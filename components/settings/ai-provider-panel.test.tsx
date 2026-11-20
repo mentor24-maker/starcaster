@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { ProviderTable, moveRow, payloadOf, readingFor, sourceText, type ProviderRow } from './ai-provider-panel';
+import { ModelChooser, ProviderTable, listStatusText, moveRow, payloadOf, readingFor, sourceText, type ProviderRow } from './ai-provider-panel';
 
 /**
  * Settings › APIs › AI provider (AI switch 2, SC-844). What matters is what
@@ -69,5 +69,42 @@ describe('ProviderTable', () => {
     expect(html).toContain('no key: add MOONSHOT_API_KEY to Doppler production');
     expect(html).toContain('data-ai-provider="kimi"');
     expect(html).not.toMatch(/sk-[A-Za-z0-9]/);
+  });
+});
+
+describe('List models (SC-903)', () => {
+  const deepseek = row({ id: 'deepseek', label: 'DeepSeek', enabled: false, keyEnv: 'DEEPSEEK_API_KEY', keySet: true, fast: 'deepseek-flash', strong: 'deepseek-v4-pro' });
+
+  it('offers a List models button on every provider when the screen can list', () => {
+    const html = renderToStaticMarkup(<ProviderTable rows={[row(), deepseek]} reading={null} onChange={() => {}} lists={{}} onList={() => {}} />);
+    expect(html).toContain('data-ai-list-models="deepseek"');
+    expect(html).toContain('List models');
+    // Nothing listed yet: no dropdown, only the typed box.
+    expect(html).not.toContain('ai-provider-model-choice');
+  });
+
+  it('once listed, each model box gets a dropdown of that provider\'s models with the saved one chosen', () => {
+    const lists = { deepseek: { models: ['deepseek-flash', 'deepseek-v4-pro'] } };
+    const html = renderToStaticMarkup(<ProviderTable rows={[deepseek]} reading={null} onChange={() => {}} lists={lists} onList={() => {}} />);
+    expect(html.match(/ai-provider-model-choice/g)?.length).toBe(2);
+    expect(html).toContain('Choose from 2 models…');
+    expect(html).toContain('<option value="deepseek-v4-pro" selected="">deepseek-v4-pro</option>');
+    expect(html).toContain('2 models listed');
+    expect(html).toContain('List again');
+  });
+
+  it('a typed name that is not on the list is said, not hidden', () => {
+    const html = renderToStaticMarkup(<ModelChooser label="DeepSeek" tier="fast" value="deepseek-v2-typo" models={['deepseek-flash']} onPick={() => {}} />);
+    expect(html).toContain('&quot;deepseek-v2-typo&quot; is not in DeepSeek&#x27;s list');
+  });
+
+  it('why a provider could not list is shown in its words', () => {
+    expect(listStatusText({ reason: 'no key yet: add XAI_API_KEY to Doppler production, then list again' })).toMatch(/XAI_API_KEY/);
+    expect(listStatusText({ busy: true })).toBe('Asking for its models…');
+    expect(listStatusText({ models: ['one'] })).toBe('1 model listed: choose under each box');
+    expect(listStatusText(undefined)).toBe('');
+    const html = renderToStaticMarkup(<ProviderTable rows={[deepseek]} reading={null} onChange={() => {}} lists={{ deepseek: { reason: 'DeepSeek would not list its models: DeepSeek refused the key (401)' } }} onList={() => {}} />);
+    expect(html).toContain('DeepSeek refused the key (401)');
+    expect(html).not.toContain('ai-provider-model-choice');
   });
 });
