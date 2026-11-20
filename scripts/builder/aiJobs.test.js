@@ -21,8 +21,10 @@ const ROOT = path.join(__dirname, '..', '..');
 const read = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8');
 const job = (id) => MINI_JOBS.find((j) => j.id === id);
 
+/** The interval of the plist the script actually writes (`--print-plist`), not of its source text. */
 function startIntervalHours(script) {
-  const m = read(script).match(/<key>StartInterval<\/key>\s*<integer>(\d+)<\/integer>/);
+  const plist = require('node:child_process').execFileSync('bash', [path.join(ROOT, script), '--print-plist'], { encoding: 'utf8' });
+  const m = plist.match(/<key>StartInterval<\/key>\s*<integer>(\d+)<\/integer>/);
   assert.ok(m, `${script} has no StartInterval`);
   return Number(m[1]) / 3600;
 }
