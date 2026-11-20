@@ -859,7 +859,9 @@ the worker's log (`~/Studio/logs/daemon.log`):
   time), then blocked — and it **stays** blocked until the edit itself
   changes (sent back and approved again, a new title or track), because
   nothing else would change the answer and every retry downloads the whole
-  original again.
+  original again. When the edit does change, the old blocked job is closed
+  before the new one is queued, so if the new one is then held for a reason
+  (no end card), fixing that note brings it back six hours later as usual.
 - **Dane sends the edit back while it renders**: the finished file and its
   sidecar are deleted, because nothing would ever upload them and they would
   sit on the disk counting against every later space check.

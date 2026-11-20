@@ -393,6 +393,42 @@ test('a render that failed every attempt is not queued again until the edit chan
   assert.equal(changed.processed.length, 1, 'once the edit changes (sent back and approved again), it is tried again');
 });
 
+test('after the edit changes, a later reasoned block retries six hours on, not held for good', async (t) => {
+  const s = setup(t);
+  // 1. Five failures: the job is blocked with attempts=5.
+  s.ffmpeg.refuse = 'Output file does not contain any stream';
+  await pass.watchApproved({ queue: s.queue, env: s.options.env, catalog: s.catalog, now: s.now });
+  for (let n = 0; n < 5; n += 1) {
+    await s.run();
+    s.advance(24 * 60 * 60 * 1000);
+  }
+  assert.equal(s.queue.listJobs({ stage: pass.STAGE_FINAL_RENDER, state: 'blocked' })[0].attempts, 5);
+
+  // 2. The edit changes (sent back, approved again): a new job is queued and
+  //    the exhausted one is stood down rather than left to absorb the next block.
+  s.ffmpeg.refuse = null;
+  s.advance(1000);
+  s.catalog.edit.updatedAt = new Date(s.now()).toISOString();
+  s.advance(1000);
+  const changed = await pass.watchApproved({ queue: s.queue, env: s.options.env, catalog: s.catalog, now: s.now });
+  assert.equal(changed.processed.length, 1);
+
+  // 3. The new job meets a reasoned block: no end card.
+  const realEndCards = s.options.readEndCards;
+  s.options.readEndCards = async () => ({ ok: true, cards: new Map() });
+  const blockedRun = await s.run();
+  assert.equal(blockedRun.blocked.length, 1, JSON.stringify(blockedRun));
+  const blockedNow = s.queue.listJobs({ stage: pass.STAGE_FINAL_RENDER, state: 'blocked' });
+  assert.equal(blockedNow.length, 1, 'one blocked row for the edit');
+  assert.equal(blockedNow[0].attempts, 0, 'the reasoned block is a fresh row, not the exhausted one with five attempts');
+
+  // 4. The note is fixed and six hours pass: it is queued again.
+  s.options.readEndCards = realEndCards;
+  s.advance(pass.RETRY_BLOCKED_AFTER_MS + 1000);
+  const later = await pass.watchApproved({ queue: s.queue, env: s.options.env, catalog: s.catalog, now: s.now });
+  assert.equal(later.processed.length, 1, `fixing the note is enough: ${JSON.stringify(later.skipped)}`);
+});
+
 test('a job whose lease was lost leaves the working folder to the new holder', async (t) => {
   const s = setup(t);
   pass.enqueueFinalRender(s.queue, { editId: EDIT });

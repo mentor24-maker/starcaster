@@ -62,7 +62,9 @@
  * outside the edit will change the answer, and each retry downloads the whole
  * original again. It stays held until the edit itself changes (its row's
  * updated_at moves past the job's: Dane sends it back and approves it again,
- * a new title, a new track).
+ * a new title, a new track). When it does, the exhausted job is stood down
+ * (moved to done) before the new one is queued, so a later block with a
+ * reason starts its own row and the six-hour retry applies to it again.
  *
  * WHAT HAPPENS TO THE FINISHED FILE. It is kept for 6c only when the edit
  * reaches `finished`. If the edit moved on while it rendered (Dane sent it
@@ -261,10 +263,22 @@ async function watchApproved({ queue, env = process.env, options = {}, catalog =
   const skipped = [];
   for (const edit of approved.data) {
     const id = text(edit.id);
-    const mine = blocked.filter((j) => text(j.subjectId).toLowerCase() === id.toLowerCase());
+    let mine = blocked.filter((j) => text(j.subjectId).toLowerCase() === id.toLowerCase());
     const changedAt = editChangedAt(edit);
     const gaveUp = mine.find((j) => exhaustedFailure(j, maxAttempts)
       && (changedAt == null || changedAt <= Number(j.updatedAt)));
+    // The edit changed after a job that failed every attempt: stand that job
+    // down BEFORE queueing the new one. queue.block() writes onto the
+    // subject's existing blocked row, so left in place, a later reasoned
+    // block ("no end card") would land on the exhausted row, keep its five
+    // attempts and stamp it newer than the edit, and fixing the note would
+    // never bring the edit back. Cleared, the next block starts a fresh row.
+    const outlived = !gaveUp && changedAt != null
+      && mine.some((j) => exhaustedFailure(j, maxAttempts) && changedAt > Number(j.updatedAt));
+    if (outlived) {
+      queue.clearBlock({ stage: STAGE_FINAL_RENDER, subjectKind: SUBJECT_VIDEO_EDIT, subjectId: text(mine[0].subjectId) || id });
+      mine = [];
+    }
     if (gaveUp) {
       skipped.push({
         editId: id,
