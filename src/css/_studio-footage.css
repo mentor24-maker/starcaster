@@ -547,3 +547,34 @@ table.studio-footage-table:not(.builder-module-preview-table):not(.builder-previ
   max-width: 40rem;
   box-sizing: border-box;
 }
+
+/* The YouTube text on a rough-cut card (Reel Spinner 6a, SC-839). Stacked
+   like the send-back form: a label line, then its box. */
+.studio-roughcut-youtube {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-top: 0.6rem;
+  min-width: 0;
+}
+
+.studio-roughcut-youtube input,
+.studio-roughcut-youtube textarea {
+  width: 100%;
+  max-width: 40rem;
+  box-sizing: border-box;
+}
+
+.studio-roughcut-youtube label {
+  display: flex;
+  flex-direction: row;
+  gap: 0.75rem;
+  align-items: baseline;
+  margin-top: 0.35rem;
+}
+
+.studio-roughcut-count {
+  color: var(--ink-secondary, #666);
+  font-size: 0.85em;
+  white-space: nowrap;
+}
