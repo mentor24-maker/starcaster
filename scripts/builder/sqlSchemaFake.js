@@ -1025,6 +1025,11 @@ function createFakeDb(schema, { idPrefix = 'row' } = {}) {
    */
   function valuesEqual(type, cell, wanted) {
     if (type === 'uuid') return String(cell).toLowerCase() === wanted.toLowerCase();
+    // jsonb compares as JSON VALUES in Postgres (`youtube_tags = '[]'` is true
+    // for an empty array), never as text: String([]) is '' and would match nothing.
+    if (type === 'jsonb' || type === 'json') {
+      try { return JSON.stringify(cell) === JSON.stringify(JSON.parse(wanted)); } catch { return false; }
+    }
     return String(cell) === wanted;
   }
 
@@ -1152,6 +1157,12 @@ function createFakeDb(schema, { idPrefix = 'row' } = {}) {
           if (op === 'gt') return at > bound;
           return at >= bound;
         });
+        continue;
+      }
+
+      // `col=is.null` — the only way PostgREST matches SQL NULL (eq.null never does).
+      if (value === 'is.null') {
+        rows = rows.filter((row) => row[key] === null || row[key] === undefined);
         continue;
       }
 

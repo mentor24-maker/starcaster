@@ -8,15 +8,19 @@
  *   GET  /api/studio/rough-cuts              every rough cut in THIS project,
  *                                            newest recording first, with the
  *                                            count of each group
- *   POST /api/studio/rough-cuts/:id/review   { status, daneNote? } — approved,
- *                                            skipped or sent_back
+ *   POST /api/studio/rough-cuts/:id/review   { status?, daneNote?, youtubeTitle?,
+ *                                              youtubeDescription?, youtubeTags? }
+ *                                            — approved, skipped or sent_back,
+ *                                            and/or the YouTube text (6a)
  *
- * THE WEBSITE WRITES ONLY `status` AND `dane_note`. The verdict goes through
- * lib/videoEditsStore.js reviewEdit, which refuses a step out of order (an
- * edit not in review cannot be approved), refuses a send-back without a note
- * sent in the same save, and guards the write on the status it read. Any
- * other field in the body is refused here, before the store sees it: the
- * YouTube text is reviewEdit's too, but it is 6b's screen, not this one.
+ * THE WEBSITE WRITES ONLY THE REVIEW HALF: `status`, `dane_note` and the
+ * YouTube text Dane edited on the card (Reel Spinner 6a, SC-839). It goes
+ * through lib/videoEditsStore.js reviewEdit, which refuses a step out of order
+ * (an edit not in review cannot be approved), refuses a send-back without a
+ * note sent in the same save, refuses text once the edit is uploading, and
+ * guards the write on the status it read. Any other field in the body is
+ * refused here, before the store sees it. Approve sends the boxes WITH the
+ * verdict, so what goes to YouTube is what was in them when he pressed it.
  *
  * The answer to a verdict is the row the database RETURNED, checked: a 200
  * that does not carry his verdict would be a toast over a write that did not
@@ -37,7 +41,8 @@ const REVIEW_PATH = /^\/api\/studio\/rough-cuts\/([^/]+)\/review$/;
 const EDIT_READ_LIMIT = 500; // listEditsByStatus's own ceiling
 const SOURCE_READ_LIMIT = 1000;
 
-const VERDICT_FIELDS = ['status', 'daneNote'];
+const TEXT_FIELDS = ['youtubeTitle', 'youtubeDescription', 'youtubeTags'];
+const VERDICT_FIELDS = ['status', 'daneNote', ...TEXT_FIELDS];
 const VERDICTS = ['approved', 'skipped', 'sent_back'];
 
 /** Every status but failed: a failed edit has no rough cut to watch. */
@@ -120,16 +125,20 @@ async function sendVerdict(req, res, editId) {
   }
   const extra = Object.keys(body).filter((k) => !VERDICT_FIELDS.includes(k));
   if (extra.length) {
-    return sendErr(res, 400, `This screen sets only status and daneNote (got ${extra.join(', ')})`, { code: 'VALIDATION_ERROR' });
+    return sendErr(res, 400, `This screen sets only ${VERDICT_FIELDS.join(', ')} (got ${extra.join(', ')})`, { code: 'VALIDATION_ERROR' });
   }
+  const textSent = TEXT_FIELDS.filter((k) => body[k] !== undefined);
+  const hasStatus = body.status !== undefined && body.status !== null && body.status !== '';
   const status = String(body.status || '').trim();
-  if (!VERDICTS.includes(status)) {
+  if ((hasStatus || !textSent.length) && !VERDICTS.includes(status)) {
     return sendErr(res, 400, `status must be one of ${VERDICTS.join(', ')}`, { code: 'VALIDATION_ERROR' });
   }
-  const input = { status };
+  const input = hasStatus ? { status } : {};
   // Passed through UNCHANGED: reviewEdit refuses a note that is not text.
   // String() here once turned {} into "[object Object]" and saved it.
   if (body.daneNote !== undefined && body.daneNote !== null) input.daneNote = body.daneNote;
+  // The same for the YouTube text: reviewEdit checks the types and lengths.
+  for (const k of textSent) input[k] = body[k];
 
   const saved = await reviewEdit(editId, input, scope);
   if (!saved.ok) {
@@ -138,10 +147,20 @@ async function sendVerdict(req, res, editId) {
     });
   }
   const row = saved.data;
-  if (!row || row.status !== status || (typeof input.daneNote === 'string' && row.daneNote !== input.daneNote.trim())) {
-    return sendErr(res, 502, 'The database answered, but the row it returned does not carry this verdict');
+  const sameText = (k) => {
+    if (input[k] === undefined) return true;
+    if (k === 'youtubeTags') return JSON.stringify(row[k]) === JSON.stringify((input[k] || []).map((t) => String(t).trim()).filter(Boolean));
+    return (row[k] || '') === String(input[k] == null ? '' : input[k]).trim();
+  };
+  if (!row || (hasStatus && row.status !== status)
+    || (typeof input.daneNote === 'string' && row.daneNote !== input.daneNote.trim())
+    || !TEXT_FIELDS.every(sameText)) {
+    return sendErr(res, 502, 'The database answered, but the row it returned does not carry what was saved');
   }
-  return sendOk(res, 200, { id: row.id, status: row.status, daneNote: row.daneNote });
+  return sendOk(res, 200, {
+    id: row.id, status: row.status, daneNote: row.daneNote,
+    youtubeTitle: row.youtubeTitle, youtubeDescription: row.youtubeDescription, youtubeTags: row.youtubeTags,
+  });
 }
 
 /** true when this module answered the request. */
