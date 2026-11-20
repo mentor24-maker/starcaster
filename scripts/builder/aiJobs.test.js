@@ -14,7 +14,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const { listAiJobs, MINI_JOBS, OPENCLAW_MODEL, NOT_METERED } = require('../../lib/aiJobs');
+const { listAiJobs, MINI_JOBS, OPENCLAW_MODEL, OPENCLAW_PROVIDER, NOT_METERED } = require('../../lib/aiJobs');
 const { priceCall } = require('../../lib/aiPricing');
 
 const ROOT = path.join(__dirname, '..', '..');
@@ -27,15 +27,21 @@ function startIntervalHours(script) {
   return Number(m[1]) / 3600;
 }
 
-test('the OpenClaw model is one install_openclaw.sh configures, and it is priced', () => {
-  // The installer reads lib/openclawModels.json (SC-871). OpenAI is primary
-  // now; until SC-873 labels each call with the model that served it, this
-  // page's label must at least be one of the models OpenClaw can use.
-  const { order } = require('../../lib/openclawModels').load();
-  assert.ok(order.includes(`anthropic/${OPENCLAW_MODEL}`), `${OPENCLAW_MODEL} is not in lib/openclawModels.json`);
-  // AI Quota 3/5 will price these calls; a model with no rate would read
-  // "incomplete" from the first metered request.
-  assert.equal(priceCall({ provider: 'anthropic', model: OPENCLAW_MODEL, promptTokens: 1 }).priced, true);
+test('the OpenClaw model is the committed primary, never a hard-coded Claude (SC-873)', () => {
+  // The installer writes lib/openclawModels.json onto the Mini (SC-871); the
+  // AI Quota page labels OpenClaw's jobs with that list's primary.
+  const { primary } = require('../../lib/openclawModels').load();
+  assert.equal(`${OPENCLAW_PROVIDER}/${OPENCLAW_MODEL}`, primary);
+  for (const j of MINI_JOBS.filter((m) => m.runner === 'OpenClaw browser')) assert.equal(j.model, OPENCLAW_MODEL, j.id);
+  assert.doesNotMatch(read('lib/aiJobs.js'), /OPENCLAW_MODEL\s*=\s*['"]/, 'OPENCLAW_MODEL is a literal again');
+  // A model with no rate must say so, never read as $0 (lib/aiPricing.js rule 1).
+  const price = priceCall({ provider: OPENCLAW_PROVIDER, model: OPENCLAW_MODEL, promptTokens: 1 });
+  assert.ok(price.priced || price.reason, 'an unpriced OpenClaw model must name the gap');
+});
+
+test('an OpenClaw request no job lists is labelled with the committed model too', () => {
+  const [stray] = require('../../lib/aiJobs').miniJobs([{ job: 'starcaster:new-thing', calls: 1 }]).filter((j) => j.id === 'openclaw:starcaster:new-thing');
+  assert.equal(stray.model, OPENCLAW_MODEL);
 });
 
 test('the schedules listed match the Mini install scripts', () => {

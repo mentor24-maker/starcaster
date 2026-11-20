@@ -1,0 +1,5 @@
+## 2026-11-19 — Make the AI key check and the AI Quota page report OpenClaw's real keys and model (#1079)
+
+OpenClaw, the AI browser on the Mac Mini, now uses OpenAI first and Anthropic as its backup (SC-871). Two reports had not caught up. The key check (`npm run ai-keys`) only tested OpenClaw's Anthropic key, so the key it actually spends from was never checked. The AI Quota page called every OpenClaw job "Claude", because that name was typed into the code.
+
+Now the key check tests every AI key OpenClaw holds and prints which model it is set to. It also says plainly when a key the model list needs is missing, or when the Mini's settings no longer match the repo. If it cannot read a file, it says it cannot tell, and never reports that as fine. The AI Quota page takes OpenClaw's model name from the same committed list the installer uses, so it reads gpt-5.5. One knock-on: OpenAI prices are not entered yet, so new OpenClaw calls show "cost unknown" rather than a Claude price, which was wrong anyway.
