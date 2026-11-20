@@ -76,8 +76,13 @@ beforeEach(() => {
       const id = decodeURIComponent(path.split("/")[4]);
       const row = rows.find((r) => r.id === id);
       if (!row) return { ok: false, error: { message: "That edit does not exist in this project" } };
-      row.status = body.status;
+      if (body.status) row.status = body.status;
       if (body.daneNote !== undefined) row.daneNote = body.daneNote;
+      const yt = row.youtube || { title: "", description: "", tags: [], missing: "" };
+      if (body.youtubeTitle !== undefined) yt.title = body.youtubeTitle;
+      if (body.youtubeDescription !== undefined) yt.description = body.youtubeDescription;
+      if (body.youtubeTags !== undefined) yt.tags = body.youtubeTags;
+      row.youtube = yt;
       return { ok: true, data: { id, status: row.status, daneNote: row.daneNote } };
     },
   };
@@ -131,8 +136,9 @@ async function click(el: HTMLElement): Promise<void> {
   await flush();
 }
 
-function typeInto(el: HTMLTextAreaElement, value: string): void {
-  const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!;
+function typeInto(el: HTMLTextAreaElement | HTMLInputElement, value: string): void {
+  const proto = el instanceof HTMLInputElement ? HTMLInputElement.prototype : HTMLTextAreaElement.prototype;
+  const setter = Object.getOwnPropertyDescriptor(proto, "value")!.set!;
   act(() => {
     setter.call(el, value);
     el.dispatchEvent(new Event("input", { bubbles: true }));
@@ -217,7 +223,10 @@ describe("rough cuts screen", () => {
     await click(q(`[data-testid="${countId}"]`)!);
     expect(cards()).toHaveLength(1);
     expect(cards()[0].querySelector('[data-testid="studio-roughcut-verdict"]')).not.toBeNull();
-    expect(cards()[0].querySelectorAll("button")).toHaveLength(0);
+    // No verdict buttons once answered. An approved cut keeps Save text: its
+    // YouTube text is his to change until it starts uploading (6a).
+    const labels = Array.from(cards()[0].querySelectorAll("button")).map((b) => b.textContent);
+    expect(labels.filter((l) => ["Approve", "Skip", "Send back"].includes(String(l)))).toEqual([]);
   });
 
   it("Send back needs a note: without one it is refused on screen and nothing is sent", async () => {
@@ -272,6 +281,36 @@ describe("rough cuts screen", () => {
     await mount();
     const music = cards().map((c) => c.querySelector('[data-testid="studio-roughcut-music"]')!.textContent);
     expect(music).toEqual(["Music: Inspired, Kevin MacLeod", "Music: No music picked"]);
+  });
+
+  it("shows the Mini's YouTube text in boxes, and a changed title survives a reload", async () => {
+    rows = [edit("e1", { youtube: { title: "Why a court can start a neighbourhood", description: "About WaveCenter.", tags: ["WaveCenter", "tennis"], missing: "" } })];
+    await mount();
+    const title = q('[data-testid="studio-roughcut-title"]') as HTMLInputElement;
+    expect(title.value).toBe("Why a court can start a neighbourhood");
+    expect((q('[data-testid="studio-roughcut-tags"]') as HTMLInputElement).value).toBe("WaveCenter, tennis");
+    expect(button(cards()[0], "Save text").disabled).toBe(true);
+    typeInto(title, "Why a tennis court can start a neighbourhood");
+    await click(button(cards()[0], "Save text"));
+    // Only the box he changed is sent, and no verdict with it.
+    expect(calls.find((c) => c.method === "POST")!.body).toEqual({ youtubeTitle: "Why a tennis court can start a neighbourhood" });
+    expect(rows[0].status).toBe("review");
+    await reload();
+    expect((q('[data-testid="studio-roughcut-title"]') as HTMLInputElement).value).toBe("Why a tennis court can start a neighbourhood");
+  });
+
+  it("Approve sends what is in the boxes with the verdict", async () => {
+    rows = [edit("e1", { youtube: { title: "Old", description: "Body.", tags: ["a"], missing: "" } })];
+    await mount();
+    typeInto(q('[data-testid="studio-roughcut-tags"]') as HTMLInputElement, "a, b ,, c");
+    await click(button(cards()[0], "Approve"));
+    expect(calls.find((c) => c.method === "POST")!.body).toEqual({ status: "approved", youtubeTags: ["a", "b", "c"] });
+  });
+
+  it("an empty box says why it is empty", async () => {
+    rows = [edit("e1", { youtube: { title: "", description: "", tags: [], missing: "YouTube text not written yet: no end card for DEO in Reel Spinner — end cards" } })];
+    await mount();
+    expect(q('[data-testid="studio-roughcut-youtube-missing"]')!.textContent).toContain("no end card for DEO");
   });
 
   it("with nothing made, says the Mac Mini has not made any", async () => {

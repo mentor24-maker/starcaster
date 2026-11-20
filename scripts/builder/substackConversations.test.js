@@ -461,3 +461,78 @@ test('the Find conversations stage says how many, and is CANNOT TELL — never "
   const broken = await conversationsStage({ listSubstackConversations: async () => ({ ok: false, error: 'db down' }) }, SCOPE, next);
   assert.equal(broken.state, 'cannot_tell');
 });
+
+// ── "not read yet" is a wait, not a fault (SC-882) ─────────────────────────
+
+test('the timetable the screen promises is the one vercel.json runs', () => {
+  const vercel = JSON.parse(fs.readFileSync(path.join(ROOT, 'vercel.json'), 'utf8'));
+  const cron = vercel.crons.find((c) => c.path === '/api/acquire/substack-miner/read-notes-due');
+  const { minute, everyHours } = conversations.READ_SCHEDULE;
+  assert.equal(cron.schedule, `${minute} */${everyHours} * * *`);
+});
+
+test('the next scheduled read is the next slot inside the account\'s active hours, in Mountain time', () => {
+  // 12:00 UTC = 6:00am Mountain (MDT). Slots run at minute 7 of even UTC hours.
+  const allDay = conversations.nextScheduledRead(NOW);
+  assert.equal(new Date(allDay).toISOString(), '2026-10-28T12:07:00.000Z', 'with no hours, the very next slot');
+  const hours = { activeStartHour: 8, activeEndHour: 22 };
+  const inside = conversations.nextScheduledRead(NOW, hours, 'America/Denver');
+  assert.equal(new Date(inside).toISOString(), '2026-10-28T14:07:00.000Z', '6:07am is before 8am; 8:07am is the first slot it reads');
+  assert.equal(conversations.nextReadPhrase(inside, NOW), '8:07am');
+  // 11pm Mountain: the next read inside 8am-10pm is tomorrow morning, and says so.
+  const late = Date.parse('2026-10-29T05:00:00Z');
+  const next = conversations.nextScheduledRead(late, hours, 'America/Denver');
+  assert.equal(conversations.nextReadPhrase(next, late), '8:07am tomorrow');
+});
+
+test('a writer approved in the last day and not read yet is NOT READ YET, naming the next read — never "Cannot tell"', async () => {
+  const { deps } = fakeDeps({ candidates: [
+    ANN({ lastNotesReadAt: null, recentNotes: [], updatedAt: new Date(NOW - 10 * 60 * 1000).toISOString() }),
+    ANN({ id: 'w2', handle: 'bo', name: 'Bo', lastNotesReadAt: null, recentNotes: [], updatedAt: new Date(NOW - 3 * HOUR).toISOString() }),
+  ] });
+  deps.notesStore.getSettings = async () => ({ ok: true, data: { activeStartHour: 8, activeEndHour: 22, timeZone: 'America/Denver' } });
+  const res = await conversations.listSubstackConversations(SCOPE, deps);
+  assert.equal(res.data.reading.state, 'not_read_yet');
+  assert.equal(res.data.reading.sentence, '2 approved writers have not been read yet (Ann and Bo). The next scheduled read is at 8:07am, or press Read now.');
+  assert.doesNotMatch(res.data.reading.sentence, /Cannot tell|refused|not running/);
+  const { conversationsStage } = require('../../lib/outreachOverview');
+  const stage = await conversationsStage({ listSubstackConversations: async () => res }, SCOPE, { label: 'x', page: 'y' });
+  assert.equal(stage.state, 'waiting_read', 'a calm stage state, not cannot_tell');
+  assert.equal(stage.sentence, res.data.reading.sentence);
+});
+
+test('with Notes already listed, a writer waiting to be read still leaves the stage for him to act on', async () => {
+  const { conversationsStage } = require('../../lib/outreachOverview');
+  const stage = await conversationsStage({ listSubstackConversations: async () => ({ ok: true, data: { newCount: 2, reading: { state: 'not_read_yet', sentence: '1 approved writer has not been read yet (Bo). The next scheduled read is at 8:07am, or press Read now.' } } }) }, SCOPE, { label: 'x', page: 'y' });
+  assert.equal(stage.state, 'needs_you');
+  assert.match(stage.sentence, /^2 new Notes worth replying to so far, best first\. 1 approved writer has not been read yet/);
+});
+
+test('when the account settings cannot be read, the wait is still calm and says the read runs inside the active hours', async () => {
+  const { deps } = fakeDeps({ candidates: [ANN({ lastNotesReadAt: null, recentNotes: [], updatedAt: new Date(NOW - HOUR).toISOString() })] });
+  deps.notesStore.getSettings = async () => ({ ok: false, status: 502, error: 'boom' });
+  const res = await conversations.listSubstackConversations(SCOPE, deps);
+  assert.equal(res.data.reading.state, 'not_read_yet');
+  assert.match(res.data.reading.sentence, /runs every two hours inside the Substack account's active hours, or press Read now\.$/);
+});
+
+test('a writer approved over a day ago and still never read keeps the fault wording', async () => {
+  const { deps } = fakeDeps({ candidates: [ANN({ lastNotesReadAt: null, recentNotes: [], updatedAt: new Date(NOW - 25 * HOUR).toISOString() })] });
+  let settingsRead = 0;
+  deps.notesStore.getSettings = async () => { settingsRead += 1; return { ok: true, data: {} }; };
+  const res = await conversations.listSubstackConversations(SCOPE, deps);
+  assert.equal(res.data.reading.state, 'cannot_tell');
+  assert.match(res.data.reading.sentence, /never been read \(Ann\).*Substack refused it or the schedule is not running/);
+  assert.equal(settingsRead, 0, 'nothing is waiting, so the account settings are not read');
+});
+
+test('one overdue writer makes the whole reading a fault, even beside a writer that is only waiting', async () => {
+  const { deps } = fakeDeps({ candidates: [
+    ANN({ lastNotesReadAt: new Date(NOW - 9 * DAY).toISOString() }),
+    ANN({ id: 'w2', handle: 'bo', name: 'Bo', lastNotesReadAt: null, recentNotes: [], updatedAt: new Date(NOW - HOUR).toISOString() }),
+  ] });
+  deps.notesStore.getSettings = async () => ({ ok: true, data: {} });
+  const res = await conversations.listSubstackConversations(SCOPE, deps);
+  assert.equal(res.data.reading.state, 'cannot_tell');
+  assert.match(res.data.reading.sentence, /1 approved writer has never been read \(Bo\), and 1 has not been read for over 8 days \(Ann\)/);
+});

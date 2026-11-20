@@ -241,7 +241,7 @@ test('a verdict out of order, on another project\'s edit, or touching another fi
     assert.equal(cross.res.statusCode, 404, cross.res.body);
     assert.equal((await storedStatus(ctx, theirs.editId, SCOPE_B)).status, 'review');
 
-    const extra = await call(ctx.route, `/api/studio/rough-cuts/${editId}/review`, SCOPE_A, 'POST', { status: 'approved', youtubeTitle: 'x' });
+    const extra = await call(ctx.route, `/api/studio/rough-cuts/${editId}/review`, SCOPE_A, 'POST', { status: 'approved', musicTrack: 'x' });
     assert.equal(extra.res.statusCode, 400, extra.res.body);
     const machine = await call(ctx.route, `/api/studio/rough-cuts/${editId}/review`, SCOPE_A, 'POST', { status: 'finished' });
     assert.equal(machine.res.statusCode, 400, machine.res.body);
@@ -339,6 +339,40 @@ test('a rough cut id that is not a valid address is a 400, not a crash', async (
     const { res } = await call(ctx.route, '/api/studio/rough-cuts/%E0%A4%A/review', SCOPE_A, 'POST', { status: 'approved' });
     assert.equal(res.statusCode, 400, res.body);
     assert.match(String(res.body), /not a valid address/);
+  } finally {
+    ctx.restore();
+  }
+});
+
+test('Reel Spinner 6a: the YouTube text saves on its own or with Approve, and the list carries it back', async () => {
+  const ctx = withRoute();
+  try {
+    const { editId } = await waitingEdit(ctx, SCOPE_A);
+    const saved = await call(ctx.route, `/api/studio/rough-cuts/${editId}/review`, SCOPE_A, 'POST', {
+      youtubeTitle: '  Building courts together ', youtubeTags: ['tennis', ' delray '],
+    });
+    assert.equal(saved.res.statusCode, 200, saved.res.body);
+    const row = await storedStatus(ctx, editId, SCOPE_A);
+    assert.equal(row.status, 'review');
+    assert.equal(row.youtubeTitle, 'Building courts together');
+    assert.deepEqual(row.youtubeTags, ['tennis', 'delray']);
+
+    const list = await call(ctx.route, '/api/studio/rough-cuts', SCOPE_A, 'GET');
+    const card = JSON.parse(list.res.body).data.edits.find((e) => e.id === editId);
+    assert.equal(card.youtube.title, 'Building courts together');
+    // The description is still empty, so the card says why.
+    assert.match(card.youtube.missing, /^YouTube text not written yet/);
+
+    const tooLong = await call(ctx.route, `/api/studio/rough-cuts/${editId}/review`, SCOPE_A, 'POST', { youtubeTitle: 'x'.repeat(101) });
+    assert.equal(tooLong.res.statusCode, 400, tooLong.res.body);
+
+    const approved = await call(ctx.route, `/api/studio/rough-cuts/${editId}/review`, SCOPE_A, 'POST', {
+      status: 'approved', youtubeDescription: 'About WaveCenter.',
+    });
+    assert.equal(approved.res.statusCode, 200, approved.res.body);
+    const after = await storedStatus(ctx, editId, SCOPE_A);
+    assert.equal(after.status, 'approved');
+    assert.equal(after.youtubeDescription, 'About WaveCenter.');
   } finally {
     ctx.restore();
   }
