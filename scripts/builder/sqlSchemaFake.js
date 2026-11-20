@@ -1160,9 +1160,12 @@ function createFakeDb(schema, { idPrefix = 'row' } = {}) {
         continue;
       }
 
-      // `col=is.null` — the only way PostgREST matches SQL NULL (eq.null never does).
-      if (value === 'is.null') {
-        rows = rows.filter((row) => row[key] === null || row[key] === undefined);
+      // `col=is.null` / `col=not.is.null` — PostgREST's NULL test, and the only
+      // way it matches SQL NULL (eq.null never does).
+      const isNull = /^(not\.)?is\.null$/.exec(value);
+      if (isNull) {
+        const negate = Boolean(isNull[1]);
+        rows = rows.filter((row) => (row[key] === null || row[key] === undefined) !== negate);
         continue;
       }
 

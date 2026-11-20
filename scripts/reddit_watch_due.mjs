@@ -24,6 +24,12 @@
  * "found nothing", and a pass that read nothing is not a clean pass: the
  * runner records no beat for any of these. A pass that read some subreddits
  * and was then stopped is a clean pass for what it read: exit 0.
+ *
+ * --requested (SC-883, Read now): the Mini's ten-minute check. Reads ONLY the
+ * projects whose Read now is waiting, the same way, and clears each request
+ * when its read finishes. With nothing waiting it prints nothing, starts no
+ * browser and exits 4 — a quiet wake, no beat, no failure post. The same exit
+ * codes otherwise.
  */
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -45,11 +51,29 @@ try {
 
 const { isConfigured } = require(path.join(ROOT, 'lib/supabase.js'));
 const { configureOpenClaw } = require(path.join(ROOT, 'workers/youtube-outreach/poster.js'));
-const { runRedditWatchDue, formatWatchLog } = require(path.join(ROOT, 'lib/acquire/RedditWatchDue.js'));
+const { runRedditWatchDue, runRequestedReads, formatWatchLog } = require(path.join(ROOT, 'lib/acquire/RedditWatchDue.js'));
+const { listReadRequests } = require(path.join(ROOT, 'lib/redditWatchStore.js'));
 
-console.log(`=== reddit-watch ${new Date().toISOString()}`);
+const requestedOnly = process.argv.includes('--requested');
+
 if (!isConfigured()) {
+  console.error(`=== reddit-watch${requestedOnly ? ' --requested' : ''} ${new Date().toISOString()}`);
   console.error('Supabase is not configured here. Run it through Doppler (see the header of this file).');
+  process.exit(1);
+}
+
+// Read now's check asks the database first, and with nothing waiting it stops
+// here: no log line, no OpenClaw, no browser. It runs every ten minutes.
+let waiting = null;
+if (requestedOnly) {
+  waiting = await listReadRequests();
+  if (waiting.ok && !waiting.data.length) process.exit(NOTHING_READ);
+  if (!waiting.ok && waiting.code === 'NOT_SET_UP') process.exit(NOTHING_READ);
+}
+
+console.log(`=== reddit-watch${requestedOnly ? ' --requested' : ''} ${new Date().toISOString()}`);
+if (waiting && !waiting.ok) {
+  console.error(`Could not read which projects asked for Read now: ${waiting.error}`);
   process.exit(1);
 }
 const openclaw = configureOpenClaw(process.env);
@@ -58,12 +82,14 @@ if (!openclaw.ok) {
   process.exit(1);
 }
 
-const run = await runRedditWatchDue();
+const run = requestedOnly
+  ? await runRequestedReads({ listRequests: async () => waiting })
+  : await runRedditWatchDue();
 if (!run.ok) {
   console.error(run.error);
   process.exit(1);
 }
 console.log(formatWatchLog(run.data));
-if (run.data.failed) process.exit(1);
+if (run.data.failed || (run.data.cleared || []).some((c) => !c.ok)) process.exit(1);
 if (run.data.read) process.exit(0);
 process.exit(run.data.stoppedForToday ? STOPPED_FOR_TODAY : NOTHING_READ);
