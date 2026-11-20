@@ -216,6 +216,8 @@ test('switchProviders: the saved order first, switched-off ones marked, Kimi and
   assert.equal(order.source, 'settings');
   assert.deepEqual(order.providers.map((p) => [p.def.id, p.enabled]), [
     ['anthropic', true], ['openai', true], ['custom-groq', true], ['gemini', false], ['kimi', false],
+    // SC-903's five, known to the code and not in the saved order: listed, off.
+    ['deepseek', false], ['openrouter', false], ['xai', false], ['mistral', false], ['groq', false],
   ]);
   const groq = order.providers[2].def;
   assert.equal(groq.baseUrl, 'https://api.groq.com/openai/v1');
@@ -225,7 +227,7 @@ test('switchProviders: the saved order first, switched-off ones marked, Kimi and
 test('switchProviders: with no saved row it follows AI_PROVIDER_ORDER and says why', () => {
   const order = aiKeys.switchProviders({ settings: null, env: { AI_PROVIDER_ORDER: 'kimi,anthropic' }, fallbackReason: 'the row could not be read' });
   assert.equal(order.source, 'AI_PROVIDER_ORDER');
-  assert.deepEqual(order.providers.map((p) => [p.def.id, p.enabled]), [['kimi', true], ['anthropic', true], ['openai', false], ['gemini', false]]);
+  assert.deepEqual(order.providers.map((p) => [p.def.id, p.enabled]), [['kimi', true], ['anthropic', true], ['openai', false], ['gemini', false], ['deepseek', false], ['openrouter', false], ['xai', false], ['mistral', false], ['groq', false]]);
   assert.match(aiKeys.orderSourceText(order), /AI_PROVIDER_ORDER setting, because the row could not be read/);
 });
 

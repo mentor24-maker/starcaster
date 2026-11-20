@@ -47,6 +47,10 @@ const RETIRED = [
   ['claude-sonnet-4-20250514', 'deprecated, past its 2026-06-15 date', 'claude-sonnet-5'],
   ['claude-opus-4-20250514', 'deprecated, past its 2026-06-15 date', 'claude-opus-5'],
   ['claude-opus-4-1-20250805', 'deprecated, retires 2026-08-05', 'claude-opus-5'],
+  // DeepSeek's legacy names, discontinued 2026-07-24 (api-docs.deepseek.com/updates, 2026-04-24 entry).
+  ['deepseek-chat', 'DeepSeek discontinued it 2026-07-24', 'deepseek-flash'],
+  ['deepseek-reasoner', 'DeepSeek discontinued it 2026-07-24', 'deepseek-v4-pro'],
+  ['mistral-medium-latest', 'Mistral Medium 3.5 deprecated 2026-10-31 (docs.mistral.ai/models)', 'mistral-large-latest'],
 ];
 
 const GLOBS = "'lib/*.js' 'lib/**/*.js' 'routes/*.js' 'scripts/*.js' 'scripts/**/*.js' 'api/*.js' 'components/**/*.ts' 'components/**/*.tsx'";

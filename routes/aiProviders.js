@@ -6,6 +6,8 @@
  *   GET /api/settings/ai-providers   the order, switches, models and added services,
  *                                    and which one the door is actually using
  *   PUT /api/settings/ai-providers   save them; answered only after reading them back
+ *   GET /api/settings/ai-providers/models?provider=<id>
+ *                                    the models that provider's key can use, to choose from (SC-903)
  *
  * Owner or admin only: the setting decides which account EVERY AI call bills,
  * the website's and the Mac Mini's. The row lives in
@@ -102,10 +104,56 @@ async function readForScreen() {
   };
 }
 
+/**
+ * The provider a "List models" click names: a built-in one, or a service
+ * added on this screen (read from the saved row). An added service whose key
+ * setting breaks the AI_SERVICE_ rule is refused, exactly as the door refuses
+ * it, so a list request can never send another provider's key to a typed
+ * address. Returns { def } or { status, error }.
+ */
+async function providerForList(id, { ai = require('../lib/aiClient'), readSettings } = {}) {
+  if (ai.AI_PROVIDERS[id]) return { def: ai.AI_PROVIDERS[id] };
+  if (!/^custom-[a-z0-9-]{1,40}$/.test(id)) return { status: 404, error: `"${id}" is not a provider this screen knows` };
+  const read = await (readSettings || require('../lib/aiProviderSettingsStore').readSettings)();
+  if (!read.ok) return { status: 502, error: `could not read the added services (${read.error})` };
+  const c = (read.data.customProviders || []).find((x) => x.id === id);
+  if (!c) return { status: 404, error: `"${id}" is not a saved service; click Save first, then list its models` };
+  if (!ai.CUSTOM_KEY_ENV_RE.test(String(c.keyEnv || ''))) {
+    return { status: 400, error: `"${c.label}"'s key setting ${c.keyEnv} does not start AI_SERVICE_, so it is never sent anywhere` };
+  }
+  return { def: { id: c.id, label: c.label, kind: 'openai-style', settingsKey: '', keyEnv: c.keyEnv, baseUrl: c.baseUrl, models: {}, custom: true } };
+}
+
+/**
+ * GET /api/settings/ai-providers/models?provider=<id>: the models this
+ * provider's key can use, for the screen to offer as choices (SC-903). The
+ * key never leaves the server. A provider that cannot list (no key, key
+ * refused) answers 200 with listed:false and the reason in words, because
+ * that is a reading for the screen to show, not a failure of the request.
+ */
+async function handleModels(req, res) {
+  const { checkEndpointLimit } = require('../lib/rateLimiter');
+  if (checkEndpointLimit(req, res, 'aiProviders.models')) return true;
+  const id = String(new URL(req.url || '/', 'http://local').searchParams.get('provider') || '').trim();
+  if (!id) return sendErr(res, 400, 'Say which provider: ?provider=<id>', { code: 'INVALID_AI_PROVIDER' }), true;
+  const ai = require('../lib/aiClient');
+  const found = await providerForList(id, { ai });
+  if (!found.def) return sendErr(res, found.status, found.error, { code: 'INVALID_AI_PROVIDER' }), true;
+  const listed = await require('../lib/aiModelList').listModels(found.def, { key: ai.providerKeyFor(found.def) });
+  return sendOk(res, 200, listed.ok
+    ? { provider: id, listed: true, models: listed.models, checkedAt: new Date().toISOString() }
+    : { provider: id, listed: false, models: [], verdict: listed.verdict || '', reason: listed.reason }), true;
+}
+
 async function handle(req, res, pathname, method) {
-  if (pathname !== PATH) return false;
+  if (pathname !== PATH && pathname !== `${PATH}/models`) return false;
   if (!isAdmin(req)) {
     return sendErr(res, 403, 'Only an owner or admin can change which AI providers StarCaster uses', { code: 'FORBIDDEN' }), true;
+  }
+
+  if (pathname === `${PATH}/models`) {
+    if (method !== 'GET') return sendErr(res, 405, 'Method not allowed'), true;
+    return handleModels(req, res);
   }
 
   if (method === 'GET') {
@@ -145,4 +193,4 @@ async function handle(req, res, pathname, method) {
   return sendErr(res, 405, 'Method not allowed'), true;
 }
 
-module.exports = { handle, manifest, screenRows, isAdmin };
+module.exports = { handle, manifest, screenRows, isAdmin, providerForList };
