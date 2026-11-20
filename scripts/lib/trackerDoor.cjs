@@ -284,10 +284,18 @@ function parseGet(stdout) {
   let body = lines.slice(cut + 1).join('\n').replace(/\n$/, '');
   if (body === '(no body)') body = '';
   const assignees = [...String(head.assigned || '').matchAll(/\((\d+)\)/g)].map((m) => ({ id: Number(m[1]) }));
+  // TAGS ONLY WHEN THE PRINT HAD A `tags:` LINE (SC-877). `build-start` finds
+  // the ticket's repo from its `repo:` tag, and a ticket with no tags array is
+  // how localWorkReading recognises a ticket that was never really read —
+  // so a print missing the line stays tagless rather than reading as "none".
+  const tags = 'tags' in head
+    ? (head.tags === '(none)' ? [] : head.tags.split(',').map((s) => s.trim()).filter(Boolean).map((name) => ({ name })))
+    : undefined;
   return {
     id: head.id,
     name: head.name || '',
     status: { status: String(head.status || '').toLowerCase() },
+    ...(tags ? { tags } : {}),
     assignees,
     markdown_description: body,
     description: body,
