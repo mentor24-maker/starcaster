@@ -9,6 +9,9 @@ import SubstackConversations, {
   cutBetweenWords,
   emptyFilterText,
   filterConversations,
+  READ_NOTES_PATH,
+  readNowNotice,
+  readRefusal,
   replyLabel,
   replyNotice,
   type Conversation,
@@ -256,5 +259,71 @@ describe('Find conversations as a table (SC-889)', () => {
     expect(cut.length).toBeLessThanOrEqual(40);
     expect(cutBetweenWords('short', 40)).toBe('short');
     expect(cutBetweenWords('x'.repeat(100), 40)).toHaveLength(40);
+  });
+});
+
+describe('Read now (SC-882)', () => {
+  function readNowButton(): HTMLButtonElement {
+    const found = [...container!.querySelectorAll('button')].find((b) => /^(Read now|Reading…)$/.test(b.textContent || ''));
+    if (!found) throw new Error('no Read now button');
+    return found;
+  }
+
+  it('reads the project, says "Reading…" and refuses a second press while it runs, then reloads the list and says what it read', async () => {
+    let finish: (v: unknown) => void = () => {};
+    const api = (window as any).App.api;
+    const base = api.getMockImplementation();
+    let posts = 0;
+    api.mockImplementation(async (path: string, options?: RequestInit) => {
+      if (path === READ_NOTES_PATH) {
+        posts += 1;
+        await new Promise((r) => { finish = r; });
+        return { data: { approved: 3, read: [{ name: 'Ann', notes: 3 }, { name: 'Bo', notes: 2 }], skipped: [], failed: [{ name: 'Cy', reason: 'their Notes answered HTTP 429' }], notReached: [] } };
+      }
+      return base(path, options);
+    });
+    const onChanged = vi.fn();
+    await render({ onChanged });
+    expect(reads).toBe(1);
+    await act(async () => { readNowButton().click(); });
+    expect(readNowButton().textContent).toBe('Reading…');
+    expect(readNowButton().disabled).toBe(true);
+    await act(async () => { readNowButton().click(); });
+    expect(posts).toBe(1);
+    await act(async () => { finish(null); });
+    expect(posts).toBe(1);
+    expect(reads).toBe(2);
+    expect(onChanged).toHaveBeenCalledTimes(1);
+    expect(readNowButton().textContent).toBe('Read now');
+    expect(container!.textContent).toContain('Read 2 writers, 5 Notes. Cy was not read: their Notes answered HTTP 429.');
+  });
+
+  it('a refusal outside the active hours is a calm notice naming the hours, not an error', async () => {
+    const api = (window as any).App.api;
+    const base = api.getMockImplementation();
+    api.mockImplementation(async (path: string, options?: RequestInit) => {
+      if (path === READ_NOTES_PATH) {
+        const err = new Error('Not reading now — the Substack account is active between 8am and 10pm (America/Denver), and the reading runs in the same hours. Run it again then.');
+        (err as any).status = 409;
+        throw err;
+      }
+      return base(path, options);
+    });
+    await render({});
+    await act(async () => { readNowButton().click(); });
+    expect(container!.querySelector('[role="alert"]')).toBeNull();
+    expect(container!.querySelector('[role="status"]')?.textContent).toMatch(/active between 8am and 10pm/);
+  });
+
+  it('any other refusal is an error that says it did not read', () => {
+    const err = new Error('Too many requests');
+    (err as any).status = 429;
+    expect(readRefusal(err)).toEqual({ calm: false, message: 'Not read: Too many requests' });
+  });
+
+  it('the notice counts writers left until next week, so "Read 0 writers" is never unexplained', () => {
+    expect(readNowNotice({ approved: 2, read: [], skipped: [{ name: 'Ann' }, { name: 'Bo' }], failed: [], notReached: [] }))
+      .toBe('Read 0 writers, 0 Notes. 2 writers read in the last 7 days were left until next week.');
+    expect(readNowNotice(null)).toMatch(/did not say what it read/);
   });
 });
