@@ -1813,6 +1813,34 @@ export const RENDER_CONTRACTS = [
     },
   },
   {
+    id: 'button-open-in-new-tab-opens-a-new-tab',
+    why:
+      'A Button had no way to open its link in a new tab, so a button pointing at another website ' +
+      'took the visitor off the client\'s site (SC-907, operator 2026-11-22). A ticked button must ' +
+      'carry target="_blank" WITH rel="noopener noreferrer" (or the opened page can reach back into ' +
+      'the client\'s site); an unticked one and one saved before the setting existed must carry ' +
+      'neither, so no live button changed behaviour.',
+    section: {
+      layout: 'single',
+      modules: [
+        { type: 'button', text: 'Shop', settings: { href: 'https://shop.example.com/', newTab: 'true' } },
+        { type: 'button', text: 'About', settings: { href: '/about', newTab: 'false' } },
+        { type: 'button', text: 'Old', settings: { href: '/old' } },
+      ],
+    },
+    selector: '.builder-preview-button',
+    read: ['display'],
+    series: {
+      count: 1, everyMs: 0, read: ['display'], attrs: ['target', 'rel'],
+      selectors: {
+        ticked: 'a.builder-preview-button[href="https://shop.example.com/"]',
+        unticked: 'a.builder-preview-button[href="/about"]',
+        legacy: 'a.builder-preview-button[href="/old"]',
+      },
+    },
+    expect: expectMenuTargets({ ticked: true, unticked: false, legacy: false }),
+  },
+  {
     id: 'menu-item-linked-to-a-renamed-page-follows-it',
     why:
       'A navigation menu item had only a typed address box, so renaming a page broke the site menu ' +

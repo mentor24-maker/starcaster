@@ -3342,12 +3342,18 @@ function BuilderModulePreviewBody({
     const href = emailPreview
       ? resolveEmailMergeTokensForPreview(module.settings.href || "#")
       : module.settings.href || "#";
+    // "Open in new tab" (SC-907). Only an explicit "true" opens one, so every
+    // button saved before the setting existed keeps opening in the same tab.
+    // An email's button already opens the reader's browser, so it never does.
+    const opensInNewTab = !emailPreview && s.newTab === "true";
 
     return (
       <Link
         className={`builder-preview-button builder-preview-button-styled builder-preview-button-${variant || "default"} builder-preview-button-${s.buttonSize ?? "medium"}`}
         href={href}
         style={btnStyle}
+        target={opensInNewTab ? "_blank" : undefined}
+        rel={opensInNewTab ? "noopener noreferrer" : undefined}
       >
         {module.text || ""}
       </Link>
