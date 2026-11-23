@@ -7,6 +7,7 @@ import RedditSubreddits from './reddit-subreddits';
 import RedditConversations from './reddit-conversations';
 import YoutubeConversations from './youtube-conversations';
 import LearnControls from './learn-controls';
+import TodayView from './today-view';
 import { MiniLimitBanner } from '../settings/mini-ai-limit';
 import { BuilderCollapseIcon } from '../builder/builder-collapse-icon';
 
@@ -65,7 +66,14 @@ export type OutreachStage = {
   next: { label: string; page: string } | null;
   /** The stage is worked on this screen, so it names no other screen (Outreach wizard 15/19). */
   inline?: boolean;
+  /** Write replies: drafts waiting for Approve or Reject (SC-642, the Today view). */
+  waitingCount?: number;
+  /** Find conversations: new ones worth replying to (SC-642, the Today view). */
+  newCount?: number;
 };
+
+/** The tab that shows Today for every channel at once (SC-642). */
+export const ALL_CHANNELS = 'all';
 
 /** The Connect stage's account question (lib/outreachOverview.js accountView). */
 export type OutreachAccount = {
@@ -512,7 +520,8 @@ export default function OutreachWizardPanel(): React.ReactElement {
   useEffect(() => () => { if (pollTimer.current) clearInterval(pollTimer.current); }, []);
 
   const channels = overview?.channels || [];
-  const current = channels.find((c) => c.key === channel) || channels[0] || null;
+  const showAll = channel === ALL_CHANNELS && channels.length > 0;
+  const current = showAll ? null : channels.find((c) => c.key === channel) || channels[0] || null;
   const openIndex = current ? openStageIndex(current.stages) : -1;
 
   const choices: StageChoices = current ? (stageChoices[current.key] ?? readSavedStages(current.key)) : {};
@@ -537,6 +546,15 @@ export default function OutreachWizardPanel(): React.ReactElement {
       {!overview && !error ? <p className="outreach-wizard-muted">{loading ? 'Reading where each channel stands…' : ''}</p> : null}
       {channels.length ? (
         <div className="tab-bar outreach-wizard-tabs" role="tablist" aria-label="Channel">
+          <button
+            type="button"
+            role="tab"
+            className="tab-btn"
+            aria-selected={showAll}
+            onClick={() => pick(ALL_CHANNELS)}
+          >
+            All channels
+          </button>
           {channels.map((c) => (
             <button
               key={c.key}
@@ -551,8 +569,14 @@ export default function OutreachWizardPanel(): React.ReactElement {
           ))}
         </div>
       ) : null}
+      {showAll ? (
+        <section role="tabpanel" aria-label="All channels outreach" className="outreach-wizard-channel" data-channel={ALL_CHANNELS}>
+          <TodayView channels={channels} scopeLabel="All channels" onChanged={() => void load()} />
+        </section>
+      ) : null}
       {current ? (
         <section role="tabpanel" aria-label={`${current.label} outreach`} className="outreach-wizard-channel" data-channel={current.key}>
+          <TodayView channels={[current]} scopeLabel={current.label} onChanged={() => void load()} />
           {openIndex === -1 ? (
             <p className="outreach-wizard-muted">{`Every ${current.label} stage is done.`}</p>
           ) : null}
