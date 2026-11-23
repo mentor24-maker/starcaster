@@ -93,7 +93,7 @@ function find(result, channel, stageKey) {
   return st;
 }
 
-test('every channel has the five stages, in order, each with a known state and one next step', async () => {
+test('every channel has the five stages, in order, each with a known state, and every one worked on this screen', async () => {
   const result = await overview.buildOverview(scope, { deps: fakeDeps(), now: NOW });
   assert.deepEqual(result.channels.map((c) => c.key), ['youtube', 'substack', 'reddit']);
   for (const ch of result.channels) {
@@ -101,10 +101,9 @@ test('every channel has the five stages, in order, each with a known state and o
     for (const st of ch.stages) {
       assert.ok(overview.STATES.includes(st.state), `${ch.key}/${st.key} state ${st.state}`);
       assert.ok(st.sentence && st.sentence.length > 10, `${ch.key}/${st.key} has no sentence`);
-      // A stage worked on this screen says so (Learn's controls are on the wizard
-      // itself, 13/19); every other one names the screen to open.
-      if (st.inline || st.key === 'learn') assert.equal(st.next, null, `${ch.key}/${st.key} is worked here but names a screen ${JSON.stringify(st.next)}`);
-      else assert.ok(st.next && st.next.label && Object.values(overview.PAGES).includes(st.next.page), `${ch.key}/${st.key} next ${JSON.stringify(st.next)}`);
+      // SC-916: no stage's button opens another screen — every one is worked here.
+      assert.equal(st.inline, true, `${ch.key}/${st.key} is not marked as worked on this screen`);
+      assert.equal(st.next, null, `${ch.key}/${st.key} names another screen ${JSON.stringify(st.next)}`);
     }
   }
 });
@@ -118,7 +117,8 @@ test('sentences name what they count', async () => {
   const creators = find(result, 'substack', 'creators');
   assert.equal(creators.state, 'done');
   assert.match(creators.sentence, /17 writers approved, 70 more waiting/);
-  assert.equal(creators.next.page, overview.PAGES.substackMiner);
+  assert.equal(creators.next, null);
+  assert.equal(creators.approvedCount, 17, 'the first-run path reads the approved count');
 
   const conversations = find(result, 'substack', 'conversations');
   assert.equal(conversations.state, 'not_started');
@@ -132,6 +132,7 @@ test('sentences name what they count', async () => {
   const ytReplies = find(result, 'youtube', 'replies');
   assert.equal(ytReplies.state, 'needs_you');
   assert.match(ytReplies.sentence, /1 comment waiting for your approval, 3 comments posted/);
+  assert.equal(ytReplies.approvedCount, 3, 'posted replies count as approved for the first-run path');
 
   const rdReplies = find(result, 'reddit', 'replies');
   assert.equal(rdReplies.state, 'not_started');
@@ -144,7 +145,7 @@ test('a Mini that never checked, or stopped checking, is waiting on the Mini —
   assert.equal(never.state, 'waiting_mini');
   assert.match(never.sentence, /never checked/);
 
-  const stale = overview.connectStage('YouTube', signedIn('Dane of Earth', 8 * 60), { label: 'x', page: overview.PAGES.youtube }, NOW);
+  const stale = overview.connectStage('YouTube', signedIn('Dane of Earth', 8 * 60), { label: 'x', page: 'p' }, NOW);
   assert.equal(stale.state, 'waiting_mini');
   assert.match(stale.sentence, /8 hours ago/);
 
@@ -183,6 +184,7 @@ test('a channel builder that blows up blanks only that channel, every stage "can
   assert.equal(youtube.stages.length, 5);
   assert.ok(youtube.stages.every((s) => s.state === 'cannot_tell'), JSON.stringify(youtube.stages.map((s) => s.state)));
   assert.match(youtube.stages[0].sentence, /The YouTube overview could not be put together/);
+  assert.ok(youtube.stages.every((s) => s.inline && s.next === null), 'a blanked channel still opens no other screen');
   assert.equal(find(result, 'substack', 'creators').state, 'done');
 });
 
@@ -195,6 +197,27 @@ test('replies: anything of his outranks the Mini, and the Mini outranks done', (
   const rejectedOnly = overview.repliesStage({ rejected: 2 }, 2, words, next);
   assert.equal(rejectedOnly.state, 'not_started');
   assert.match(rejectedOnly.sentence, /2 rejected/);
+});
+
+test('Reddit with no canon keeps the waiting and approved counts the Today view and first-run path read (SC-916)', async () => {
+  const deps = fakeDeps({
+    canonStore: { listCanon: async () => ok([]) },
+    redditCommentsStore: { ...fakeDeps().redditCommentsStore, listItems: async () => ok([...rows('draft', 2), ...rows('posted', 1)]) },
+  });
+  const result = await overview.buildOverview(scope, { deps, now: NOW });
+  const replies = find(result, 'reddit', 'replies');
+  assert.equal(replies.state, 'needs_you');
+  assert.match(replies.sentence, /No canon documents/);
+  assert.equal(replies.waitingCount, 2);
+  assert.equal(replies.approvedCount, 1);
+  assert.equal(replies.toWriteCount, 0);
+});
+
+test('replies count the ideas still to be drafted, so Write replies can draft them here (SC-916)', () => {
+  const st = overview.repliesStage({ idea: 2, draft: 1 }, 3, { one: 'Note', many: 'Notes', idea: 'idea', ideas: 'ideas' }, null);
+  assert.equal(st.toWriteCount, 2);
+  assert.equal(st.waitingCount, 1);
+  assert.equal(st.state, 'needs_you');
 });
 
 test('the route answers GET only, needs a project, and is closed to a client site admin', async () => {

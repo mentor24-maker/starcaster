@@ -167,17 +167,16 @@ describe("openStageIndex", () => {
 });
 
 describe("OutreachWizardPanel", () => {
-  it("shows the five stages with their sentences, and exactly one primary button on the open stage", async () => {
+  it("shows the five stages with their sentences, and no stage links to another screen — even when the payload names one (SC-916)", async () => {
     await mount();
     const rows = stages();
     expect(rows.map((r) => r.dataset.stage)).toEqual(["connect", "creators", "conversations", "replies", "learn"]);
     expect(rows[0].textContent).toContain("proj_doe: The browser is SIGNED OUT of YouTube.");
     expect(rows[0].getAttribute("aria-current")).toBe("step");
     expect(rows[0].textContent).toContain("Needs you");
-    const primaries = container!.querySelectorAll(".outreach-wizard-stages .btn-primary");
-    expect(primaries).toHaveLength(1);
-    expect(rows[0].contains(primaries[0])).toBe(true);
-    expect(primaries[0].getAttribute("href")).toBe("#page=engageYoutubeOutreachPage");
+    // The fixture's stages still carry an old-style `next` screen; none is drawn.
+    expect(container!.querySelectorAll('a[href^="#page="]')).toHaveLength(0);
+    expect(container!.querySelectorAll(".outreach-wizard-stage-edit")).toHaveLength(0);
     // Collapsed stages still say where they stand.
     expect(rows[3].textContent).toContain("0 comments.");
   });
@@ -191,7 +190,7 @@ describe("OutreachWizardPanel", () => {
     expect(rows[2].textContent).toContain("could not be read: boom");
     expect(rows[1].textContent).toContain("✓");
     expect(rows[2].textContent).not.toContain("✓");
-    expect(container!.querySelectorAll(".outreach-wizard-stages .btn-primary")).toHaveLength(1);
+    expect(container!.querySelectorAll('a[href^="#page="]')).toHaveLength(0);
   });
 
   it("the channel switch is the shared tab style, never a button (UI rule C9, 86bcyrqbb)", async () => {
@@ -208,25 +207,14 @@ describe("OutreachWizardPanel", () => {
     expect(tab("YouTube").getAttribute("aria-selected")).toBe("false");
   });
 
-  it("the button opens the screen for that step", async () => {
-    await mount();
-    const button = container!.querySelector<HTMLAnchorElement>(".outreach-wizard-stages .btn-primary")!;
-    await act(async () => button.click());
-    expect(setActivePage).toHaveBeenCalledWith("engageYoutubeOutreachPage");
-  });
-
-  it("every stage but the open one has a pencil back to its screen — done stages included (86bcuar8y)", async () => {
+  it("a done stage reopens from its header, with no pencil out to another screen (SC-916)", async () => {
     await mount();
     await act(async () => tab("Substack").click());
-    const rows = stages();
-    const pencil = (row: HTMLLIElement) => row.querySelector<HTMLAnchorElement>(".outreach-wizard-stage-edit");
-    // The open stage (conversations) has its button and no pencil; every other row has one.
-    expect(rows.map((r) => !!pencil(r))).toEqual([true, true, false, true, true]);
-    const done = pencil(rows[1])!;
-    expect(done.getAttribute("href")).toBe("#page=acquireSubstackPage");
-    expect(done.getAttribute("aria-label")).toBe("Go to creators");
-    await act(async () => done.click());
-    expect(setActivePage).toHaveBeenCalledWith("acquireSubstackPage");
+    expect(container!.querySelectorAll(".outreach-wizard-stage-edit")).toHaveLength(0);
+    expect(stages()[1].dataset.expanded).toBe("false");
+    await act(async () => header("creators").click());
+    expect(stages()[1].dataset.expanded).toBe("true");
+    expect(setActivePage).not.toHaveBeenCalled();
   });
 
   it("remembers the last channel per viewer, and survives storage that throws", async () => {
@@ -308,8 +296,8 @@ describe("Connect: the account each channel posts as (Outreach wizard 2/19)", ()
     expect(stages()[0].textContent).toContain("Posting as Exotic-Break-7850.");
     // Once chosen, the button offering the same account goes away.
     expect(Array.from(container!.querySelectorAll("button")).some((b) => b.textContent === "Post as this account")).toBe(false);
-    // Still exactly one primary on the screen.
-    expect(container!.querySelectorAll(".outreach-wizard-stages .btn-primary")).toHaveLength(1);
+    // Nothing on the screen leads to another one.
+    expect(container!.querySelectorAll('a[href^="#page="]')).toHaveLength(0);
   });
 
   it("I'll sign in as someone else takes a different name, and Check now asks the Mini", async () => {
@@ -426,9 +414,9 @@ describe("Stages open and close from their header (SC-886)", () => {
     const body = container!.querySelector<HTMLElement>(`#${controls}`)!;
     expect(body.hidden).toBe(true);
     expect(body.childElementCount).toBe(0);
-    // The open stage's body really is there: its primary button and Connect controls.
+    // The open stage's body really is open.
     expect(header("connect").getAttribute("aria-expanded")).toBe("true");
-    expect(stages()[0].querySelector(".btn-primary")).not.toBeNull();
+    expect(stages()[0].querySelector<HTMLElement>(".outreach-wizard-stage-body")!.hidden).toBe(false);
   });
 
   it("the header is a real button, so Enter and Space work the same as a click", async () => {
@@ -441,7 +429,7 @@ describe("Stages open and close from their header (SC-886)", () => {
     expect(b.getAttribute("type")).toBe("button");
     await act(async () => b.click());
     expect(expanded()[0]).toBe(false);
-    expect(container!.querySelector(".outreach-wizard-stages .btn-primary")).toBeNull();
+    expect(stages()[0].querySelector<HTMLElement>(".outreach-wizard-stage-body")!.hidden).toBe(true);
     await act(async () => b.click());
     expect(expanded()[0]).toBe(true);
   });
@@ -522,5 +510,167 @@ describe("Stages open and close from their header (SC-886)", () => {
     await act(async () => header("conversations").click());
     await act(async () => {});
     expect(reads.length).toBeGreaterThan(0);
+  });
+});
+
+describe("Write replies is worked on this screen (SC-916)", () => {
+  function withReplies(patch: (o: OutreachOverview) => void, extra: (path: string, options?: RequestInit) => any) {
+    const api = (window as any).App.api;
+    (window as any).App.api = async (path: string, options?: RequestInit) => {
+      if (path === "/api/outreach/overview") {
+        const o = overviewFor(activeProject);
+        patch(o);
+        return { ok: true, data: o };
+      }
+      const hit = await extra(path, options);
+      if (hit !== undefined) return hit;
+      return api(path, options);
+    };
+  }
+
+  it("Work through the waiting replies starts the Today walk-through, here", async () => {
+    const reads: string[] = [];
+    withReplies((o) => {
+      o.channels[0].stages[3] = { ...o.channels[0].stages[3], state: "needs_you", sentence: "2 comments waiting.", waitingCount: 2, next: null, inline: true };
+    }, (path) => {
+      if (path === "/api/youtube-outreach/comments?status=draft") {
+        reads.push(path);
+        return { ok: true, data: [{ id: "c1", status: "draft", draftText: "Nice point.", videoTitle: "A video", createdAt: "2026-11-01" }] };
+      }
+      return undefined;
+    });
+    await mount();
+    await act(async () => header("replies").click());
+    const button = Array.from(container!.querySelectorAll<HTMLButtonElement>('[data-stage="replies"] button')).find((b) => b.textContent === "Work through 2 waiting replies");
+    expect(button).toBeTruthy();
+    expect(button!.className).toContain("btn-primary");
+    await act(async () => button!.click());
+    await act(async () => {});
+    expect(reads).toEqual(["/api/youtube-outreach/comments?status=draft"]);
+    expect(container!.querySelector('[data-today-reply="youtube:c1"]')).not.toBeNull();
+    expect(setActivePage).not.toHaveBeenCalled();
+  });
+
+  it("Write drafts drafts each idea through the channel's own endpoint, and says how it went", async () => {
+    withReplies((o) => {
+      o.channels[2].stages[3] = { ...o.channels[2].stages[3], state: "needs_you", sentence: "2 posts waiting to be written.", waitingCount: 0, toWriteCount: 2, next: null, inline: true } as OutreachStage;
+    }, (path) => {
+      if (path === "/api/engage/reddit-comments/items") {
+        return { ok: true, data: [{ id: "i1", status: "idea" }, { id: "i2", status: "idea" }, { id: "d1", status: "draft" }] };
+      }
+      if (path === "/api/engage/reddit-comments/items/i2/draft") throw new Error("The post is still being read");
+      return undefined;
+    });
+    await mount();
+    await act(async () => tab("Reddit").click());
+    await act(async () => header("replies").click());
+    const button = Array.from(container!.querySelectorAll<HTMLButtonElement>('[data-stage="replies"] button')).find((b) => b.textContent === "Write 2 drafts")!;
+    await act(async () => button.click());
+    await act(async () => {});
+    expect(posts.map((p) => p.path)).toEqual(["/api/engage/reddit-comments/items/i1/draft"]);
+    const text = container!.querySelector('[data-replies="reddit"]')!.textContent;
+    expect(text).toContain("1 draft written, 1 not.");
+    expect(text).toContain("One was not drafted: The post is still being read");
+  });
+
+  it("with nothing waiting, says where replies come from", async () => {
+    await mount();
+    await act(async () => header("replies").click());
+    expect(container!.querySelector('[data-replies="youtube"]')!.textContent).toContain("Replies are written from Find conversations");
+  });
+});
+
+describe("Substack's Find creators is worked on this screen (SC-916)", () => {
+  it("lists the Miner's writers in the stage instead of linking to the Miner", async () => {
+    const api = (window as any).App.api;
+    (window as any).App.api = async (path: string, options?: RequestInit) => {
+      if (path === "/api/outreach/overview") {
+        const o = overviewFor(activeProject);
+        o.channels[1].stages = o.channels[1].stages.map((x) => ({ ...x, next: null, inline: true }));
+        return { ok: true, data: o };
+      }
+      if (path === "/api/acquire/substack-miner/candidates?limit=1000") {
+        return { ok: true, data: [{ id: "w1", handle: "ana", name: "Ana Writes", status: "candidate", keywordsHit: ["tennis"], publicationUrl: "https://ana.substack.com" }] };
+      }
+      if (path === "/api/outreach/keywords") return { ok: true, data: { keywords: ["tennis"], source: "saved" } };
+      return api(path, options);
+    };
+    await mount();
+    await act(async () => tab("Substack").click());
+    await act(async () => header("creators").click());
+    await act(async () => {});
+    const stage = container!.querySelector('[data-stage="creators"]')!;
+    expect(stage.querySelector("[data-substack-writers]")).not.toBeNull();
+    expect(stage.querySelector('[data-writer-id="w1"]')).not.toBeNull();
+    expect(stage.querySelector('a[href^="#page="]')).toBeNull();
+  });
+});
+
+describe("Getting started on a new channel (SC-916)", () => {
+  it("shows only while the channel has counted zero approved replies, and Go to opens the stage", async () => {
+    let approved: number | undefined = 0;
+    const api = (window as any).App.api;
+    (window as any).App.api = async (path: string, options?: RequestInit) => {
+      if (path === "/api/outreach/overview") {
+        const o = overviewFor(activeProject);
+        o.channels[0].stages[3] = { ...o.channels[0].stages[3], approvedCount: approved } as OutreachStage;
+        return { ok: true, data: o };
+      }
+      if (path === "/api/outreach/keywords" && options?.method === "PUT") {
+        const body = JSON.parse(String(options.body));
+        puts.push(body);
+        return { ok: true, data: { keywords: body.keywords, source: "saved" } };
+      }
+      if (path === "/api/outreach/keywords") return { ok: true, data: { keywords: ["tennis"], source: "substack_miner" } };
+      return api(path, options);
+    };
+    const puts: any[] = [];
+    await mount();
+    const path = container!.querySelector('[data-first-run="youtube"]')!;
+    expect(path).not.toBeNull();
+    // YouTube has no account read in this fixture, so its first two steps cannot be told.
+    expect(path.querySelector('[data-step="connect"]')!.getAttribute("data-state")).toBe("cannot_tell");
+    expect(path.querySelector('[data-step="keywords"]')!.getAttribute("data-state")).toBe("now");
+    expect(path.querySelector('[data-step="keywords"]')!.textContent).toContain("Started from the Substack Miner's keywords");
+    expect(path.querySelector<HTMLInputElement>("#first-run-keywords-youtube")!.value).toBe("tennis");
+    await act(async () => path.querySelector<HTMLFormElement>('[data-step="keywords"] form')!.requestSubmit());
+    await act(async () => {});
+    expect(puts).toEqual([{ keywords: ["tennis"] }]);
+    expect(path.textContent).toContain("Keywords saved.");
+    expect(path.querySelector('[data-step="keywords"]')!.getAttribute("data-state")).toBe("done");
+    expect(path.querySelector('[data-step="creators"]')!.getAttribute("data-state")).toBe("cannot_tell");
+    // A reply count that could not be read is not "new": the path goes away.
+    approved = undefined;
+    act(() => root!.unmount());
+    container!.remove();
+    await mount();
+    expect(container!.querySelector("[data-first-run]")).toBeNull();
+  });
+
+  it("Go to opens the stage that does the step", async () => {
+    const api = (window as any).App.api;
+    (window as any).App.api = async (path: string, options?: RequestInit) => {
+      if (path === "/api/outreach/overview") {
+        const o = overviewFor(activeProject);
+        o.channels[2].stages[1] = { ...o.channels[2].stages[1], approvedCount: 0 } as OutreachStage;
+        o.channels[2].stages[3] = { ...o.channels[2].stages[3], approvedCount: 0 } as OutreachStage;
+        return { ok: true, data: o };
+      }
+      if (path === "/api/outreach/keywords") return { ok: true, data: { keywords: ["tennis"], source: "saved" } };
+      if (path.startsWith("/api/outreach/reddit/subreddits")) return { ok: true, data: { subreddits: [] } };
+      return api(path, options);
+    };
+    await mount();
+    await act(async () => tab("Reddit").click());
+    await act(async () => {});
+    const path = container!.querySelector('[data-first-run="reddit"]')!;
+    // Reddit: the Mini sees an account, none chosen yet — that is the step now.
+    expect(path.querySelector('[data-step="connect"]')!.getAttribute("data-state")).toBe("done");
+    expect(path.querySelector('[data-step="account"]')!.getAttribute("data-state")).toBe("now");
+    expect(path.querySelector('[data-step="account"] [data-step-next]')!.textContent).toContain("Saved at once");
+    await act(async () => header("connect").click());
+    expect(stages()[0].dataset.expanded).toBe("false");
+    await act(async () => path.querySelector<HTMLButtonElement>('[data-show-stage="connect"]')!.click());
+    expect(stages()[0].dataset.expanded).toBe("true");
   });
 });

@@ -199,13 +199,19 @@ const PROJECT_SWITCH_EVENT = 'projectContext:session-changed';
 
 type Tally = { approved: number; rejected: number; skipped: number };
 
-export default function TodayView({ channels, scopeLabel, onChanged }: {
+export default function TodayView({ channels, scopeLabel, onChanged, startSignal = 0 }: {
   /** The channels this view covers: one, or all three for "All channels". */
   channels: OutreachChannel[];
   /** "All channels", or the one channel's name. */
   scopeLabel: string;
   /** Re-read the overview after a decision. */
   onChanged: () => void;
+  /**
+   * Bumped by the Write replies stage's button (SC-916): each new value starts
+   * the walk-through here, as Start does, and brings this view into sight —
+   * so that stage's work happens on this screen instead of on another one.
+   */
+  startSignal?: number;
 }): React.ReactElement {
   const [queue, setQueue] = useState<WaitingReply[] | null>(null);
   const [at, setAt] = useState(0);
@@ -219,6 +225,7 @@ export default function TodayView({ channels, scopeLabel, onChanged }: {
   const [tally, setTally] = useState<Tally>({ approved: 0, rejected: 0, skipped: 0 });
   const epoch = useRef(0);
   const boxRef = useRef<HTMLTextAreaElement | null>(null);
+  const hostRef = useRef<HTMLElement | null>(null);
 
   const counts = channels.map(countsFor);
   const line = todayLine(counts);
@@ -273,6 +280,19 @@ export default function TodayView({ channels, scopeLabel, onChanged }: {
     setAt(0);
     setBusy('');
   };
+
+  // The Write replies stage asked to start: walk from here (SC-916).
+  // Only a CHANGE starts it: a view that mounts with a value already set (a
+  // channel tab opened after the button was used on another) does not.
+  const startRef = useRef(start);
+  startRef.current = start;
+  const seenSignal = useRef(startSignal);
+  useEffect(() => {
+    if (startSignal === seenSignal.current) return;
+    seenSignal.current = startSignal;
+    hostRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+    void startRef.current();
+  }, [startSignal]);
 
   const pick = (n: number) => {
     const choice = choices[n - 1];
@@ -356,7 +376,7 @@ export default function TodayView({ channels, scopeLabel, onChanged }: {
   const dropped = current ? droppedLine(current.options) : '';
 
   return (
-    <section className="outreach-today" aria-label={`Today: ${scopeLabel}`} data-today={channelKeys}>
+    <section ref={hostRef} className="outreach-today" aria-label={`Today: ${scopeLabel}`} data-today={channelKeys}>
       <div className="outreach-today-head">
         <h3 className="outreach-today-title">Today</h3>
         <p className="outreach-today-line" data-today-line>{line}</p>
