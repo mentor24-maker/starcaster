@@ -244,3 +244,45 @@ describe("Start walks through the waiting replies", () => {
     expect(container!.textContent).toContain("No replies are waiting for you on YouTube");
   });
 });
+
+describe("Write replies' button while a walk is under way (SC-916 send-back)", () => {
+  async function mountWithSignal(signal: number) {
+    await act(async () => {
+      root!.render(<TodayView channels={ALL()} scopeLabel="All channels" onChanged={() => { changed += 1; }} startSignal={signal} />);
+    });
+  }
+
+  it("a second press does not restart the walk or throw away an edited wording", async () => {
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+    await mountWithSignal(0);
+    await mountWithSignal(1); // first press: the walk starts
+    expect(card()!.dataset.todayReply).toBe("reddit:rd1");
+    await press("ArrowRight");
+    expect(card()!.dataset.todayReply).toBe("youtube:yt1");
+    await press("1");
+    const box = container!.querySelector<HTMLTextAreaElement>("#outreach-today-box")!;
+    await act(async () => {
+      const set = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!;
+      set.call(box, "my own edit");
+      box.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await mountWithSignal(2); // second press, mid-walk
+    expect(card()!.dataset.todayReply).toBe("youtube:yt1");
+    expect(container!.querySelector<HTMLTextAreaElement>("#outreach-today-box")!.value).toBe("my own edit");
+    expect(container!.textContent).not.toContain("That was the last one");
+  });
+
+  it("once the walk is over, a press starts a new one", async () => {
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+    await mountWithSignal(0);
+    await mountWithSignal(1);
+    for (let i = 0; i < 3; i += 1) await press("ArrowRight");
+    expect(card()).toBeNull();
+    await mountWithSignal(2);
+    expect(card()!.dataset.todayReply).toBe("reddit:rd1");
+  });
+});

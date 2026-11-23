@@ -1071,3 +1071,147 @@ p.reddit-sub-rule {
     padding: var(--space-3) var(--space-4);
   }
 }
+
+/* ── Getting started on a new channel (SC-916) ──────────────────────────
+   components/outreach-wizard/first-run-path.tsx. The Today card's frame, so
+   the two cards at the top of a channel read as one family. */
+
+.outreach-first-run {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  margin-bottom: var(--space-5);
+  padding: var(--space-4) var(--space-5);
+  border: 1px solid var(--border-light);
+  border-radius: 10px;
+}
+
+.outreach-first-run-title {
+  margin: 0;
+  font-size: var(--text-lg);
+}
+
+.outreach-first-run-steps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+  padding-left: var(--space-5);
+}
+
+.outreach-first-run-step {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.outreach-first-run-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-3);
+}
+
+/* A step already done, or not yet reached, recedes; the one to do now does not. */
+.outreach-first-run-step--done,
+.outreach-first-run-step--later {
+  opacity: 0.7;
+}
+
+.outreach-first-run-step--now .outreach-first-run-head strong {
+  color: var(--accent);
+}
+
+/* ── Substack's writers on the Outreach screen (SC-916) ─────────────────
+   components/outreach-wizard/substack-writers.tsx. Fixed columns that wrap
+   their content, for the YouTube creator table's reason (SC-887): no name
+   or description can widen the table past its card. */
+
+.substack-writers {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.substack-writers-links {
+  min-height: 3.5rem;
+}
+
+.substack-writers-table {
+  table-layout: fixed;
+  width: 100%;
+  min-width: 44rem;
+}
+
+.substack-writers-col-subs { width: 14%; }
+.substack-writers-col-keywords { width: 16%; }
+.substack-writers-col-status { width: 16%; }
+/* Three 36px icons, two 4px gaps, and the cell's own padding. */
+.substack-writers-col-actions { width: 9.5rem; }
+
+.substack-writers-table td {
+  overflow-wrap: anywhere;
+}
+
+.substack-writers-table .table-actions-row {
+  gap: 4px;
+}
+
+.substack-writer-description {
+  display: block;
+  font-size: var(--text-sm);
+  opacity: 0.8;
+}
+
+.outreach-wizard-replies {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+/* Write replies' restacks/likes and decided replies (SC-916 send-back). */
+.outreach-wizard-wordless {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.outreach-wizard-reply-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.outreach-wizard-reply-item {
+  border: 1px solid var(--border-light);
+  border-radius: 6px;
+  padding: var(--space-2) var(--space-3);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.outreach-wizard-reply-head,
+.outreach-wizard-reply-text {
+  margin: 0 0 var(--space-1);
+}
+
+.outreach-wizard-reply-text {
+  white-space: pre-wrap;
+}
+
+@media (max-width: 600px) {
+  .outreach-first-run {
+    padding: var(--space-3) var(--space-4);
+  }
+
+  .outreach-first-run-steps {
+    padding-left: var(--space-4);
+  }
+}

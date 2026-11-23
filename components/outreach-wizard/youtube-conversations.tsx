@@ -11,7 +11,8 @@ import { RowIcon, SortHeader, filterRows, sortRows, type SortState, type SortVal
  *
  * Per comment: **Write replies** puts the video on the YouTube outreach list
  * with this comment's id filled in — no more typing ids by hand — writes its
- * three options and opens the YouTube outreach screen where the chooser is;
+ * three options and brings Write replies below into view, where the chooser is
+ * (SC-916: it no longer leaves the Outreach screen);
  * **Skip** asks why with the shared reason picker and takes it off the list;
  * **Save as contact** adds the commenter to Contacts. Per video: **Comment on
  * the video** does the same as Write replies for a top-level comment.
@@ -37,7 +38,6 @@ import { RowIcon, SortHeader, filterRows, sortRows, type SortState, type SortVal
  */
 
 export const YT_CONVERSATIONS_PATH = '/api/outreach/youtube/conversations';
-const YOUTUBE_PAGE = 'engageYoutubeOutreachPage';
 
 export type YtComment = {
   commentId: string;
@@ -78,7 +78,7 @@ export type YtConversationsReply = {
 };
 
 type ApiFn = (path: string, options?: RequestInit) => Promise<Record<string, any>>;
-type AppShape = { api?: ApiFn; setActivePage?: (pageId: string) => void };
+type AppShape = { api?: ApiFn };
 
 function getApp(): AppShape | null {
   return (window as unknown as { App?: AppShape }).App || null;
@@ -102,8 +102,8 @@ export function replyLabel(replyStatus: string, forVideo = false): string {
 
 /** What to say once a reply call answers; `drafted: false` means nothing new was written. */
 export function replyNotice(who: string, reply: Record<string, any> | null | undefined): string {
-  if (reply?.data?.drafted === false) return `Already drafted — open the reply ${who} on the YouTube outreach screen.`;
-  return `Three replies written ${who} — choose one on the YouTube outreach screen.`;
+  if (reply?.data?.drafted === false) return `Already drafted — the reply ${who} is waiting in Write replies below.`;
+  return `Three replies written ${who} — choose one in Write replies below.`;
 }
 
 export type ReadNowReport = {
@@ -264,13 +264,15 @@ export function emptyConversationsText(f: ConversationFilters, videos: YtVideo[]
 type Props = {
   /** Something on the list changed: re-read the stage sentence above it. */
   onChanged?: () => void;
+  /** A reply was written (or found already drafted): show Write replies, on this screen. */
+  onDrafted?: () => void;
   /** The overview's time; a new one re-reads the list in place. */
   version?: string;
 };
 
 type Busy = { key: string; action: string } | null;
 
-export default function YoutubeConversations({ onChanged, version }: Props = {}): React.ReactElement {
+export default function YoutubeConversations({ onChanged, onDrafted, version }: Props = {}): React.ReactElement {
   const [data, setData] = useState<YtConversationsReply | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -338,9 +340,8 @@ export default function YoutubeConversations({ onChanged, version }: Props = {})
     try {
       const reply = await post(verb, body);
       setNotice(replyNotice(who, reply));
-      const app = getApp();
-      if (typeof app?.setActivePage === 'function') app.setActivePage(YOUTUBE_PAGE);
       onChanged?.();
+      onDrafted?.();
     } catch (err) {
       setRowError({ key, message: `No replies written: ${errorText(err, 'unknown error')}` });
     } finally {

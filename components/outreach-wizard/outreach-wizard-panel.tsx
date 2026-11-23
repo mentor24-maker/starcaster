@@ -8,6 +8,9 @@ import RedditConversations from './reddit-conversations';
 import YoutubeConversations from './youtube-conversations';
 import LearnControls from './learn-controls';
 import TodayView from './today-view';
+import SubstackWriters from './substack-writers';
+import FirstRunPath, { isFirstRun } from './first-run-path';
+import RepliesControls from './replies-controls';
 import { MiniLimitBanner } from '../settings/mini-ai-limit';
 import { BuilderCollapseIcon } from '../builder/builder-collapse-icon';
 
@@ -23,25 +26,27 @@ export { PROJECT_SWITCH_EVENT };
  * (routes/outreach.js over lib/outreachOverview.js), which reads the existing
  * outreach stores and changes nothing.
  *
- * It REPORTS and ROUTES, with one exception: the Connect stage is where Dane
- * chooses the account each channel posts as, asks the Mini to check its
- * sign-in now, and (Reddit) sets the pace — Outreach wizard 2/19, task
- * 86bcrmba0, over POST /api/outreach/accounts/:site/*. Nothing posts on a
- * channel until its account is chosen. Its Connect button opens the Mini's
- * browser inside this screen so Dane can sign in there (Outreach wizard 6/19,
- * task 86bcrmbfb, ./sign-in-window.tsx). Every other stage's one button opens
- * the existing screen for that step (slice 19 brings the work inside), except
- * Substack's Find conversations, which lists the ranked Notes right here
- * (Outreach wizard 14/19, ./substack-conversations.tsx), Learn, whose
- * lessons are read and changed right here (Outreach wizard 13/19, task
- * 86bcrmbpm, ./learn-controls.tsx), and YouTube's Find creators, whose
- * channel list is worked right here (Outreach wizard 15/19, task 86bcrmbrf,
- * ./youtube-creators.tsx), YouTube's Find conversations, whose ranked
- * comments are worked right here (Outreach wizard 16/19, task 86bcrmbtn,
- * ./youtube-conversations.tsx), and Reddit's Find creators (the subreddits the
- * Mini watches) and Find conversations (the ranked posts it found) —
- * Outreach wizard 18/19, task 86bcrmbwm, ./reddit-subreddits.tsx and
- * ./reddit-conversations.tsx. The first stage that is not done is open and
+ * EVERY STAGE IS WORKED ON THIS SCREEN; no stage's button opens another one
+ * (Outreach wizard 19/19 slice C, task SC-916):
+ *   Connect         choose the account each channel posts as, ask the Mini to
+ *                   check its sign-in, (Reddit) set the pace — 2/19, over
+ *                   POST /api/outreach/accounts/:site/* — and sign the Mini's
+ *                   browser in through ./sign-in-window.tsx (6/19). Nothing
+ *                   posts on a channel until its account is chosen.
+ *   Find creators   YouTube ./youtube-creators.tsx (15/19), Reddit
+ *                   ./reddit-subreddits.tsx (18/19), Substack
+ *                   ./substack-writers.tsx (SC-916, the Miner's own endpoints).
+ *   Find conversations  ./youtube-conversations.tsx (16/19),
+ *                   ./substack-conversations.tsx (14/19),
+ *                   ./reddit-conversations.tsx (18/19).
+ *   Write replies   ./replies-controls.tsx: drafts the ideas waiting to be
+ *                   written, walks the waiting replies in the Today view
+ *                   (./today-view.tsx, SC-642), decides Substack's restacks
+ *                   and likes, and lists the replies already decided.
+ *   Learn           ./learn-controls.tsx (13/19).
+ * A channel with no reply approved yet also gets ./first-run-path.tsx, the
+ * five steps from Connect to its first approved reply (SC-916). The first
+ * stage that is not done is open and
  * highlighted, and starts expanded; every stage opens and closes from its
  * header, and Dane's choice is remembered per channel (task SC-886).
  *
@@ -70,6 +75,10 @@ export type OutreachStage = {
   waitingCount?: number;
   /** Find conversations: new ones worth replying to (SC-642, the Today view). */
   newCount?: number;
+  /** Write replies: ideas Write drafts can draft on this screen (SC-916). */
+  toWriteCount?: number;
+  /** Write replies: why ideas waiting cannot be drafted right now (SC-916 — Reddit with no canon). */
+  writeBlocked?: string;
 };
 
 /** The tab that shows Today for every channel at once (SC-642). */
@@ -167,7 +176,6 @@ export function saveChannel(key: string): void {
 
 type AppShape = {
   api?: (path: string, options?: RequestInit) => Promise<Record<string, any>>;
-  setActivePage?: (pageId: string) => void;
 };
 
 function getApp(): AppShape | null {
@@ -176,15 +184,6 @@ function getApp(): AppShape | null {
 
 function errorText(err: unknown, fallback: string): string {
   return err instanceof Error && err.message ? err.message : fallback;
-}
-
-/** Open another admin screen. The link's href is the same place, for a new tab. */
-export function openPage(event: React.MouseEvent, page: string): void {
-  const app = getApp();
-  if (typeof app?.setActivePage !== 'function') return; // fall through to the href
-  if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return;
-  event.preventDefault();
-  app.setActivePage(page);
 }
 
 function clockText(iso: string): string {
@@ -354,26 +353,16 @@ export function ConnectControls({ channel, onChanged, onCheckAsked }: {
   );
 }
 
-function EditIcon(): React.ReactElement {
-  // App.ACTION_ICONS.edit (public/js/core.js).
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M12 20h9" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-      <path d="M16.5 3.5a2.1 2.1 0 1 1 3 3L7 19l-4 1 1-4 12.5-12.5Z" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
 /**
  * One stage. Its header (number, name, state word) is a button that opens and
  * closes it (task SC-886); a closed stage keeps its one-line sentence, so
  * where it stands is readable without opening it, and does not mount its body
  * at all — a closed Find conversations makes no request.
  *
- * Every stage but the open one also has a pencil at the right edge that opens
- * the same screen its button would. Without it a stage that is already done —
- * approved and rejected replies included — had no way back from here (task
- * 86bcuar8y).
+ * A done stage is reopened from its header, so it needs no way out to another
+ * screen: the pencil that used to lead back to one (task 86bcuar8y) went with
+ * the other screens (SC-916). What the pencil reached — replies already
+ * approved or rejected — is Write replies' "Show decided replies".
  */
 function StageRow({ stage, index, open, expanded, onToggle, channelKey, children }: {
   stage: OutreachStage;
@@ -408,33 +397,10 @@ function StageRow({ stage, index, open, expanded, onToggle, channelKey, children
             <span className="outreach-wizard-stage-state">{STATE_WORDS[stage.state] || stage.state}</span>
           </span>
         </button>
-        {!open && stage.next ? (
-          <a
-            className="btn tiny-btn icon-btn outreach-wizard-stage-edit"
-            href={`#page=${stage.next.page}`}
-            title={stage.next.label}
-            aria-label={stage.next.label}
-            data-stage-edit={stage.key}
-            onClick={(e) => openPage(e, stage.next!.page)}
-          >
-            <span className="icon-btn-glyph"><EditIcon /></span>
-          </a>
-        ) : null}
       </div>
       <p className="outreach-wizard-stage-sentence">{stage.sentence}</p>
       <div id={contentId} className="outreach-wizard-stage-body" hidden={!expanded}>
-        {expanded ? (
-          <>
-            {children}
-            {open && stage.next ? (
-              <div className="outreach-wizard-stage-actions">
-                <a className="btn btn-primary" href={`#page=${stage.next.page}`} onClick={(e) => openPage(e, stage.next!.page)}>
-                  {stage.next.label}
-                </a>
-              </div>
-            ) : null}
-          </>
-        ) : null}
+        {expanded ? children : null}
       </div>
     </li>
   );
@@ -450,6 +416,8 @@ export default function OutreachWizardPanel(): React.ReactElement {
   const pollTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   // Dane's open/close choices, per channel, once read or changed this visit.
   const [stageChoices, setStageChoices] = useState<Record<string, StageChoices>>({});
+  // Bumped by Write replies' button: starts the Today walk-through (SC-916).
+  const [walkSignal, setWalkSignal] = useState(0);
 
   const load = useCallback(async () => {
     const api = getApp()?.api;
@@ -533,6 +501,17 @@ export default function OutreachWizardPanel(): React.ReactElement {
     saveStages(current.key, next);
   };
 
+  // The first-run path's "Go to" button: open that stage and bring it into sight.
+  const showStage = (key: string) => {
+    if (!current) return;
+    const next = { ...choices, [key]: true };
+    setStageChoices((all) => ({ ...all, [current.key]: next }));
+    saveStages(current.key, next);
+    setTimeout(() => {
+      hostRef.current?.querySelector(`[data-stage="${key}"]`)?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+    }, 0);
+  };
+
   const pick = (key: string) => {
     setChannel(key);
     saveChannel(key);
@@ -576,7 +555,10 @@ export default function OutreachWizardPanel(): React.ReactElement {
       ) : null}
       {current ? (
         <section role="tabpanel" aria-label={`${current.label} outreach`} className="outreach-wizard-channel" data-channel={current.key}>
-          <TodayView channels={[current]} scopeLabel={current.label} onChanged={() => void load()} />
+          {isFirstRun(current) ? (
+            <FirstRunPath key={current.key} channel={current} onShowStage={showStage} onChanged={() => void load()} />
+          ) : null}
+          <TodayView channels={[current]} scopeLabel={current.label} onChanged={() => void load()} startSignal={walkSignal} />
           {openIndex === -1 ? (
             <p className="outreach-wizard-muted">{`Every ${current.label} stage is done.`}</p>
           ) : null}
@@ -594,23 +576,36 @@ export default function OutreachWizardPanel(): React.ReactElement {
                 {s.key === 'connect' ? (
                   <ConnectControls key={current.key} channel={current} onChanged={() => void load()} onCheckAsked={startCheckPoll} />
                 ) : null}
-                {s.key === 'creators' && current.key === 'youtube' && s.inline ? (
+                {s.key === 'creators' && current.key === 'youtube' ? (
                   <YoutubeCreators onChanged={() => void load()} />
+                ) : null}
+                {/* SC-916: Substack's writers, approved here rather than on the Miner. */}
+                {s.key === 'creators' && current.key === 'substack' ? (
+                  <SubstackWriters onChanged={() => void load()} />
                 ) : null}
                 {/* Outreach wizard 14/19: Substack's Notes worth replying to, ranked. */}
                 {s.key === 'conversations' && current.key === 'substack' && s.state !== 'not_started' ? (
-                  <SubstackConversations version={overview?.generatedAt} onChanged={() => void load()} />
+                  <SubstackConversations version={overview?.generatedAt} onChanged={() => void load()} onDrafted={() => showStage('replies')} />
                 ) : null}
                 {/* Outreach wizard 18/19: Reddit's watched subreddits and the posts found in them. */}
-                {s.key === 'creators' && current.key === 'reddit' && s.inline ? (
+                {s.key === 'creators' && current.key === 'reddit' ? (
                   <RedditSubreddits onChanged={() => void load()} />
                 ) : null}
-                {s.key === 'conversations' && current.key === 'reddit' && s.inline && s.state !== 'not_started' ? (
-                  <RedditConversations version={overview?.generatedAt} onChanged={() => void load()} />
+                {s.key === 'conversations' && current.key === 'reddit' && s.state !== 'not_started' ? (
+                  <RedditConversations version={overview?.generatedAt} onChanged={() => void load()} onDrafted={() => showStage('replies')} />
                 ) : null}
                 {/* Outreach wizard 16/19: comments on approved channels' newest videos, ranked. */}
-                {s.key === 'conversations' && current.key === 'youtube' && s.inline && s.state !== 'not_started' ? (
-                  <YoutubeConversations version={overview?.generatedAt} onChanged={() => void load()} />
+                {s.key === 'conversations' && current.key === 'youtube' && s.state !== 'not_started' ? (
+                  <YoutubeConversations version={overview?.generatedAt} onChanged={() => void load()} onDrafted={() => showStage('replies')} />
+                ) : null}
+                {s.key === 'replies' ? (
+                  <RepliesControls
+                    key={current.key}
+                    channel={current}
+                    stage={s}
+                    onWalk={() => setWalkSignal((n) => n + 1)}
+                    onChanged={() => void load()}
+                  />
                 ) : null}
                 {s.key === 'learn' && s.state !== 'cannot_tell' ? (
                   <LearnControls key={current.key} channel={current.key} label={current.label} onChanged={() => void load()} />

@@ -34,6 +34,8 @@
  *                                                with the reason picker's reason
  *   GET  /api/outreach/youtube/creators          the YouTube channels found, and
  *                                                the wizard's keyword list
+ *   GET  /api/outreach/keywords                  the wizard's shared keyword list
+ *                                                (saved, else the Substack Miner's)
  *   PUT  /api/outreach/keywords                  { keywords: [] } — the wizard's
  *                                                shared keyword list
  *   POST /api/outreach/youtube/creators/find     search YouTube for channels on
@@ -157,6 +159,8 @@ async function readBody(req, res) {
 async function handleCreators(req, res, pathname, method, creators) {
   const base = `${PREFIX}/youtube/creators`;
   if (pathname === `${PREFIX}/keywords`) {
+    // GET: the list the first-run path starts from (SC-916) — saved, else the Miner's.
+    if (method === 'GET') return reply(res, await creators.store().getKeywords(requestScope(req))), true;
     if (method !== 'PUT') return sendErr(res, 405, 'Method not allowed'), true;
     const body = await readBody(req, res);
     if (!body) return true;
