@@ -4070,6 +4070,7 @@ export function createEmptyModule(
       : type === "button"
         ? {
             href: "",
+            newTab: "false",
             buttonColor: "#214c71",
             buttonHoverColor: "#0f4f8f",
             textColor: "#ffffff",
