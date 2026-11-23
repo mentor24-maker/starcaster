@@ -52,6 +52,10 @@ export type RoughCut = {
   recutProblem?: string;
   /** The YouTube text (6a). `missing` says why a box is empty, '' when all three are written. */
   youtube?: YoutubeText;
+  /** On YouTube (6c): its page in YouTube Studio, where he makes it public. '' otherwise. */
+  youtubeUrl?: string;
+  /** YouTube refused the upload (6c): the reason, starting "YouTube refused the upload: ". */
+  uploadProblem?: string;
   updatedAt: string;
 };
 
@@ -119,7 +123,7 @@ const AFTER_APPROVAL: Record<string, string> = {
   // The finished file waits on the Mac Mini for the YouTube upload (6c).
   finished: 'finished, waiting to upload',
   uploading: 'uploading to YouTube',
-  on_youtube: 'on YouTube',
+  on_youtube: 'On YouTube (private)',
 };
 
 /**
@@ -160,10 +164,11 @@ export function lengthLine(edit: Pick<RoughCut, 'lengthS' | 'savedS'>): string {
 
 /** What has happened to it, for anything no longer waiting. */
 export function verdictLine(
-  edit: Pick<RoughCut, 'status' | 'group' | 'daneNote'> & Partial<Pick<RoughCut, 'recutCount' | 'recutProblem'>>,
+  edit: Pick<RoughCut, 'status' | 'group' | 'daneNote'> & Partial<Pick<RoughCut, 'recutCount' | 'recutProblem' | 'uploadProblem'>>,
 ): string {
   if (edit.group === 'waiting') return edit.recutProblem ? edit.recutProblem.charAt(0).toUpperCase() + edit.recutProblem.slice(1) : (edit.recutCount && edit.daneNote ? `Re-cut from your note: "${edit.daneNote}"` : '');
   if (edit.group === 'approved') {
+    if (edit.uploadProblem) return `Approved — ${edit.uploadProblem}.`;
     const after = AFTER_APPROVAL[edit.status];
     return after ? `Approved — ${after}.` : 'Approved — the Mac Mini will finish it.';
   }
@@ -262,6 +267,14 @@ function RoughCutItem({ edit, momentsError, onVerdict }: {
         </ul>
       ) : null}
       {verdict ? <p className="studio-roughcut-verdict" data-testid="studio-roughcut-verdict">{verdict}</p> : null}
+      {edit.youtubeUrl ? (
+        <p className="studio-roughcut-line" data-testid="studio-roughcut-on-youtube">
+          <a href={edit.youtubeUrl} target="_blank" rel="noopener" title="Opens the video in YouTube Studio (new tab), where you can make it public">
+            Open in YouTube Studio
+          </a>
+          {' · it is Private until you make it public there'}
+        </p>
+      ) : null}
       <div className="studio-roughcut-youtube" data-testid="studio-roughcut-youtube">
         {yt?.missing ? <p className="studio-moments-note" data-testid="studio-roughcut-youtube-missing">{yt.missing}</p> : null}
         <label className="studio-footage-filter" htmlFor={`roughcut-title-${edit.id}`}>

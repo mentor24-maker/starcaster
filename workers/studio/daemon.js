@@ -71,6 +71,9 @@ const {
 const {
   runFinalRender, watchApproved, STAGE_FINAL_RENDER, STAGE_FINAL_RENDER_WATCH, FINAL_RENDER_WATCH_EVERY_MS,
 } = require('./finalRenderPass.js');
+const {
+  runUpload, watchFinished, STAGE_UPLOAD, STAGE_UPLOAD_WATCH, UPLOAD_WATCH_EVERY_MS,
+} = require('./uploadPass.js');
 const { sweepReadyOriginals } = require('./evict.js');
 
 /** How long to wait after a tick that found nothing to do. */
@@ -195,6 +198,13 @@ const STAGE_RUNNERS = {
     label: 'finished video',
     run: ({ queue, owner, env }) => runFinalRender({ queue, owner, env, max: 1 }),
   },
+  // Right behind the finished video: the last step, and each finished file
+  // takes disk until it is up. One at a time; a long upload beats its lease
+  // after every 8 MB piece (workers/studio/uploadPass.js, Reel Spinner 6c).
+  [STAGE_UPLOAD]: {
+    label: 'YouTube upload',
+    run: ({ queue, owner, env }) => runUpload({ queue, owner, env, max: 1 }),
+  },
   // LAST, on purpose: a tick runs the first stage in this list with work due,
   // so a backlog of cut-marks jobs (the backfill queues ~28 at once) waits
   // behind any new recording's transcription rather than in front of it.
@@ -283,6 +293,13 @@ const WATCHERS = {
     label: 'finished-video watch',
     everyMs: FINAL_RENDER_WATCH_EVERY_MS,
     run: ({ queue, env }) => watchApproved({ queue, env }),
+  },
+  // Clock-driven for the same reason: `finished` is a status on the edit's
+  // row, and the upload is the step after it.
+  [STAGE_UPLOAD_WATCH]: {
+    label: 'upload watch',
+    everyMs: UPLOAD_WATCH_EVERY_MS,
+    run: ({ queue, env }) => watchFinished({ queue, env }),
   },
 };
 
@@ -634,6 +651,7 @@ function formatWatch(w) {
   if (w.stage === STAGE_RECUT_WATCH) return formatRecutWatch(w.label, r);
   if (w.stage === STAGE_YOUTUBE_COPY_WATCH) return formatYoutubeCopyWatch(w.label, r);
   if (w.stage === STAGE_FINAL_RENDER_WATCH) return formatFinalRenderWatch(w.label, r);
+  if (w.stage === STAGE_UPLOAD_WATCH) return formatUploadWatch(w.label, r);
   if (r.blocked) return `${w.label} BLOCKED (${r.blocked.kind}): ${r.blocked.reason}`;
   const queued = Array.isArray(r.processed) ? r.processed.length : 0;
   const skipped = Array.isArray(r.skipped) ? r.skipped.length : 0;
@@ -681,6 +699,15 @@ function formatFinalRenderWatch(label, r) {
   if (!r.ok) return `${label} COULD NOT TELL: ${r.error || 'no reason given'}`;
   const bits = [`${label} OK: ${(r.processed || []).length} approved edit(s) queued to finish, ${(r.skipped || []).length} already waiting or blocked`];
   if (r.truncated) bits.push('more approved edits than one read takes; the rest are read next minute');
+  return bits.join(', ');
+}
+
+/** The upload watch's outcome, in the tick line. Same three words again. */
+function formatUploadWatch(label, r) {
+  if (r.notConfigured) return `${label} OFF: ${r.notConfigured}`;
+  if (!r.ok) return `${label} COULD NOT TELL: ${r.error || 'no reason given'}`;
+  const bits = [`${label} OK: ${(r.processed || []).length} finished edit(s) queued to upload, ${(r.skipped || []).length} already waiting or blocked`];
+  if (r.truncated) bits.push('more finished edits than one read takes; the rest are read next minute');
   return bits.join(', ');
 }
 

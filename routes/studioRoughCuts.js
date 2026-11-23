@@ -45,8 +45,13 @@ const TEXT_FIELDS = ['youtubeTitle', 'youtubeDescription', 'youtubeTags'];
 const VERDICT_FIELDS = ['status', 'daneNote', ...TEXT_FIELDS];
 const VERDICTS = ['approved', 'skipped', 'sent_back'];
 
-/** Every status but failed: a failed edit has no rough cut to watch. */
-const LISTED_STATUSES = EDIT_STATUSES.filter((s) => s !== 'failed');
+/**
+ * Every status. Failed is read too, but lib/studioRoughCuts.js shows only the
+ * failed edits YouTube refused to take (Reel Spinner 6c): he approved those,
+ * and an approved video must not vanish from the screen without a reason.
+ * Any other failed edit has no rough cut to watch and is left out there.
+ */
+const LISTED_STATUSES = EDIT_STATUSES;
 
 /**
  * The cuts waiting on Dane are read ON THEIR OWN, never as part of one read
