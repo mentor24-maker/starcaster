@@ -174,7 +174,7 @@ describe("OutreachWizardPanel", () => {
     expect(rows[0].textContent).toContain("proj_doe: The browser is SIGNED OUT of YouTube.");
     expect(rows[0].getAttribute("aria-current")).toBe("step");
     expect(rows[0].textContent).toContain("Needs you");
-    const primaries = container!.querySelectorAll(".btn-primary");
+    const primaries = container!.querySelectorAll(".outreach-wizard-stages .btn-primary");
     expect(primaries).toHaveLength(1);
     expect(rows[0].contains(primaries[0])).toBe(true);
     expect(primaries[0].getAttribute("href")).toBe("#page=engageYoutubeOutreachPage");
@@ -191,7 +191,7 @@ describe("OutreachWizardPanel", () => {
     expect(rows[2].textContent).toContain("could not be read: boom");
     expect(rows[1].textContent).toContain("✓");
     expect(rows[2].textContent).not.toContain("✓");
-    expect(container!.querySelectorAll(".btn-primary")).toHaveLength(1);
+    expect(container!.querySelectorAll(".outreach-wizard-stages .btn-primary")).toHaveLength(1);
   });
 
   it("the channel switch is the shared tab style, never a button (UI rule C9, 86bcyrqbb)", async () => {
@@ -210,7 +210,7 @@ describe("OutreachWizardPanel", () => {
 
   it("the button opens the screen for that step", async () => {
     await mount();
-    const button = container!.querySelector<HTMLAnchorElement>(".btn-primary")!;
+    const button = container!.querySelector<HTMLAnchorElement>(".outreach-wizard-stages .btn-primary")!;
     await act(async () => button.click());
     expect(setActivePage).toHaveBeenCalledWith("engageYoutubeOutreachPage");
   });
@@ -309,7 +309,7 @@ describe("Connect: the account each channel posts as (Outreach wizard 2/19)", ()
     // Once chosen, the button offering the same account goes away.
     expect(Array.from(container!.querySelectorAll("button")).some((b) => b.textContent === "Post as this account")).toBe(false);
     // Still exactly one primary on the screen.
-    expect(container!.querySelectorAll(".btn-primary")).toHaveLength(1);
+    expect(container!.querySelectorAll(".outreach-wizard-stages .btn-primary")).toHaveLength(1);
   });
 
   it("I'll sign in as someone else takes a different name, and Check now asks the Mini", async () => {
@@ -441,7 +441,7 @@ describe("Stages open and close from their header (SC-886)", () => {
     expect(b.getAttribute("type")).toBe("button");
     await act(async () => b.click());
     expect(expanded()[0]).toBe(false);
-    expect(container!.querySelector(".btn-primary")).toBeNull();
+    expect(container!.querySelector(".outreach-wizard-stages .btn-primary")).toBeNull();
     await act(async () => b.click());
     expect(expanded()[0]).toBe(true);
   });
