@@ -147,6 +147,21 @@ header {
   display: block;
 }
 
+/* A label inside a sub-menu that groups the links under it (Engage ›
+   Advanced, SC-915). Not a link: nothing to click, so it never takes the
+   hover colour and a tap on it leaves the phone menu open. */
+.submenu .submenu-heading {
+  padding: 0.55rem 0.85rem 0.35rem;
+  border-top: 1px solid var(--ink-secondary);
+  color: var(--ink-muted);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: default;
+  user-select: none;
+}
+
 /* ── One-row admin header (task 86bcyrqau, UI normalization 1 of 10) ─────────
    The logo band (154px) plus a separate menu bar (~45px, ~76px when it
    wrapped) cost about 230px of every screen before any work appeared. The
