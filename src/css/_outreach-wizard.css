@@ -997,3 +997,77 @@ p.reddit-sub-rule {
   text-align: center;
   opacity: 0.8;
 }
+
+/* ── Today: what is waiting, and Start (SC-642 slice A) ─────────────────
+   components/outreach-wizard/today-view.tsx. The card reuses the shared
+   draft chooser's classes (_draft-chooser.css), which already stack the
+   three options on a phone. */
+
+.outreach-today {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+  margin-bottom: var(--space-5);
+  padding: var(--space-4) var(--space-5);
+  border: 1px solid var(--border-light);
+  border-radius: 10px;
+}
+
+.outreach-today-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2) var(--space-4);
+  min-width: 0;
+}
+
+.outreach-today-title {
+  margin: 0;
+  font-size: var(--text-lg);
+}
+
+.outreach-today-line {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.outreach-today-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.outreach-today-where {
+  font-size: var(--text-sm);
+  opacity: 0.75;
+}
+
+.outreach-today-context {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.outreach-today-context-title {
+  font-weight: 600;
+}
+
+.outreach-today-context-detail {
+  opacity: 0.8;
+}
+
+.outreach-today-done {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+@media (max-width: 600px) {
+  .outreach-today {
+    padding: var(--space-3) var(--space-4);
+  }
+}

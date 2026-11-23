@@ -370,3 +370,19 @@ test('YouTube channels approved and simply waiting for their first read are a ca
   assert.equal(some.state, 'needs_you', 'comments already found still need him');
   assert.match(some.sentence, /^2 comments worth replying to on 1 video so far, best first\. 2 approved channels have not been read yet/);
 });
+
+test('The Today view reads its numbers off the stages: drafts waiting, and new conversations — never a 0 it did not count (SC-642)', async () => {
+  const withCount = (newCount) => fakeDeps({
+    youtubeConversations: { listYoutubeConversations: async () => ok({ videos: [{ comments: [{}, {}] }], newCount, reading: { state: 'read', sentence: 'Read 5 minutes ago.' } }) },
+  });
+  const result = await overview.buildOverview(scope, { deps: withCount(7), now: NOW });
+  assert.equal(find(result, 'youtube', 'replies').waitingCount, 1, 'the one draft in the fake comments list');
+  assert.equal(find(result, 'youtube', 'conversations').newCount, 7);
+
+  const unread = fakeDeps({
+    youtubeConversations: { listYoutubeConversations: async () => { throw new Error('boom'); } },
+  });
+  const broken = find(await overview.buildOverview(scope, { deps: unread, now: NOW }), 'youtube', 'conversations');
+  assert.equal(broken.state, 'cannot_tell');
+  assert.equal('newCount' in broken, false, 'a list that could not be read carries no count at all');
+});
