@@ -42,7 +42,7 @@ type Harness = {
 
 async function mount(
   settings: Record<string, string> = {},
-  props: { compact?: boolean } = {}
+  props: { compact?: boolean; isEmailTemplate?: boolean } = {}
 ): Promise<Harness> {
   let current: BuilderTemplateModule = {
     ...createEmptyModule("button"),
@@ -56,6 +56,7 @@ async function mount(
     root!.render(
       <BuilderButtonModuleSettings
         compact={props.compact}
+        isEmailTemplate={props.isEmailTemplate}
         module={current}
         onUpdateModule={(updater) => {
           current = updater(current);
@@ -148,5 +149,57 @@ describe("Button settings — the Frame axis", () => {
     click(tabLabelled("Image"), "the Image tab");
     expect(document.querySelector('input[placeholder^="https://"]')).not.toBeNull();
     expect(container!.innerHTML).not.toContain("Choose From Gallery");
+  });
+});
+
+/**
+ * "Open in new tab" (SC-907): Dane asked for a button that sends a visitor to
+ * another website without taking them off the client's site. The box sits
+ * beside Link, writes the same `newTab` key the Image module uses, and is not
+ * offered in an email template, whose button already opens a browser.
+ */
+function newTabBox(): HTMLInputElement | null {
+  const field = Array.from(document.querySelectorAll(".builder-module-field")).find(
+    (el) => (el.querySelector(".builder-module-field-label")?.textContent ?? "").trim() === "Open in New Tab"
+  );
+  return field?.querySelector<HTMLInputElement>('input[type="checkbox"]') ?? null;
+}
+
+describe("Button settings — Open in New Tab", () => {
+  it("shows the box beside Link, unticked on a new button", async () => {
+    await mount({ ...createEmptyModule("button").settings });
+    const box = newTabBox();
+    expect(box).not.toBeNull();
+    expect(box!.checked).toBe(false);
+    // Same strip as the Link it gates.
+    const strip = box!.closest(".builder-module-field-strip");
+    const labels = Array.from(strip!.querySelectorAll(".builder-module-field-label")).map((el) =>
+      (el.textContent ?? "").trim()
+    );
+    expect(labels).toContain("Link");
+  });
+
+  it("is unticked on a button saved before the setting existed", async () => {
+    await mount({});
+    expect(newTabBox()!.checked).toBe(false);
+  });
+
+  it("writes newTab true when ticked and false when unticked", async () => {
+    const harness = await mount({});
+    click(newTabBox(), "the Open in New Tab box");
+    expect(harness.module().settings.newTab).toBe("true");
+    expect(newTabBox()!.checked).toBe(true);
+    click(newTabBox(), "the Open in New Tab box");
+    expect(harness.module().settings.newTab).toBe("false");
+  });
+
+  it("shows a saved choice", async () => {
+    await mount({ newTab: "true" });
+    expect(newTabBox()!.checked).toBe(true);
+  });
+
+  it("is not offered in an email template", async () => {
+    await mount({}, { isEmailTemplate: true });
+    expect(newTabBox()).toBeNull();
   });
 });
