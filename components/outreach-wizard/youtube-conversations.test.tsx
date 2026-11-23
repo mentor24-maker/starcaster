@@ -11,7 +11,7 @@ import YoutubeConversations, {
  * Outreach wizard 16/19 (86bcrmbtn). The ranking, the grouping and the server
  * refusals are tested with the server code (scripts/builder/youtubeConversations.test.js).
  * What is tested here: each comment shows who wrote it and why it ranked, Write
- * replies sends THAT comment's id and opens the YouTube outreach screen, a
+ * replies sends THAT comment's id and stays on the Outreach screen (SC-916), a
  * video waiting on one reply holds its others, and every change asks the
  * wizard to re-read the stage sentence above the list.
  */
@@ -81,7 +81,7 @@ afterEach(() => {
   delete (window as any).App;
 });
 
-async function render(props: { onChanged?: () => void } = {}) {
+async function render(props: { onChanged?: () => void; onDrafted?: () => void } = {}) {
   await act(async () => { root!.render(<YoutubeConversations {...props} />); });
 }
 
@@ -103,13 +103,18 @@ describe('YouTube Find conversations', () => {
     expect(item.querySelector('.yt-conversation-video-cell')!.textContent).toContain('A video');
   });
 
-  it('Write replies sends the comment id clicked, opens the YouTube outreach screen and re-reads the stage', async () => {
+  it('Write replies sends the comment id clicked, stays on this screen, shows Write replies and re-reads the stage', async () => {
     const onChanged = vi.fn();
-    await render({ onChanged });
+    const onDrafted = vi.fn();
+    await render({ onChanged, onDrafted });
     await act(async () => { button('Write replies').click(); });
     expect(posts).toEqual([{ path: '/api/outreach/youtube/conversations/reply', body: { commentId: 'Ugz1' } }]);
-    expect((window as any).App.setActivePage).toHaveBeenCalledWith('engageYoutubeOutreachPage');
+    // SC-916: the main button of Find conversations never opens another screen.
+    expect((window as any).App.setActivePage).not.toHaveBeenCalled();
+    expect(onDrafted).toHaveBeenCalledTimes(1);
     expect(onChanged).toHaveBeenCalled();
+    expect(container!.textContent).toContain('in Write replies below');
+    expect(container!.textContent).not.toMatch(/outreach screen|Engage ›/);
   });
 
   it('Comment on the video and Save as contact send what they act on', async () => {

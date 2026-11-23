@@ -213,6 +213,33 @@ test('Reddit with no canon keeps the waiting and approved counts the Today view 
   assert.equal(replies.toWriteCount, 0);
 });
 
+test('Reddit with no canon offers no drafts to write, and says why (SC-916 round 2)', async () => {
+  const deps = fakeDeps({
+    canonStore: { listCanon: async () => ok([]) },
+    redditCommentsStore: { ...fakeDeps().redditCommentsStore, listItems: async () => ok(rows('idea', 3)) },
+  });
+  const result = await overview.buildOverview(scope, { deps, now: NOW });
+  const replies = find(result, 'reddit', 'replies');
+  assert.equal(replies.toWriteCount, 0, 'every draft would be refused without a canon, so none is offered');
+  assert.match(replies.writeBlocked, /^3 posts are waiting to be written, but no canon documents have been copied in/);
+  const withCanon = find(await overview.buildOverview(scope, { deps: fakeDeps({
+    redditCommentsStore: { ...fakeDeps().redditCommentsStore, listItems: async () => ok(rows('idea', 3)) },
+  }), now: NOW }), 'reddit', 'replies');
+  assert.equal(withCanon.toWriteCount, 3);
+  assert.equal(withCanon.writeBlocked, undefined);
+});
+
+test('the first reply approved counts a reply that later failed to post, and never a Substack like or restack (SC-916 round 2)', () => {
+  assert.equal(overview.repliesStage({ failed: 1 }, 1, { one: 'comment', many: 'comments', idea: 'post', ideas: 'posts' }, null).approvedCount, 1,
+    'only a posting reply can fail, so a failed one was approved');
+  const likesOnly = overview.substackRepliesStage([
+    { status: 'approved', kind: 'like' }, { status: 'posted', kind: 'restack' }, { status: 'draft', kind: 'reply' },
+  ]);
+  assert.equal(likesOnly.approvedCount, 0, 'approving a like is not a first reply');
+  const withNote = overview.substackRepliesStage([{ status: 'posted', kind: 'note' }, { status: 'approved', kind: 'like' }]);
+  assert.equal(withNote.approvedCount, 1);
+});
+
 test('replies count the ideas still to be drafted, so Write replies can draft them here (SC-916)', () => {
   const st = overview.repliesStage({ idea: 2, draft: 1 }, 3, { one: 'Note', many: 'Notes', idea: 'idea', ideas: 'ideas' }, null);
   assert.equal(st.toWriteCount, 2);

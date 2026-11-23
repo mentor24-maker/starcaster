@@ -8,7 +8,7 @@ function stage(key: string, extra: Partial<OutreachStage> & Record<string, unkno
   return { key, label: key, state: "not_started", sentence: "s", next: null, inline: true, ...extra } as OutreachStage;
 }
 
-function channel(over: { account?: OutreachChannel["account"]; creators?: number; replies?: number; waiting?: number; repliesState?: OutreachStage["state"] } = {}): OutreachChannel {
+function channel(over: { account?: OutreachChannel["account"]; creators?: number; replies?: number; waiting?: number; toWrite?: number; writeBlocked?: string; repliesState?: OutreachStage["state"] } = {}): OutreachChannel {
   return {
     key: "youtube",
     label: "YouTube",
@@ -17,7 +17,7 @@ function channel(over: { account?: OutreachChannel["account"]; creators?: number
       stage("connect"),
       stage("creators", { approvedCount: over.creators ?? 0 }),
       stage("conversations"),
-      stage("replies", { approvedCount: over.replies ?? 0, waitingCount: over.waiting ?? 0, state: over.repliesState ?? "not_started" }),
+      stage("replies", { approvedCount: over.replies ?? 0, waitingCount: over.waiting ?? 0, toWriteCount: over.toWrite ?? 0, writeBlocked: over.writeBlocked, state: over.repliesState ?? "not_started" }),
       stage("learn"),
     ],
   };
@@ -54,6 +54,16 @@ describe("firstRunSteps", () => {
   it("the reply step sends you to Write replies once something is waiting", () => {
     expect(firstRunSteps(channel(), saved)[4].stage).toBe("conversations");
     expect(firstRunSteps(channel({ waiting: 2 }), saved)[4].stage).toBe("replies");
+  });
+
+  it("ideas waiting to be written point at Write drafts, not Find conversations (SC-916 round 2)", () => {
+    const step = firstRunSteps(channel({ toWrite: 3 }), saved)[4];
+    expect(step.stage).toBe("replies");
+    expect(step.sentence).toBe("3 ideas are waiting to be written. Click Write drafts in Write replies below.");
+    expect(step.sentence).not.toContain("No reply written yet");
+    const blocked = firstRunSteps(channel({ writeBlocked: "3 posts are waiting to be written, but no canon documents have been copied in." }), saved)[4];
+    expect(blocked.sentence).toContain("no canon documents");
+    expect(blocked.stage).toBe("replies");
   });
 });
 

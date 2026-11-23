@@ -9,7 +9,8 @@ import { RowIcon, SortHeader, filterRows, sortRows, type SortState, type SortVal
  * one sentence on why it ranked there (lib/outreachRanking.js).
  *
  * Per Note: **Write replies** lines up the reply and writes its three options,
- * then opens the Substack Notes screen where the chooser is; **Skip** asks why
+ * then brings Write replies below into view, where the chooser is (SC-916: it
+ * no longer leaves the Outreach screen); **Skip** asks why
  * with the shared reason picker and takes it off the list; **Add writer**
  * (a writer a keyword found, not yet approved) approves them through the
  * Miner's own approve flow.
@@ -40,7 +41,6 @@ import { RowIcon, SortHeader, filterRows, sortRows, type SortState, type SortVal
 export const CONVERSATIONS_PATH = '/api/outreach/substack/conversations';
 const MINER_CANDIDATES_PATH = '/api/acquire/substack-miner/candidates';
 export const READ_NOTES_PATH = '/api/acquire/substack-miner/read-notes';
-const NOTES_PAGE = 'engageSubstackNotesPage';
 
 export type Conversation = {
   url: string;
@@ -69,7 +69,7 @@ export type ConversationsReply = {
 
 type ApiFn = (path: string, options?: RequestInit) => Promise<Record<string, any>>;
 
-type AppShape = { api?: ApiFn; setActivePage?: (pageId: string) => void };
+type AppShape = { api?: ApiFn };
 
 function getApp(): AppShape | null {
   return (window as unknown as { App?: AppShape }).App || null;
@@ -91,8 +91,8 @@ export function replyLabel(c: Conversation): string {
  * would claim work that did not happen.
  */
 export function replyNotice(c: Conversation, reply: Record<string, any> | null | undefined): string {
-  if (reply?.data?.drafted === false) return `Already drafted — open ${c.writer.name}'s reply on the Substack Notes screen.`;
-  return `Replies written for ${c.writer.name}'s Note — choose one on the Substack Notes screen.`;
+  if (reply?.data?.drafted === false) return `Already drafted — ${c.writer.name}'s reply is waiting in Write replies below.`;
+  return `Replies written for ${c.writer.name}'s Note — choose one in Write replies below.`;
 }
 
 /** What the per-project read answers (lib/acquire/SubstackNotesReadRun.js). */
@@ -139,6 +139,8 @@ export function readRefusal(err: unknown): { calm: boolean; message: string } {
 type Props = {
   /** Something on the list changed: re-read the stage sentence above it. */
   onChanged?: () => void;
+  /** A reply was written (or found already drafted): show Write replies, on this screen. */
+  onDrafted?: () => void;
   /** The overview's time; a new one re-reads the list in place. */
   version?: string;
 };
@@ -247,7 +249,7 @@ function postedText(c: Conversation): { text: string; title?: string } {
 
 const COLUMNS = 8;
 
-export default function SubstackConversations({ onChanged, version }: Props = {}): React.ReactElement {
+export default function SubstackConversations({ onChanged, onDrafted, version }: Props = {}): React.ReactElement {
   const [data, setData] = useState<ConversationsReply | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -334,9 +336,8 @@ export default function SubstackConversations({ onChanged, version }: Props = {}
     try {
       const reply = await post(`${CONVERSATIONS_PATH}/reply`, { url: c.url });
       setNotice(replyNotice(c, reply));
-      const app = getApp();
-      if (typeof app?.setActivePage === 'function') app.setActivePage(NOTES_PAGE);
       onChanged?.();
+      onDrafted?.();
     } catch (err) {
       setRowError({ url: c.url, message: `No replies written: ${errorText(err, 'unknown error')}` });
     } finally {

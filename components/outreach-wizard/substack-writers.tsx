@@ -202,7 +202,7 @@ export default function SubstackWriters({ onChanged }: { onChanged?: () => void 
           {busy === 'find' ? 'Searching the web…' : 'Find writers'}
         </button>
       </div>
-      {lines.map((l) => <p key={l} className="outreach-wizard-notice" role="status">{l}</p>)}
+      {lines.map((l, i) => <p key={`${i}-${l}`} className="outreach-wizard-notice" role="status">{l}</p>)}
       {error ? <p className="outreach-wizard-error" role="alert">{error}</p> : null}
       {readError ? <p className="outreach-wizard-error" role="alert">{readError}</p> : null}
       {writers ? (

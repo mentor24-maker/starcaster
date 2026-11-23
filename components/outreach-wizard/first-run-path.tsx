@@ -69,7 +69,7 @@ function wordsFor(key: string): Words {
   return CHANNEL_WORDS[key] || { creators: 'creators', findButton: 'Find', afterCreators: '', afterReply: '' };
 }
 
-type Counted = OutreachStage & { approvedCount?: number; waitingCount?: number };
+type Counted = OutreachStage & { approvedCount?: number };
 
 function stageOf(channel: OutreachChannel, key: string): Counted | undefined {
   return channel.stages.find((s) => s.key === key) as Counted | undefined;
@@ -159,15 +159,22 @@ export function firstRunSteps(channel: OutreachChannel, keywords: Keywords | { e
   });
 
   const waiting = replies?.waitingCount || 0;
+  const toWrite = replies?.toWriteCount || 0;
   steps.push({
     key: 'reply',
     title: 'Approve your first reply',
     done: replies && replies.state !== 'cannot_tell' && typeof replies.approvedCount === 'number' ? replies.approvedCount > 0 : null,
     sentence: waiting
       ? `${waiting} ${waiting === 1 ? 'reply is' : 'replies are'} waiting for you. Write replies below walks you through ${waiting === 1 ? 'it' : 'them'}.`
-      : 'No reply written yet.',
+      // Ideas already picked but not yet drafted: Write drafts is the move,
+      // not Find conversations (SC-916 round 2).
+      : toWrite
+        ? `${toWrite} ${toWrite === 1 ? 'idea is' : 'ideas are'} waiting to be written. Click Write drafts in Write replies below.`
+        : replies?.writeBlocked
+          ? replies.writeBlocked
+          : 'No reply written yet.',
     next: w.afterReply,
-    stage: waiting ? 'replies' : 'conversations',
+    stage: waiting || toWrite || replies?.writeBlocked ? 'replies' : 'conversations',
   });
 
   // The first step not done is the one to do now; a step that cannot be told

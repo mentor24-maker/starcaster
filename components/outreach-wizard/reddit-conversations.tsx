@@ -17,8 +17,9 @@ import { RowIcon, SortHeader, filterRows, sortRows, type SortState, type SortVal
  * indented rows beneath it, each comment with its own icons.
  *
  * Per post: **Write replies** (to the post, or to one of its comments) lines
- * up the comment on Engage › Comments from what the Mini already read and
- * writes its three options, then opens that screen, where the chooser is;
+ * up the comment from what the Mini already read and writes its three
+ * options, then brings Write replies below into view, where the chooser is
+ * (SC-916: it no longer leaves the Outreach screen);
  * **Skip** asks why with the shared reason picker; **Save as contact** keeps
  * a commenter (or the post's author) as a lead.
  *
@@ -36,7 +37,6 @@ import { RowIcon, SortHeader, filterRows, sortRows, type SortState, type SortVal
  */
 
 export const REDDIT_CONVERSATIONS_PATH = '/api/outreach/reddit/conversations';
-const COMMENTS_PAGE = 'engageCommentResponsesPage';
 
 /** `replyItemId` / `replyStatus`: the reply to THIS comment, kept apart from the post's own. */
 export type RedditComment = { id: string; author: string; body: string; score: number; replyItemId?: string; replyStatus?: string };
@@ -126,7 +126,7 @@ export function readRequestNote(r: RedditConversationsReply['readRequest'], now:
 export const READ_REQUEST_POLL_MS = 60 * 1000;
 
 type ApiFn = (path: string, options?: RequestInit) => Promise<Record<string, any>>;
-type AppShape = { api?: ApiFn; setActivePage?: (pageId: string) => void };
+type AppShape = { api?: ApiFn };
 
 function getApp(): AppShape | null {
   return (window as unknown as { App?: AppShape }).App || null;
@@ -248,9 +248,14 @@ export function emptyPostsText(f: RedditFilters, listed: number): string {
 
 const COLUMNS = 10;
 
-type Props = { onChanged?: () => void; version?: string };
+type Props = {
+  onChanged?: () => void;
+  /** A reply was written (or found already drafted): show Write replies, on this screen. */
+  onDrafted?: () => void;
+  version?: string;
+};
 
-export default function RedditConversations({ onChanged, version }: Props = {}): React.ReactElement {
+export default function RedditConversations({ onChanged, onDrafted, version }: Props = {}): React.ReactElement {
   const [data, setData] = useState<RedditConversationsReply | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -330,11 +335,10 @@ export default function RedditConversations({ onChanged, version }: Props = {}):
     try {
       const reply = await post(`${REDDIT_CONVERSATIONS_PATH}/reply`, { postId: c.postId, ...(comment ? { commentId: comment.id } : {}) });
       setNotice(reply?.data?.drafted === false
-        ? 'Already drafted — open it on Engage › Comments.'
-        : `Replies written ${comment ? `to u/${comment.author}'s comment` : 'to the post'} — choose one on Engage › Comments.`);
-      const app = getApp();
-      if (typeof app?.setActivePage === 'function') app.setActivePage(COMMENTS_PAGE);
+        ? 'Already drafted — it is waiting in Write replies below.'
+        : `Replies written ${comment ? `to u/${comment.author}'s comment` : 'to the post'} — choose one in Write replies below.`);
       onChanged?.();
+      onDrafted?.();
     } catch (err) {
       setRowError({ postId: c.postId, key: rowKey(c, comment), message: `No replies written: ${errorText(err, 'unknown error')}` });
     } finally {

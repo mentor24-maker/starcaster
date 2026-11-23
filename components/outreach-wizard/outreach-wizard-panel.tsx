@@ -75,6 +75,10 @@ export type OutreachStage = {
   waitingCount?: number;
   /** Find conversations: new ones worth replying to (SC-642, the Today view). */
   newCount?: number;
+  /** Write replies: ideas Write drafts can draft on this screen (SC-916). */
+  toWriteCount?: number;
+  /** Write replies: why ideas waiting cannot be drafted right now (SC-916 — Reddit with no canon). */
+  writeBlocked?: string;
 };
 
 /** The tab that shows Today for every channel at once (SC-642). */
@@ -572,27 +576,27 @@ export default function OutreachWizardPanel(): React.ReactElement {
                 {s.key === 'connect' ? (
                   <ConnectControls key={current.key} channel={current} onChanged={() => void load()} onCheckAsked={startCheckPoll} />
                 ) : null}
-                {s.key === 'creators' && current.key === 'youtube' && s.inline ? (
+                {s.key === 'creators' && current.key === 'youtube' ? (
                   <YoutubeCreators onChanged={() => void load()} />
                 ) : null}
                 {/* SC-916: Substack's writers, approved here rather than on the Miner. */}
-                {s.key === 'creators' && current.key === 'substack' && s.inline ? (
+                {s.key === 'creators' && current.key === 'substack' ? (
                   <SubstackWriters onChanged={() => void load()} />
                 ) : null}
                 {/* Outreach wizard 14/19: Substack's Notes worth replying to, ranked. */}
                 {s.key === 'conversations' && current.key === 'substack' && s.state !== 'not_started' ? (
-                  <SubstackConversations version={overview?.generatedAt} onChanged={() => void load()} />
+                  <SubstackConversations version={overview?.generatedAt} onChanged={() => void load()} onDrafted={() => showStage('replies')} />
                 ) : null}
                 {/* Outreach wizard 18/19: Reddit's watched subreddits and the posts found in them. */}
-                {s.key === 'creators' && current.key === 'reddit' && s.inline ? (
+                {s.key === 'creators' && current.key === 'reddit' ? (
                   <RedditSubreddits onChanged={() => void load()} />
                 ) : null}
-                {s.key === 'conversations' && current.key === 'reddit' && s.inline && s.state !== 'not_started' ? (
-                  <RedditConversations version={overview?.generatedAt} onChanged={() => void load()} />
+                {s.key === 'conversations' && current.key === 'reddit' && s.state !== 'not_started' ? (
+                  <RedditConversations version={overview?.generatedAt} onChanged={() => void load()} onDrafted={() => showStage('replies')} />
                 ) : null}
                 {/* Outreach wizard 16/19: comments on approved channels' newest videos, ranked. */}
-                {s.key === 'conversations' && current.key === 'youtube' && s.inline && s.state !== 'not_started' ? (
-                  <YoutubeConversations version={overview?.generatedAt} onChanged={() => void load()} />
+                {s.key === 'conversations' && current.key === 'youtube' && s.state !== 'not_started' ? (
+                  <YoutubeConversations version={overview?.generatedAt} onChanged={() => void load()} onDrafted={() => showStage('replies')} />
                 ) : null}
                 {s.key === 'replies' ? (
                   <RepliesControls

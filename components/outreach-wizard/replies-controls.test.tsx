@@ -2,7 +2,7 @@
 import { act } from "react-dom/test-utils";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import RepliesControls, { LIST_LIMIT, decidedFrom, ideasFrom, wordlessIdeasFrom } from "./replies-controls";
+import RepliesControls, { LIST_LIMIT, WRITE_BATCH, decidedFrom, ideasFrom, wordlessIdeasFrom } from "./replies-controls";
 import type { OutreachChannel, OutreachStage } from "./outreach-wizard-panel";
 
 /**
@@ -82,6 +82,14 @@ describe("the lists", () => {
   it("decided replies are every approved, posting, posted, failed and rejected row, newest first", () => {
     expect(decidedFrom(SUBSTACK_ROWS).map((r) => r.id)).toEqual(["x1", "p1"]);
   });
+
+  it("a rejection made today sorts above an approval from last week (SC-916 round 2)", () => {
+    const rows = [
+      { id: "old", status: "approved", approvedAt: "2026-11-14T01:00:00Z", createdAt: "2026-11-13T01:00:00Z", updatedAt: "2026-11-14T01:00:00Z" },
+      { id: "today", status: "rejected", createdAt: "2026-11-01T01:00:00Z", updatedAt: "2026-11-22T01:00:00Z" },
+    ];
+    expect(decidedFrom(rows).map((r) => r.id)).toEqual(["today", "old"]);
+  });
 });
 
 describe("RepliesControls on Substack", () => {
@@ -94,6 +102,27 @@ describe("RepliesControls on Substack", () => {
     expect(calls[0].path).toBe(`${BASE}?status=idea&limit=${LIST_LIMIT}`);
     expect(container!.textContent).toContain("2 drafts written.");
     expect(container!.textContent).not.toContain("Approvals tab");
+  });
+
+  it("Write drafts writes at most one batch per press and says how many more wait (SC-916 round 2)", async () => {
+    const many = Array.from({ length: WRITE_BATCH + 5 }, (_, i) => ({ id: `m${i}`, status: "idea", kind: "note" }));
+    (window as any).App.api = async (path: string, options?: RequestInit) => {
+      const method = options?.method || "GET";
+      calls.push({ path, method, body: null });
+      return method === "GET" ? { ok: true, data: many } : { ok: true, data: {} };
+    };
+    await mount(repliesStage({ toWriteCount: many.length }));
+    expect(container!.textContent).toContain(`${many.length} ideas are waiting; this writes the first ${WRITE_BATCH}`);
+    await act(async () => button(`Write ${WRITE_BATCH} drafts`).click());
+    await act(async () => {});
+    expect(calls.filter((c) => c.method === "POST")).toHaveLength(WRITE_BATCH);
+  });
+
+  it("ideas that cannot be drafted show the reason, never a Write drafts button (SC-916 round 2)", async () => {
+    await mount(repliesStage({ toWriteCount: 0, writeBlocked: "3 posts are waiting to be written, but no canon documents have been copied in." }));
+    expect(container!.querySelector("[data-write-blocked]")!.textContent).toContain("no canon documents");
+    expect(Array.from(document.querySelectorAll("button")).some((b) => /^Write \d/.test(b.textContent || ""))).toBe(false);
+    expect(container!.textContent).not.toContain("No Substack replies are waiting for you");
   });
 
   it("restacks and likes are approved right here, as they are", async () => {

@@ -19,3 +19,11 @@ One thing the ticket asked for does not exist yet: keywords suggested from the c
 - Pressing "Work through N waiting replies" again in the middle of a walk-through used to start it over and throw away a wording you were editing. Now it just scrolls you back to where you were.
 - If your keywords cannot be read, Substack's Find creators now says so and why. Before, it showed "No keywords yet", which looked like an answer when it was really a failure.
 - Smaller fixes: a keyword save in one section now shows up in the others straight away. "Choose the account" no longer says Done when the Mini is signed in as a different account. The keyword box stays hidden until your keywords have loaded.
+
+**After review sent it back a second time (same day):**
+
+- The "Write Replies" button on each conversation in Find conversations still jumped to another screen after writing the reply options (the YouTube outreach page, Substack Notes, or Engage › Comments). That was the last thing in Getting started that left the Outreach screen. Now it stays put, opens Write replies below and scrolls to it, and its message says "choose one in Write replies below".
+- On Substack, approving a single like or restack used to count as "your first reply approved", which hid Getting started too early. Only a Note or a reply counts now. A reply that was approved but then failed to post still counts, because you did approve it. The failure shows in Write replies.
+- On Reddit with no canon documents, "Write N drafts" used to show even though every draft would be refused. Now there is no button, and the stage says why.
+- Getting started's last step used to say "No reply written yet" even when ideas were already waiting to be written. Now it says how many are waiting and points at Write drafts.
+- Smaller fixes: Write drafts now writes at most 10 per press and says how many more are waiting, so one press can no longer tie the screen up for hours. Decided replies sort by the last thing that happened to them, so a reply rejected today appears above one approved last week.

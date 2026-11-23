@@ -25,6 +25,13 @@ import type { OutreachChannel, OutreachStage } from './outreach-wizard-panel';
 
 export const LIST_LIMIT = 1000;
 
+/**
+ * Write drafts writes at most this many per press. Each is an AI call of up to
+ * a minute, one after another, with the stage's buttons held; a batch of a
+ * thousand would hold the screen for hours with no way to stop it.
+ */
+export const WRITE_BATCH = 10;
+
 /** The Substack kinds that carry words (lib/substackNotesStore.js TEXT_KINDS). */
 const SUBSTACK_TEXT_KINDS = ['note', 'reply'];
 
@@ -72,7 +79,11 @@ export function wordlessIdeasFrom(rows: unknown): Row[] {
 
 /** The replies already decided, newest first. */
 export function decidedFrom(rows: unknown): Row[] {
-  const when = (r: Row) => String(r.postedAt || r.approvedAt || r.updatedAt || r.createdAt || '');
+  // The LATEST thing that happened to it: a rejection records no time of its
+  // own, so its updatedAt is when it was rejected, and a reply rejected today
+  // must sort above one approved last week.
+  const when = (r: Row) => [r.postedAt, r.approvedAt, r.updatedAt, r.createdAt]
+    .map((t) => String(t || '')).sort().pop() || '';
   return (Array.isArray(rows) ? rows : [])
     .filter((r: any) => r && r.id && Object.prototype.hasOwnProperty.call(DECIDED_WORDS, r.status))
     .sort((a: Row, b: Row) => when(b).localeCompare(when(a)));
@@ -85,7 +96,7 @@ function kindWord(row: Row): string {
 
 export default function RepliesControls({ channel, stage, onWalk, onChanged }: {
   channel: OutreachChannel;
-  stage: OutreachStage & { toWriteCount?: number; toDecideCount?: number };
+  stage: OutreachStage & { toDecideCount?: number };
   onWalk: () => void;
   onChanged: () => void;
 }): React.ReactElement | null {
@@ -101,6 +112,7 @@ export default function RepliesControls({ channel, stage, onWalk, onChanged }: {
   if (stage.state === 'cannot_tell') return null;
   const waiting = stage.waitingCount || 0;
   const toWrite = stage.toWriteCount || 0;
+  const batch = Math.min(toWrite, WRITE_BATCH);
   const toDecide = key === 'substack' ? stage.toDecideCount || 0 : 0;
 
   const readList = async (query: string): Promise<Row[]> => {
@@ -115,7 +127,7 @@ export default function RepliesControls({ channel, stage, onWalk, onChanged }: {
     setBusy('write'); setLines([]); setError('');
     const out: string[] = [];
     try {
-      const ideas = ideasFrom(await readList('status=idea&'), key);
+      const ideas = ideasFrom(await readList('status=idea&'), key).slice(0, WRITE_BATCH);
       let written = 0;
       for (const idea of ideas) {
         try {
@@ -190,14 +202,19 @@ export default function RepliesControls({ channel, stage, onWalk, onChanged }: {
       {toWrite && source ? (
         <div className="outreach-wizard-stage-actions">
           <button type="button" className={waiting ? 'btn' : 'btn btn-primary'} disabled={!!busy} onClick={() => void writeDrafts()}>
-            {busy === 'write' ? 'Writing drafts…' : `Write ${plural(toWrite, 'draft', 'drafts')}`}
+            {busy === 'write' ? 'Writing drafts…' : `Write ${plural(batch, 'draft', 'drafts')}`}
           </button>
-          <p className="outreach-wizard-muted">Each draft takes under a minute to write.</p>
+          <p className="outreach-wizard-muted">
+            {toWrite > batch
+              ? `Each draft takes under a minute to write. ${toWrite} ideas are waiting; this writes the first ${batch}, press again for more.`
+              : 'Each draft takes under a minute to write.'}
+          </p>
         </div>
       ) : null}
+      {!toWrite && stage.writeBlocked ? <p className="outreach-wizard-muted" data-write-blocked>{stage.writeBlocked}</p> : null}
       {waiting ? (
         <p className="outreach-wizard-muted">Each one opens in Today, above: choose a wording, edit it if you like, then Approve or Reject. Approved replies are posted by the Mini within the channel&apos;s pace.</p>
-      ) : !toWrite && !toDecide ? (
+      ) : !toWrite && !toDecide && !stage.writeBlocked ? (
         <p className="outreach-wizard-muted">{`No ${channel.label} replies are waiting for you. Replies are written from Find conversations: click Write Replies on one there, and it comes back here for your Approve or Reject.`}</p>
       ) : null}
 
