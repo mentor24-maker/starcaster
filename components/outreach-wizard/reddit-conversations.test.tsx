@@ -117,16 +117,21 @@ describe('RedditConversations', () => {
     expect(text).toContain('Great question');
   });
 
-  it('Write replies to the post, and to a comment, post the ids and open Engage › Comments', async () => {
+  it('Write replies to the post, and to a comment, post the ids and stay on this screen', async () => {
     const onChanged = vi.fn();
-    act(() => root!.render(<RedditConversations onChanged={onChanged} />));
+    const onDrafted = vi.fn();
+    act(() => root!.render(<RedditConversations onChanged={onChanged} onDrafted={onDrafted} />));
     await flush();
     await expand();
     await act(async () => { button('Write Replies').click(); });
     await flush();
     expect(posts[0]).toEqual({ path: '/api/outreach/reddit/conversations/reply', body: { postId: 'abc1' } });
-    expect((window as any).App.setActivePage).toHaveBeenCalledWith('engageCommentResponsesPage');
+    // SC-916: the main button of Find conversations never opens another screen.
+    expect((window as any).App.setActivePage).not.toHaveBeenCalled();
+    expect(onDrafted).toHaveBeenCalledTimes(1);
     expect(onChanged).toHaveBeenCalled();
+    expect(container!.textContent).toContain('in Write replies below');
+    expect(container!.textContent).not.toContain('Engage › Comments');
     await act(async () => { button("Reply to dave's Comment").click(); });
     await flush();
     expect(posts[1].body).toEqual({ postId: 'abc1', commentId: 'c1' });

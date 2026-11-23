@@ -83,7 +83,7 @@ afterEach(() => {
   delete (window as any).App;
 });
 
-async function render(props: { onChanged?: () => void; version?: string }) {
+async function render(props: { onChanged?: () => void; onDrafted?: () => void; version?: string }) {
   await act(async () => { root!.render(<SubstackConversations {...props} />); });
 }
 
@@ -133,16 +133,25 @@ describe('Find conversations', () => {
     const c = note();
     expect(replyNotice(c, { data: { drafted: false } })).toMatch(/^Already drafted/);
     expect(replyNotice(c, { data: { drafted: true } })).toMatch(/^Replies written for Ann's Note/);
+    // SC-916: both point at Write replies on this screen, never another screen.
+    for (const drafted of [true, false]) {
+      expect(replyNotice(c, { data: { drafted } })).toContain('in Write replies below');
+      expect(replyNotice(c, { data: { drafted } })).not.toMatch(/Notes screen|Engage ›/);
+    }
   });
 
   it('Add writer and Write replies ask the wizard to re-read the stage sentence', async () => {
     const onChanged = vi.fn();
-    await render({ onChanged });
+    const onDrafted = vi.fn();
+    await render({ onChanged, onDrafted });
     await act(async () => { button('Add Writer').click(); });
     expect(onChanged).toHaveBeenCalledTimes(1);
     replyAnswer = { data: { drafted: false } };
     await act(async () => { button('Write replies').click(); });
     expect(onChanged).toHaveBeenCalledTimes(2);
+    // SC-916: Write replies stays on the Outreach screen and shows Write replies there.
+    expect((window as any).App.setActivePage).not.toHaveBeenCalled();
+    expect(onDrafted).toHaveBeenCalledTimes(1);
     expect(container!.textContent).toContain('Already drafted');
   });
 

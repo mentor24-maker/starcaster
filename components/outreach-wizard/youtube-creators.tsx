@@ -24,6 +24,28 @@ import { RowIcon, SortHeader, filterRows, sortRows, type SortState, type SortVal
 export const CREATORS_PATH = '/api/outreach/youtube/creators';
 export const KEYWORDS_PATH = '/api/outreach/keywords';
 
+/**
+ * Fired on window after the shared keyword list is saved, with the saved list
+ * as `detail`. Getting started, Substack's and YouTube's Find creators each
+ * show that one list; this keeps a save in one from leaving the others stale
+ * until a reload (SC-916 send-back).
+ */
+export const KEYWORDS_SAVED_EVENT = 'outreach:keywords-saved';
+
+export function announceKeywords(saved: Keywords | null | undefined): void {
+  if (saved && Array.isArray(saved.keywords)) window.dispatchEvent(new CustomEvent(KEYWORDS_SAVED_EVENT, { detail: saved }));
+}
+
+/** Run `apply` with the saved list each time any section saves it. Returns the unsubscribe. */
+export function onKeywordsSaved(apply: (saved: Keywords) => void): () => void {
+  const listener = (e: Event) => {
+    const saved = (e as CustomEvent<Keywords>).detail;
+    if (saved && Array.isArray(saved.keywords)) apply(saved);
+  };
+  window.addEventListener(KEYWORDS_SAVED_EVENT, listener);
+  return () => window.removeEventListener(KEYWORDS_SAVED_EVENT, listener);
+}
+
 export type Suggestion = { action: Decision; reasons: string[]; confidence: 'high' | 'medium' | 'low'; why: string };
 export type YoutubeCreator = {
   id: string;
@@ -273,6 +295,7 @@ export default function YoutubeCreators({ onChanged }: { onChanged?: () => void 
     }
   }, []);
   useEffect(() => { void load(); }, [load]);
+  useEffect(() => onKeywordsSaved((saved) => { setKeywords(saved); setDraft(saved.keywords.join(', ')); }), []);
 
   const post = async (path: string, body: unknown, method = 'POST') => {
     const api = getApi();
@@ -286,6 +309,7 @@ export default function YoutubeCreators({ onChanged }: { onChanged?: () => void 
       const list = draft.split(',').map((k) => k.trim()).filter(Boolean);
       const reply = await post(KEYWORDS_PATH, { keywords: list }, 'PUT');
       setKeywords(reply?.data || null);
+      announceKeywords(reply?.data);
       setNotice('Keywords saved.');
     } catch (err) {
       setError(`The keywords were not saved: ${errorText(err)}`);
