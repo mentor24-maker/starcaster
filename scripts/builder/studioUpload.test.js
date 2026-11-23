@@ -406,11 +406,98 @@ test('the watcher queues finished and half-uploaded edits, once each', async (t)
   assert.equal(mid.processed.length, 1, 'an upload a restart interrupted is picked up again');
 });
 
+test('a video already on YouTube only needs its catalog write: a shelf or end card changed since does not block it', async (t) => {
+  const s = setup(t);
+  s.youtube.videoReadMisses = 100;
+  const first = await s.run();
+  assert.equal(first.result.outcome, 'outage', first.result.reason);
+  assert.equal(JSON.parse(fs.readFileSync(s.paths.session, 'utf8')).videoId, 'vid1', 'the video is up; only the writes are left');
+
+  // Since then the track left the shelf and the end card was switched off.
+  s.youtube.videoReadMisses = 0;
+  s.advance(pass.RELEASE_HOLD_MS + 1);
+  const second = await s.run({ shelf: { tracks: [] }, readEndCards: async () => ({ ok: true, cards: new Map() }) });
+  assert.equal(second.result.outcome, 'uploaded', second.result.reason);
+  assert.equal(s.catalog.edit.status, 'on_youtube');
+  assert.equal(s.catalog.edit.youtubeVideoId, 'vid1');
+  assert.equal(s.youtube.starts, 1, 'uploaded once');
+  assert.equal(fs.existsSync(s.paths.video), false, 'and the file goes, as it should');
+});
+
+test('a rejected video whose failed write did not land keeps its note, so the retry never uploads it again', async (t) => {
+  const s = setup(t);
+  s.youtube.uploadStatus = 'rejected';
+  s.catalog.refuseMoveTo = 'failed';
+  const first = await s.run();
+  assert.equal(first.result.outcome, 'outage', first.result.reason);
+  assert.equal(s.catalog.edit.status, 'uploading');
+  assert.equal(JSON.parse(fs.readFileSync(s.paths.session, 'utf8')).videoId, 'vid1', 'the note is kept until the edit reads failed');
+
+  s.catalog.refuseMoveTo = '';
+  s.advance(pass.RELEASE_HOLD_MS + 1);
+  const second = await s.run();
+  assert.equal(second.result.outcome, 'failed', second.result.reason);
+  assert.equal(s.youtube.starts, 1, 'the whole file was not sent a second time');
+  assert.equal(fs.existsSync(s.paths.session), false, 'now the edit reads failed, the rejected id goes');
+  assert.ok(fs.existsSync(s.paths.video));
+});
+
+test('a wrong-channel sign-in on a resumed, expired session does not clear the alarm\'s throttle', async (t) => {
+  const s = setup(t, { channel: 'Somebody Else', status: 'uploading' });
+  fs.writeFileSync(s.paths.session, JSON.stringify({ sessionUrl: 'https://upload.example/session/gone', bytes: FILE_BYTES }));
+  const { result } = await s.run();
+  assert.equal(result.outcome, 'outage', result.reason);
+  assert.equal(s.alarms.length, 1);
+  assert.equal(s.cleared(), 0, 'a token that only refreshed proves nothing about the channel');
+});
+
+test('a resumed upload that finishes clears the alarm once, with no channel read needed', async (t) => {
+  const s = setup(t);
+  s.youtube.dropAfterPieces = 1;
+  await s.run();
+  const clearedAfterFirst = s.cleared();
+  s.youtube.dropAfterPieces = Infinity;
+  s.advance(pass.RELEASE_HOLD_MS + 1);
+  const second = await s.run();
+  assert.equal(second.result.outcome, 'uploaded', second.result.reason);
+  assert.equal(s.cleared() - clearedAfterFirst, 1, 'YouTube showing the video is the proof');
+});
+
+test('an upload that failed every attempt is not queued again every six hours, only once the edit changes', async (t) => {
+  const s = setup(t);
+  const env = { STUDIO_PROJECT_ID: PROJECT };
+  s.catalog.edit.updatedAt = new Date(Date.parse('2026-11-22T19:00:00Z')).toISOString();
+  for (let n = 0; n < 5; n += 1) {
+    await pass.watchFinished({ queue: s.queue, env, catalog: s.catalog, now: () => Date.parse('2026-11-22T20:00:00Z') + n * 86400000 });
+    const job = s.queue.claim(OWNER, { stages: [pass.STAGE_UPLOAD] });
+    assert.ok(job, `attempt ${n + 1} could be claimed`);
+    s.queue.fail(job.id, OWNER, 'uploading this edit threw an error: boom');
+    s.advance(24 * 60 * 60 * 1000);
+  }
+  const job = s.queue.listJobs({ stage: pass.STAGE_UPLOAD })[0];
+  assert.equal(job.state, 'blocked', 'five failures is the queue\'s ceiling');
+  assert.equal(job.attempts, 5);
+
+  let at = Date.parse('2026-11-22T20:00:00Z') + 10 * 86400000;
+  const later = await pass.watchFinished({ queue: s.queue, env, catalog: s.catalog, now: () => at });
+  assert.equal(later.processed.length, 0, 'days on, it is still held: it would only fail the same way');
+  assert.match(later.skipped[0].why, /failed all 5 attempts .*not tried again until the edit changes/);
+
+  at += 1000;
+  s.catalog.edit.updatedAt = new Date(at).toISOString(); // sent back and approved again
+  const changed = await pass.watchFinished({ queue: s.queue, env, catalog: s.catalog, now: () => at });
+  assert.equal(changed.processed.length, 1, 'once the edit changes, it is tried again');
+});
+
 test('the daemon runs the upload stage and its watcher, and says what the watch did', () => {
   assert.equal(typeof daemon.STAGE_RUNNERS[pass.STAGE_UPLOAD].run, 'function');
   assert.equal(daemon.WATCHERS[pass.STAGE_UPLOAD_WATCH].everyMs, pass.UPLOAD_WATCH_EVERY_MS);
   const line = daemon.formatWatch({ stage: pass.STAGE_UPLOAD_WATCH, label: 'upload watch', result: { ok: true, processed: [1], skipped: [] } });
   assert.equal(line, 'upload watch OK: 1 finished edit(s) queued to upload, 0 already waiting or blocked');
+  // Each read takes the same first 200, so "the rest are read next minute" was not true.
+  const full = daemon.formatWatch({ stage: pass.STAGE_UPLOAD_WATCH, label: 'upload watch', result: { ok: true, processed: [], skipped: [], truncated: true } });
+  assert.match(full, /CANNOT TELL about finished edits past the first 200/);
+  assert.doesNotMatch(full, /next minute/);
 });
 
 test('Rough cuts: an edit on YouTube links to YouTube Studio; a refused upload stays under Approved with its reason', () => {

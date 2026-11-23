@@ -707,7 +707,7 @@ function formatUploadWatch(label, r) {
   if (r.notConfigured) return `${label} OFF: ${r.notConfigured}`;
   if (!r.ok) return `${label} COULD NOT TELL: ${r.error || 'no reason given'}`;
   const bits = [`${label} OK: ${(r.processed || []).length} finished edit(s) queued to upload, ${(r.skipped || []).length} already waiting or blocked`];
-  if (r.truncated) bits.push('more finished edits than one read takes; the rest are read next minute');
+  if (r.truncated) bits.push('CANNOT TELL about finished edits past the first 200: every read takes the same first 200, so the rest are queued only as those go up or move on');
   return bits.join(', ');
 }
 

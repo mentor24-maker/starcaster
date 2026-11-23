@@ -67,7 +67,7 @@ const { spawnSync } = require('node:child_process');
 const yt = require('./youtubeUpload.js');
 const copy = require('./youtubeCopy.js');
 const cards = require('./cards.js');
-const { finishedPathsFor, resolveFinishedDir } = require('./finalRenderPass.js');
+const { finishedPathsFor, resolveFinishedDir, blockedHold } = require('./finalRenderPass.js');
 const { EXPECTED_CHANNEL } = require('../../lib/youtubeUploadAccess.js');
 const videoEditsStore = require('../../lib/videoEditsStore.js');
 const videoMomentsStore = require('../../lib/videoMomentsStore.js');
@@ -79,8 +79,8 @@ const SUBJECT_VIDEO_EDIT = 'video_edit';
 const ALARM_JOB = 'reel-spinner-youtube-upload';
 const UPLOAD_WATCH_EVERY_MS = 60 * 1000;
 const WATCH_LIMIT = 200;
-/** A blocked job is queued again after this. */
-const RETRY_BLOCKED_AFTER_MS = 6 * 60 * 60 * 1000;
+/** A blocked job is queued again after this: the finished-video watch's number, so the two agree. */
+const { RETRY_BLOCKED_AFTER_MS } = require('./finalRenderPass.js');
 /** The machine's problem: tried again in 15 minutes, no attempt spent. */
 const RELEASE_HOLD_MS = 15 * 60 * 1000;
 /** A refused sign-in: tried again hourly (the bus hears once per six hours). */
@@ -165,8 +165,14 @@ function enqueueUpload(queue, { editId, why = '' }) {
   });
 }
 
-/** The watcher. An edit whose job was blocked in the last six hours is left alone. */
-async function watchFinished({ queue, env = process.env, options = {}, catalog = realCatalog(), now = Date.now } = {}) {
+/**
+ * The watcher. An edit whose job was blocked in the last six hours is left
+ * alone, and one whose upload FAILED every attempt is left alone until the
+ * edit itself changes — the same rule the finished-video watch keeps
+ * (finalRenderPass.js `blockedHold`), so a job that can only fail is not
+ * re-queued every six hours for good.
+ */
+async function watchFinished({ queue, env = process.env, options = {}, catalog = realCatalog(), now = Date.now, maxAttempts } = {}) {
   const scope = scopeFor(options, env);
   if (!scope) return { ok: true, processed: [], skipped: [], failed: [], notConfigured: 'STUDIO_PROJECT_ID is not set' };
   const listed = await catalog.listEditsByStatus(WATCH_LIMIT, ['finished', 'uploading'], scope);
@@ -176,10 +182,9 @@ async function watchFinished({ queue, env = process.env, options = {}, catalog =
   const skipped = [];
   for (const edit of listed.data) {
     const id = text(edit.id);
-    const held = blocked.find((j) => text(j.subjectId).toLowerCase() === id.toLowerCase()
-      && now() - Number(j.updatedAt) < RETRY_BLOCKED_AFTER_MS);
-    if (held) {
-      skipped.push({ editId: id, why: `its job ${held.id} is blocked: ${held.lastError}` });
+    const hold = blockedHold({ queue, stage: STAGE_UPLOAD, blocked, edit, now, ...(maxAttempts ? { maxAttempts } : {}) });
+    if (hold) {
+      skipped.push({ editId: id, why: hold });
       continue;
     }
     const { job, created } = enqueueUpload(queue, { editId: id, why: edit.status });
@@ -310,13 +315,25 @@ async function uploadJob({
     return releaseIt(`${reason}. The finished file is kept; tried again in an hour`, { holdMs: AUTH_HOLD_MS, alarm: told && told.said });
   };
   // This video will not go up. The file stays: nothing is deleted before YouTube confirms it.
-  const stopHere = async (reason) => {
+  // `afterMarked` runs only once the failed write has landed, never before.
+  const stopHere = async (reason, { afterMarked = null } = {}) => {
     const moved = await catalog.moveEdit(editId, 'failed', { error: reason }, scope);
     if (!moved.ok) return releaseIt(`${reason}. Edit ${editId} could not be marked failed: ${moved.error}`);
+    if (afterMarked) afterMarked();
     return completeIt('failed', reason);
   };
-  const refusedIt = (why) => stopHere(`${videoEditsStore.UPLOAD_PROBLEM_PREFIX}YouTube refused it (${why}). `
-    + `The finished file is kept on the Mac Mini. ${NOTHING_MORE}`);
+  const refusedIt = (why, opts) => stopHere(`${videoEditsStore.UPLOAD_PROBLEM_PREFIX}YouTube refused it (${why}). `
+    + `The finished file is kept on the Mac Mini. ${NOTHING_MORE}`, opts);
+  // The alarm is cleared only by proof the sign-in is GOOD for Dane of Earth:
+  // the channel check passing, or YouTube showing the video. A token that
+  // merely refreshed proves neither, and clearing on it let a wrong-channel
+  // sign-in reset the six-hour throttle and alarm the bus every hour.
+  let alarmCleared = false;
+  const allClear = () => {
+    if (alarmCleared) return;
+    alarmCleared = true;
+    clearAlarm();
+  };
 
   if (!editId) return blockIt('this upload job names no edit, so there is nothing to upload');
   if (!scope) return blockIt('STUDIO_PROJECT_ID is not set, so the edit cannot be read in its project. Fix: set STUDIO_PROJECT_ID.');
@@ -357,12 +374,20 @@ async function uploadJob({
   }
   base.bytes = bytes;
 
-  let musicShelf = shelf;
-  if (!musicShelf) {
-    try { musicShelf = realShelf(); } catch (err) { return blockIt(`the music shelf could not be read (${err.message}), so the music credit cannot be written`); }
+  // The text is only needed to OPEN an upload. With the video id already on
+  // the disk the video is up and only the catalog write is left, so a shelf,
+  // end card or note that changed since must not hold that write back (a
+  // blocked job here would leave the card with no link and the file on disk
+  // for good).
+  let meta = null;
+  if (!videoId) {
+    let musicShelf = shelf;
+    if (!musicShelf) {
+      try { musicShelf = realShelf(); } catch (err) { return blockIt(`the music shelf could not be read (${err.message}), so the music credit cannot be written`); }
+    }
+    meta = await uploadMetadata({ edit, sidecar: readJson(paths.sidecar, io), scope, catalog, readEndCards, shelf: musicShelf });
+    if (!meta.ok) return meta.machine ? releaseIt(meta.why) : blockIt(`it cannot go up yet: ${meta.why}`);
   }
-  const meta = await uploadMetadata({ edit, sidecar: readJson(paths.sidecar, io), scope, catalog, readEndCards, shelf: musicShelf });
-  if (!meta.ok) return meta.machine ? releaseIt(meta.why) : blockIt(`it cannot go up yet: ${meta.why}`);
 
   // ── 2. A fresh sign-in, for the right channel ──────────────────────────
   const signedIn = await youtube.accessToken();
@@ -384,13 +409,13 @@ async function uploadJob({
       };
     }
     channelChecked = { ok: true };
+    allClear();
     return channelChecked;
   };
   if (!videoId && !text(saved.sessionUrl)) {
     const mine = await checkChannel();
     if (!mine.ok) return mine.kind === 'auth' ? signInStopped(mine.why) : releaseIt(mine.why);
   }
-  clearAlarm();
 
   // ── 3. The edit moves to uploading; its text is locked from here ────────
   if (edit.status === 'finished') {
@@ -442,13 +467,16 @@ async function uploadJob({
   if (!confirmed.ok) {
     if (confirmed.kind === 'refused') {
       // The note's video id is the rejected one: kept, every later try would
-      // skip the upload, read the same rejection back and fail again.
-      removeQuietly(paths.session, io);
-      return refusedIt(confirmed.why);
+      // skip the upload, read the same rejection back and fail again. But it
+      // goes only AFTER the edit reads failed: if that write fails the job is
+      // released, and a retry without the note would upload the whole file
+      // a second time.
+      return refusedIt(confirmed.why, { afterMarked: () => removeQuietly(paths.session, io) });
     }
     if (confirmed.kind === 'auth') return signInStopped(confirmed.why);
     return releaseIt(`${confirmed.why}; the finished file is kept until YouTube shows it`);
   }
+  allClear();
   base.privacy = confirmed.privacy;
   if (confirmed.privacy !== 'private') base.warning = `it was uploaded as Private, but YouTube reads it back as "${confirmed.privacy}"`;
 

@@ -991,7 +991,9 @@ YouTube names it, so a try whose database write failed only redoes the write:
   403 or 429 for the project's quota or a rate limit; all of them wait.
 - **the sign-in is refused, or belongs to another channel**: stopped, tried
   hourly, and the bus hears once per six hours (`reel-spinner-youtube-upload`)
-  with the fix, `npm run studio:youtube-login`. The next good sign-in clears it.
+  with the fix, `npm run studio:youtube-login`. The next sign-in PROVED good
+  clears it: the channel check passing, or YouTube showing the uploaded video.
+  A token that merely refreshed proves neither, so it clears nothing.
 - **no answer, a YouTube hiccup, the database not answering**: tried again
   in 15 minutes, no attempt counted, carrying on where it stopped. Three
   answers in a row that take none of a piece also count as a hiccup, so a
@@ -1001,9 +1003,21 @@ YouTube names it, so a try whose database write failed only redoes the write:
   moves to `failed`, and the card shows it under Approved with the reason
   ("Not uploaded to YouTube: …"). A missing file is said as a missing file,
   with "YouTube was not asked". A video rejected on read-back also has its
-  session note removed, so its rejected id is never read back again.
+  session note removed, so its rejected id is never read back again, but
+  only once the edit reads `failed`: if that write does not land, the note
+  stays, so the retry does not send the whole file a second time.
+- **the video is already up, and only the database write is left**: the
+  retry skips the upload AND the text (title, music credit, end card), so a
+  shelf or end card changed since cannot hold the write back.
+- **an upload job that failed every attempt** is not queued again every six
+  hours; it waits until the edit itself changes (the finished-video watch's
+  rule, `blockedHold` in `finalRenderPass.js`).
 
 **A failed upload stops there.** Nothing moves a `failed` edit on by itself,
+and a rough-cut job for the same recording (queued when a sibling short is
+sent back, or the moments are re-scored) skips it too
+(`videoEditsStore.isUploadProblem`): rendering it again would erase the
+reason and put an approved video back in front of Dane as waiting for review.
 and the Rough cuts screen has no button that sends one again yet (the website
 sets only approved, skipped and sent_back). Every reason ends by saying so,
 rather than naming a step the screen does not offer. These edits are read on

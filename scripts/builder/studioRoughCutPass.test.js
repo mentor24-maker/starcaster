@@ -21,7 +21,7 @@ const {
   runRoughCut, enqueueRoughCut, soundShift, filterScript, renderArgs, driveFileName,
   localPathsFor, STAGE_ROUGH_CUT, ROUGH_CUTS_FOLDER, STUDIO_FOLDER_ID,
 } = require('../../workers/studio/roughCutPass.js');
-const { stepError, keepRangesOrError } = require('../../lib/videoEditsStore.js');
+const { stepError, keepRangesOrError, UPLOAD_PROBLEM_PREFIX } = require('../../lib/videoEditsStore.js');
 const { FAILURES } = require('../../workers/studio/proxy.js');
 const daemon = require('../../workers/studio/daemon.js');
 const { planBackfill, runBackfill, report: backfillReport } = require('../studio_backfill_roughcuts.cjs');
@@ -339,6 +339,31 @@ test('an edit left in rendering by a run that died is rendered again rather than
   const r = rep.done[0] || rep;
   assert.equal(r.outcome, 'done', JSON.stringify(r));
   assert.deepEqual(s.catalog.edits.map((e) => e.status), ['review', 'review']);
+});
+
+test('an approved video the upload stopped is never rendered again by a later rough-cut job (SC-842)', async (t) => {
+  const s = setup(t);
+  enqueueRoughCut(s.queue, { sourceId: SRC });
+  await s.run();
+  assert.deepEqual(s.catalog.edits.map((e) => e.status), ['review', 'review']);
+  // The short was approved, finished, and then YouTube refused it; the full
+  // edit was sent back and waits to be re-cut (a draft again).
+  const [full, short] = s.catalog.edits;
+  const reason = `${UPLOAD_PROBLEM_PREFIX}YouTube refused it (invalid title). Nothing more happens to this video on its own`;
+  Object.assign(short, { status: 'failed', error: reason });
+  full.status = 'draft';
+  const before = renders(s.ffmpegCalls).length;
+
+  s.advance(1000);
+  enqueueRoughCut(s.queue, { sourceId: SRC });
+  const rep = await s.run();
+  const r = rep.done[0] || rep;
+  assert.equal(r.outcome, 'done', JSON.stringify(r));
+  assert.equal(renders(s.ffmpegCalls).length - before, 1, 'only the draft sibling is rendered');
+  assert.deepEqual(r.edits.map((e) => e.editId), [full.id]);
+  assert.equal(full.status, 'review');
+  assert.equal(short.status, 'failed', 'the refused video stays where the upload left it');
+  assert.equal(short.error, reason, 'and its reason is not erased');
 });
 
 test('the lease is stretched to cover the render before ffmpeg runs', async (t) => {
