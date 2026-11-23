@@ -67,6 +67,7 @@ const tasks       = require('./tasks');
 const polls       = require('./polls');
 const platformScreenshots = require('./platformScreenshots');
 const crm         = require('./crm');
+const booking     = require('./booking');
 const blog        = require('./blog');
 const events      = require('./events');
 const studio      = require('./studio');
@@ -159,6 +160,7 @@ const ROUTE_MODULES = [
   tasks,
   polls,
   crm,
+  booking,
   blog,
   events,
   studio,
