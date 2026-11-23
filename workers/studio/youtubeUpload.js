@@ -22,7 +22,9 @@
  *   quota     the day's upload allowance is used up. It resets at midnight
  *             Pacific; nothing is wrong with the video.
  *   refused   YouTube looked at THIS upload and said no (a 4xx about the
- *             video or its text). The video's problem.
+ *             video or its text). The video's problem. With `local: true`
+ *             the file on the disk was the problem and YouTube was never
+ *             asked (empty, or shorter than it measured).
  *   expired   the saved upload session is gone (YouTube keeps one about a
  *             week). Start a new one.
  *   machine   no answer, or a 5xx: the network or YouTube having a moment.
@@ -43,6 +45,12 @@ const CHUNK_BYTES = 8 * 1024 * 1024;
 const BLOCK = 256 * 1024;
 /** The reasons YouTube gives when the day's allowance is spent. */
 const QUOTA_REASONS = ['quotaExceeded', 'uploadLimitExceeded', 'dailyLimitExceeded', 'rateLimitExceeded', 'userRateLimitExceeded'];
+/**
+ * How many answers in a row may give no ground (a 308 with no Range header,
+ * or one that names a byte at or before where the piece started) before the
+ * upload stops. Without a cap such answers rewind forever and hold the daemon.
+ */
+const MAX_NO_PROGRESS = 3;
 const FIX_SIGN_IN = 'Fix: run npm run studio:youtube-login on the Mac Mini and sign in as the account that owns Dane of Earth';
 
 function text(value) {
@@ -87,12 +95,13 @@ function said(res) {
 function classify(res, { session = false } = {}) {
   const status = Number(res && res.status) || 0;
   const code = reasonCode(res);
-  if (!status || status >= 500 || status === 429) {
-    return QUOTA_REASONS.includes(code) && status === 429 ? 'quota' : 'machine';
-  }
+  // The channel's daily upload cap comes back as 400 uploadLimitExceeded
+  // (videos.insert's own error table); the project's API quota as a 403; a
+  // rate limit as a 403 or 429. All three mean "wait", never "this video is bad".
+  if (QUOTA_REASONS.includes(code) && [400, 403, 429].includes(status)) return 'quota';
+  if (!status || status >= 500 || status === 429) return 'machine';
   if (status === 401) return 'auth';
   if (status === 403) {
-    if (QUOTA_REASONS.includes(code)) return 'quota';
     if (/insufficient|forbidden|authError|youtubeSignupRequired/i.test(code)) return 'auth';
     return 'refused';
   }
@@ -234,6 +243,10 @@ function readSlice(file, start, length, io = fs) {
  *                 sent, so the next try can resume it
  *   onProgress    called after each piece with the bytes YouTube has; return
  *                 false to stop (the job's lease was lost)
+ *   beforeNewSession  called before EVERY new session is opened, including
+ *                 one opened because a saved session expired; a `{ ok: false }`
+ *                 answer is returned as it is and nothing is opened. This is
+ *                 where the caller checks the sign-in's channel.
  *
  * Returns `{ ok, video, resumedFrom, sentBytes }` or a failure with `kind`
  * (plus `leaseLost`). A session YouTube no longer knows (`expired`) is
@@ -241,10 +254,10 @@ function readSlice(file, start, length, io = fs) {
  */
 async function uploadResumable({
   client, token, file, bytes, metadata, session = null, saveSession = () => {}, onProgress = async () => true,
-  chunkBytes = CHUNK_BYTES, io = fs,
+  beforeNewSession = async () => ({ ok: true }), chunkBytes = CHUNK_BYTES, io = fs,
 }) {
   const size = Number(bytes);
-  if (!(size > 0)) return { ok: false, kind: 'refused', why: `the file to upload is empty (${file})` };
+  if (!(size > 0)) return { ok: false, kind: 'refused', local: true, why: `the file to upload is empty (${file})` };
   const piece = Math.max(BLOCK, Math.floor(Number(chunkBytes) / BLOCK) * BLOCK || CHUNK_BYTES);
   let sessionUrl = text(session && session.sessionUrl);
   let offset = 0;
@@ -264,29 +277,35 @@ async function uploadResumable({
       return asked;
     }
   }
-  if (!sessionUrl) {
+  const openSession = async () => {
+    const allowed = await beforeNewSession();
+    if (!allowed || !allowed.ok) return allowed || { ok: false, kind: 'machine', why: 'the check before a new upload gave no answer' };
     const opened = await client.startSession({ token, metadata, bytes: size });
     if (!opened.ok) return opened;
     sessionUrl = opened.sessionUrl;
     saveSession({ sessionUrl, bytes: size });
     offset = 0;
+    return { ok: true };
+  };
+  if (!sessionUrl) {
+    const opened = await openSession();
+    if (!opened.ok) return opened;
   }
 
   let sentBytes = 0;
+  let noProgress = 0;
   while (offset < size) {
     const length = Math.min(piece, size - offset);
     const buffer = readSlice(file, offset, length, io);
-    if (buffer.length !== length) return { ok: false, kind: 'refused', why: `the file ended at ${offset + buffer.length} bytes, before the ${size} it was measured at` };
+    if (buffer.length !== length) return { ok: false, kind: 'refused', local: true, why: `the file ended at ${offset + buffer.length} bytes, before the ${size} it was measured at` };
     const sent = await client.putChunk({ token, sessionUrl, buffer, start: offset, total: size });
     if (!sent.ok) {
       if (sent.kind === 'expired' && !restarted) {
         // Gone mid-way (rare: it lives about a week). Start once more from the top.
         restarted = true;
-        const opened = await client.startSession({ token, metadata, bytes: size });
-        if (!opened.ok) return opened;
-        sessionUrl = opened.sessionUrl;
-        saveSession({ sessionUrl, bytes: size });
-        offset = 0;
+        const opened = await openSession();
+        if (!opened.ok) return { ...opened, resumedFrom, sentBytes };
+        noProgress = 0;
         continue;
       }
       return { ...sent, resumedFrom, sentBytes };
@@ -294,6 +313,17 @@ async function uploadResumable({
     sentBytes += length;
     if (sent.state === 'done') return { ok: true, video: sent.video, resumedFrom, sentBytes, restarted };
     // YouTube may keep less than it was sent; carry on from where IT says.
+    if (sent.nextByte <= offset) {
+      noProgress += 1;
+      if (noProgress >= MAX_NO_PROGRESS) {
+        return {
+          ok: false, kind: 'machine', resumedFrom, sentBytes,
+          why: `YouTube answered ${noProgress} pieces in a row without taking any of them (it says it has ${sent.nextByte} of ${size} bytes), so the upload stopped rather than send the same bytes forever`,
+        };
+      }
+    } else {
+      noProgress = 0;
+    }
     offset = sent.nextByte;
     if ((await onProgress(offset)) === false) return { ok: false, kind: 'machine', leaseLost: true, why: 'the job\'s lease was lost mid-upload', resumedFrom, sentBytes };
   }
@@ -325,6 +355,7 @@ module.exports = {
   msUntilQuotaReset,
   readSlice,
   CHUNK_BYTES,
+  MAX_NO_PROGRESS,
   QUOTA_REASONS,
   FIX_SIGN_IN,
 };

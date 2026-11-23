@@ -1169,6 +1169,15 @@ function createFakeDb(schema, { idPrefix = 'row' } = {}) {
         continue;
       }
 
+      // `col=like.Some prefix*` — PostgREST's LIKE, with `*` standing for `%`.
+      // Case-sensitive, as LIKE is; NULL never matches.
+      const like = /^like\.(.*)$/s.exec(value);
+      if (like) {
+        const pattern = new RegExp(`^${like[1].split('*').map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('.*')}$`, 's');
+        rows = rows.filter((row) => row[key] !== null && row[key] !== undefined && pattern.test(String(row[key])));
+        continue;
+      }
+
       const match = /^eq\.(.*)$/.exec(value);
       if (!match) throw new Error(`sqlSchemaFake: unsupported filter ${key}=${value}`);
       const wanted = match[1];

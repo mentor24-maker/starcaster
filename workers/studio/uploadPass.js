@@ -50,8 +50,14 @@
  *   - no answer, a YouTube 5xx, the catalog unreachable: put back for 15
  *     minutes, no attempt spent; the upload resumes where it stopped;
  *   - YouTube refused THIS upload (a 4xx about the video, or a rejection on
- *     read-back): the edit moves to `failed` with YouTube's reason, starting
- *     `YouTube refused the upload: ` so the Rough cuts card keeps showing it.
+ *     read-back), or the finished file is not on the disk at all: the edit
+ *     moves to `failed` with the reason, starting `Not uploaded to YouTube: `
+ *     (UPLOAD_PROBLEM_PREFIX) so the Rough cuts card keeps showing it.
+ *
+ * A FAILED EDIT IS WHERE THIS STOPS. Nothing moves a failed edit on by itself,
+ * and the Rough cuts screen has no button that does (the website sets only
+ * approved, skipped and sent_back). So every `failed` reason says that, in
+ * those words, rather than naming a step Dane cannot take from the screen.
  */
 
 const fs = require('node:fs');
@@ -84,6 +90,8 @@ const PIECE_LEASE_MS = 15 * 60 * 1000;
 /** YouTube's read can lag its own write (docs/STUDIO.md): read back for up to this long. */
 const READ_BACK_TRIES = 7;
 const READ_BACK_WAIT_MS = 5 * 1000;
+/** The last words of every `failed` reason: what happens next, which is nothing on its own. */
+const NOTHING_MORE = 'Nothing more happens to this video on its own, and this screen has no button that sends it again yet';
 /** People & Blogs, what the 6b test upload used. */
 const CATEGORY_ID = '22';
 
@@ -301,13 +309,14 @@ async function uploadJob({
     const told = alarm(reason, { env });
     return releaseIt(`${reason}. The finished file is kept; tried again in an hour`, { holdMs: AUTH_HOLD_MS, alarm: told && told.said });
   };
-  // YouTube said no to THIS upload. The file stays: nothing is deleted before YouTube confirms it.
-  const refusedIt = async (why) => {
-    const reason = `${videoEditsStore.UPLOAD_PROBLEM_PREFIX}${why}. The finished file is kept on the Mac Mini`;
+  // This video will not go up. The file stays: nothing is deleted before YouTube confirms it.
+  const stopHere = async (reason) => {
     const moved = await catalog.moveEdit(editId, 'failed', { error: reason }, scope);
-    if (!moved.ok) return releaseIt(`YouTube refused the upload (${why}), and edit ${editId} could not be marked failed: ${moved.error}`);
+    if (!moved.ok) return releaseIt(`${reason}. Edit ${editId} could not be marked failed: ${moved.error}`);
     return completeIt('failed', reason);
   };
+  const refusedIt = (why) => stopHere(`${videoEditsStore.UPLOAD_PROBLEM_PREFIX}YouTube refused it (${why}). `
+    + `The finished file is kept on the Mac Mini. ${NOTHING_MORE}`);
 
   if (!editId) return blockIt('this upload job names no edit, so there is nothing to upload');
   if (!scope) return blockIt('STUDIO_PROJECT_ID is not set, so the edit cannot be read in its project. Fix: set STUDIO_PROJECT_ID.');
@@ -341,7 +350,9 @@ async function uploadJob({
     }
     try { bytes = io.statSync(paths.video).size; } catch { bytes = 0; }
     if (!(bytes > 0)) {
-      return refusedIt(`there is nothing to upload: the finished file is not at ${paths.video}. Fix: send the cut back and approve it again, which makes the finished video again`);
+      // Not YouTube's doing: YouTube was never asked. Said as what it is.
+      return stopHere(`${videoEditsStore.UPLOAD_PROBLEM_PREFIX}the finished video is not on the Mac Mini (it was looked for at ${paths.video}), `
+        + `so there was nothing to send, and YouTube was not asked. ${NOTHING_MORE}`);
     }
   }
   base.bytes = bytes;
@@ -357,12 +368,27 @@ async function uploadJob({
   const signedIn = await youtube.accessToken();
   if (!signedIn.ok) return signedIn.kind === 'auth' ? signInStopped(signedIn.why) : releaseIt(signedIn.why);
   const token = signedIn.token;
-  if (!videoId && !text(saved.sessionUrl)) {
+  // The channel is checked before ANY new upload session opens: here when
+  // there is no saved one, and inside uploadResumable when a saved one turns
+  // out to have expired. Asked once per job at most.
+  let channelChecked = null;
+  const checkChannel = async () => {
+    if (channelChecked) return channelChecked;
     const mine = await youtube.channelTitles(token);
-    if (!mine.ok) return mine.kind === 'auth' ? signInStopped(mine.why) : releaseIt(mine.why);
+    if (!mine.ok) return mine;
     if (!mine.titles.includes(EXPECTED_CHANNEL)) {
-      return signInStopped(`the upload sign-in belongs to ${mine.titles.length ? `"${mine.titles.join('", "')}"` : 'an account with no channel'}, not "${EXPECTED_CHANNEL}", so nothing was uploaded. ${yt.FIX_SIGN_IN}`);
+      return {
+        ok: false,
+        kind: 'auth',
+        why: `the upload sign-in belongs to ${mine.titles.length ? `"${mine.titles.join('", "')}"` : 'an account with no channel'}, not "${EXPECTED_CHANNEL}", so nothing was uploaded. ${yt.FIX_SIGN_IN}`,
+      };
     }
+    channelChecked = { ok: true };
+    return channelChecked;
+  };
+  if (!videoId && !text(saved.sessionUrl)) {
+    const mine = await checkChannel();
+    if (!mine.ok) return mine.kind === 'auth' ? signInStopped(mine.why) : releaseIt(mine.why);
   }
   clearAlarm();
 
@@ -386,6 +412,7 @@ async function uploadJob({
       session: text(saved.sessionUrl) && Number(saved.bytes) === bytes ? saved : null,
       saveSession: ({ sessionUrl }) => writeJson(paths.session, { sessionUrl, bytes, startedAt: new Date(clock()).toISOString() }, io),
       onProgress: async () => queue.heartbeat(job.id, owner, { leaseMs: PIECE_LEASE_MS }) !== false,
+      beforeNewSession: checkChannel,
     });
     Object.assign(base, { resumedFrom: up.resumedFrom, sentBytes: up.sentBytes, uploadMs: clock() - started });
     if (!up.ok) {
@@ -395,6 +422,10 @@ async function uploadJob({
           + 'this upload waits until then, no attempt counted, and the finished file is kept', { holdMs: yt.msUntilQuotaReset(clock()), outcome: 'waiting' });
       }
       if (up.kind === 'auth') return signInStopped(up.why);
+      if (up.kind === 'refused' && up.local) {
+        return stopHere(`${videoEditsStore.UPLOAD_PROBLEM_PREFIX}the finished video on the Mac Mini could not be read whole (${up.why}), `
+          + `so YouTube was not sent it. ${NOTHING_MORE}`);
+      }
       if (up.kind === 'refused') return refusedIt(up.why);
       return releaseIt(`the upload stopped part-way (${up.why}); it carries on from where YouTube got to, and the finished file is kept`);
     }
@@ -409,7 +440,12 @@ async function uploadJob({
   // ── 5. Read back from YouTube ──────────────────────────────────────────
   const confirmed = await confirmVideo({ client: youtube, token, videoId, sleep });
   if (!confirmed.ok) {
-    if (confirmed.kind === 'refused') return refusedIt(confirmed.why);
+    if (confirmed.kind === 'refused') {
+      // The note's video id is the rejected one: kept, every later try would
+      // skip the upload, read the same rejection back and fail again.
+      removeQuietly(paths.session, io);
+      return refusedIt(confirmed.why);
+    }
     if (confirmed.kind === 'auth') return signInStopped(confirmed.why);
     return releaseIt(`${confirmed.why}; the finished file is kept until YouTube shows it`);
   }

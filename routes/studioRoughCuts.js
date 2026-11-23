@@ -28,7 +28,7 @@
  */
 
 const { sendOk, sendErr, parseJsonBody } = require('./http');
-const { listEditsByStatus, reviewEdit, EDIT_STATUSES } = require('../lib/videoEditsStore');
+const { listEditsByStatus, listUploadProblemEdits, reviewEdit, EDIT_STATUSES } = require('../lib/videoEditsStore');
 const { listSources } = require('../lib/videoSourcesStore');
 const { getMomentsBySource } = require('../lib/videoMomentsStore');
 const { roughCutsView, MAKING } = require('../lib/studioRoughCuts');
@@ -46,12 +46,13 @@ const VERDICT_FIELDS = ['status', 'daneNote', ...TEXT_FIELDS];
 const VERDICTS = ['approved', 'skipped', 'sent_back'];
 
 /**
- * Every status. Failed is read too, but lib/studioRoughCuts.js shows only the
- * failed edits YouTube refused to take (Reel Spinner 6c): he approved those,
- * and an approved video must not vanish from the screen without a reason.
- * Any other failed edit has no rough cut to watch and is left out there.
+ * Every status but failed: a failed edit has no rough cut to watch. The one
+ * exception, an approved edit the upload step stopped (Reel Spinner 6c), is
+ * read on its own (listUploadProblemEdits, newest first), so years of old
+ * machine failures can never push it, or anything else, off the end of the
+ * main read.
  */
-const LISTED_STATUSES = EDIT_STATUSES;
+const LISTED_STATUSES = EDIT_STATUSES.filter((s) => s !== 'failed');
 
 /**
  * The cuts waiting on Dane are read ON THEIR OWN, never as part of one read
@@ -92,24 +93,25 @@ async function readMoments(edits, scope) {
 async function sendList(req, res) {
   const scope = requestScope(req);
   if (!scope.projectId) return sendErr(res, 400, 'No active project', { code: 'PROJECT_REQUIRED' });
-  const [waiting, others, sources] = await Promise.all([
+  const [waiting, others, notUploaded, sources] = await Promise.all([
     listEditsByStatus(EDIT_READ_LIMIT, WAITING_STATUSES, scope),
     listEditsByStatus(EDIT_READ_LIMIT, OTHER_STATUSES, scope),
+    listUploadProblemEdits(EDIT_READ_LIMIT, scope),
     listSources(SOURCE_READ_LIMIT, scope),
   ]);
   // A failed read is an error, never "no rough cuts yet".
-  for (const edits of [waiting, others]) {
+  for (const edits of [waiting, others, notUploaded]) {
     if (!edits.ok) return sendErr(res, edits.status || 500, `Could not read the rough cuts: ${edits.error}`);
   }
   if (!sources.ok) return sendErr(res, sources.status || 500, `Could not read the recordings: ${sources.error}`);
-  const edits = [...waiting.data, ...others.data];
+  const edits = [...waiting.data, ...others.data, ...notUploaded.data];
   const moments = await readMoments(edits, scope);
   let shelf = null;
   try { shelf = loadShelf(); } catch { shelf = null; }
   const view = roughCutsView({ edits, sources: sources.data, momentsBySource: moments.bySource, shelf });
   return sendOk(res, 200, {
     ...view,
-    truncated: waiting.data.length >= EDIT_READ_LIMIT || others.data.length >= EDIT_READ_LIMIT,
+    truncated: [waiting, others, notUploaded].some((r) => r.data.length >= EDIT_READ_LIMIT),
     waitingTruncated: waiting.data.length >= EDIT_READ_LIMIT,
     readLimit: EDIT_READ_LIMIT,
     momentsError: moments.error,

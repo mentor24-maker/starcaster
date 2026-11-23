@@ -54,7 +54,7 @@ export type RoughCut = {
   youtube?: YoutubeText;
   /** On YouTube (6c): its page in YouTube Studio, where he makes it public. '' otherwise. */
   youtubeUrl?: string;
-  /** YouTube refused the upload (6c): the reason, starting "YouTube refused the upload: ". */
+  /** Not uploaded (6c): the reason, starting "Not uploaded to YouTube: ". '' otherwise. */
   uploadProblem?: string;
   updatedAt: string;
 };
@@ -123,7 +123,7 @@ const AFTER_APPROVAL: Record<string, string> = {
   // The finished file waits on the Mac Mini for the YouTube upload (6c).
   finished: 'finished, waiting to upload',
   uploading: 'uploading to YouTube',
-  on_youtube: 'On YouTube (private)',
+  on_youtube: 'on YouTube (private)',
 };
 
 /**
@@ -168,7 +168,7 @@ export function verdictLine(
 ): string {
   if (edit.group === 'waiting') return edit.recutProblem ? edit.recutProblem.charAt(0).toUpperCase() + edit.recutProblem.slice(1) : (edit.recutCount && edit.daneNote ? `Re-cut from your note: "${edit.daneNote}"` : '');
   if (edit.group === 'approved') {
-    if (edit.uploadProblem) return `Approved — ${edit.uploadProblem}.`;
+    if (edit.uploadProblem) return `Approved — ${edit.uploadProblem.charAt(0).toLowerCase()}${edit.uploadProblem.slice(1).replace(/\.$/, '')}.`;
     const after = AFTER_APPROVAL[edit.status];
     return after ? `Approved — ${after}.` : 'Approved — the Mac Mini will finish it.';
   }

@@ -159,7 +159,7 @@ describe("rough cuts: what each line says", () => {
 
   it("says what happened to one he has answered", () => {
     expect(verdictLine({ status: "approved", group: "approved", daneNote: "" })).toContain("Approved");
-    expect(verdictLine({ status: "on_youtube", group: "approved", daneNote: "" })).toBe("Approved — On YouTube (private).");
+    expect(verdictLine({ status: "on_youtube", group: "approved", daneNote: "" })).toBe("Approved — on YouTube (private).");
     expect(verdictLine({ status: "finished", group: "approved", daneNote: "" })).toBe("Approved — finished, waiting to upload.");
     expect(verdictLine({ status: "sent_back", group: "sent_back", daneNote: "trim the start" }))
       .toBe('Sent back: "trim the start"');
@@ -233,16 +233,16 @@ describe("rough cuts screen", () => {
   it("an uploaded cut links to YouTube Studio; a refused upload says YouTube's reason (6c)", async () => {
     rows = [
       edit("up", { status: "on_youtube", youtubeUrl: "https://studio.youtube.com/video/vid9/edit" }),
-      edit("no", { status: "failed", uploadProblem: "YouTube refused the upload: invalid title" }),
+      edit("no", { status: "failed", uploadProblem: "Not uploaded to YouTube: YouTube refused it (invalid title). Nothing more happens to this video on its own." }),
     ];
     await mount();
     await click(q('[data-testid="studio-roughcuts-approved"]')!);
     const [up, no] = ["up", "no"].map((id) => cards().find((c) => c.dataset.editId === id)!);
-    expect(up.querySelector('[data-testid="studio-roughcut-verdict"]')!.textContent).toBe("Approved — On YouTube (private).");
+    expect(up.querySelector('[data-testid="studio-roughcut-verdict"]')!.textContent).toBe("Approved — on YouTube (private).");
     const link = up.querySelector<HTMLAnchorElement>('[data-testid="studio-roughcut-on-youtube"] a')!;
     expect(link.href).toBe("https://studio.youtube.com/video/vid9/edit");
     expect(link.textContent).toBe("Open in YouTube Studio");
-    expect(no.querySelector('[data-testid="studio-roughcut-verdict"]')!.textContent).toBe("Approved — YouTube refused the upload: invalid title.");
+    expect(no.querySelector('[data-testid="studio-roughcut-verdict"]')!.textContent).toBe("Approved — not uploaded to YouTube: YouTube refused it (invalid title). Nothing more happens to this video on its own.");
     expect(no.querySelector('[data-testid="studio-roughcut-on-youtube"]')).toBeNull();
   });
 

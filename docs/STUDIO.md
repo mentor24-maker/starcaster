@@ -954,13 +954,14 @@ console's Quotas page for `starcaster-498505` (a browser login).
 
 Once a video is finished, the Mini uploads it to **Dane of Earth as Private**
 (SC-842). Nothing is ever made public by the Mini: the card on **Assets ›
-Footage › Rough cuts** reads **"Approved — On YouTube (private)."** with an
+Footage › Rough cuts** reads **"Approved — on YouTube (private)."** with an
 **Open in YouTube Studio** link, and Dane makes it public there with one click.
 
 **How it gets there.** A watcher asks the database every minute for
 `finished` edits (and `uploading` ones a restart left mid-way) and queues one
 `upload` job each, run one at a time right after the finished-video stage.
-The job checks the sign-in belongs to Dane of Earth before any new upload,
+The job checks the sign-in belongs to Dane of Earth before any new upload
+session opens (including one opened because a saved session had expired),
 moves the edit to `uploading` (its text is locked from then, so what goes up
 is what he approved), sends the file, reads the video back from YouTube until
 it is there and not rejected, moves the edit to `on_youtube` with the video's
@@ -985,15 +986,29 @@ YouTube names it, so a try whose database write failed only redoes the write:
 **When it stops:**
 
 - **the day's upload allowance is used up**: it waits until the allowance
-  resets at midnight Pacific (1 AM Mountain), no attempt counted.
+  resets at midnight Pacific (1 AM Mountain), no attempt counted. YouTube says
+  this as a **400** `uploadLimitExceeded` for the channel's daily cap, and a
+  403 or 429 for the project's quota or a rate limit; all of them wait.
 - **the sign-in is refused, or belongs to another channel**: stopped, tried
   hourly, and the bus hears once per six hours (`reel-spinner-youtube-upload`)
   with the fix, `npm run studio:youtube-login`. The next good sign-in clears it.
 - **no answer, a YouTube hiccup, the database not answering**: tried again
-  in 15 minutes, no attempt counted, carrying on where it stopped.
+  in 15 minutes, no attempt counted, carrying on where it stopped. Three
+  answers in a row that take none of a piece also count as a hiccup, so a
+  confused session cannot hold the Mini sending the same bytes forever.
 - **YouTube refuses the upload** (a 4xx about the video, or a rejection when
-  it is read back): the edit moves to `failed` with YouTube's reason, which
-  the card shows under Approved ("YouTube refused the upload: …").
+  it is read back), **or the finished file is not on the Mini**: the edit
+  moves to `failed`, and the card shows it under Approved with the reason
+  ("Not uploaded to YouTube: …"). A missing file is said as a missing file,
+  with "YouTube was not asked". A video rejected on read-back also has its
+  session note removed, so its rejected id is never read back again.
+
+**A failed upload stops there.** Nothing moves a `failed` edit on by itself,
+and the Rough cuts screen has no button that sends one again yet (the website
+sets only approved, skipped and sent_back). Every reason ends by saying so,
+rather than naming a step the screen does not offer. These edits are read on
+their own, newest first (`listUploadProblemEdits`), so old machine failures can
+never push them off the screen.
 
 **A finished file is never deleted before YouTube confirms the video.** A
 failed, refused or unconfirmed upload leaves it on the Mini.

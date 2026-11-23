@@ -62,6 +62,8 @@ function fakeYoutube({ channel = 'Dane of Earth' } = {}) {
     starts: 0,
     pieces: [],
     queries: 0,
+    channelReads: 0,
+    noRange: false,
     keepShort: 0,
     dropAfterPieces: Infinity,
     failToken: false,
@@ -78,9 +80,11 @@ function fakeYoutube({ channel = 'Dane of Earth' } = {}) {
       if (yt.failToken) return reply(400, { error: 'invalid_grant', error_description: 'Token has been expired or revoked.' });
       return reply(200, { access_token: 'tok' });
     }
-    if (url.includes('/channels?')) return reply(200, { items: [{ snippet: { title: yt.channel } }] });
+    if (url.includes('/channels?')) { yt.channelReads += 1; return reply(200, { items: [{ snippet: { title: yt.channel } }] }); }
     if (url.includes('/upload/youtube/v3/videos?uploadType=resumable')) {
-      if (yt.quota) return reply(403, { error: { message: 'The user has exceeded the number of videos they may upload.', errors: [{ reason: 'uploadLimitExceeded' }] } });
+      // The channel's daily cap, as YouTube really sends it: a 400, not a 403
+      // (videos.insert error table: badRequest (400) uploadLimitExceeded).
+      if (yt.quota) return reply(400, { error: { message: 'The user has exceeded the number of videos they may upload.', errors: [{ reason: 'uploadLimitExceeded' }] } });
       if (yt.refuseInsert) return reply(400, { error: { message: yt.refuseInsert, errors: [{ reason: 'invalidTitle' }] } });
       yt.starts += 1;
       yt.metadata = JSON.parse(options.body);
@@ -92,7 +96,7 @@ function fakeYoutube({ channel = 'Dane of Earth' } = {}) {
       const s = yt.sessions.get(url);
       if (!s) return reply(404, { error: { message: 'session not found' } });
       const range = String(h['content-range']);
-      const status = () => (s.have.length ? reply(308, '', { Range: `bytes=0-${s.have.length - 1}` }) : reply(308, ''));
+      const status = () => (s.have.length && !yt.noRange ? reply(308, '', { Range: `bytes=0-${s.have.length - 1}` }) : reply(308, ''));
       if (range.startsWith('bytes */')) {
         yt.queries += 1;
         return s.video ? reply(200, s.video) : status();
@@ -100,6 +104,7 @@ function fakeYoutube({ channel = 'Dane of Earth' } = {}) {
       if (yt.pieces.length >= yt.dropAfterPieces) throw new Error('socket hang up');
       const m = /bytes (\d+)-(\d+)\/(\d+)/.exec(range);
       const start = Number(m[1]);
+      if (yt.noRange) { yt.pieces.push({ start, length: Buffer.from(options.body).length }); return status(); }
       assert.equal(start, s.have.length, 'a piece must start at the byte YouTube has');
       let body = Buffer.from(options.body);
       if (yt.keepShort && start + body.length < s.total) body = body.subarray(0, body.length - yt.keepShort);
@@ -302,6 +307,59 @@ test('a video YouTube rejects after it arrives is failed too, and the file is ke
   assert.equal(result.outcome, 'failed', result.reason);
   assert.match(s.catalog.edit.error, /rejected video vid1.*duplicate/);
   assert.ok(fs.existsSync(s.paths.video));
+  // The note held the rejected id: kept, every later try would skip the upload,
+  // read the same rejection back and fail again.
+  assert.equal(fs.existsSync(s.paths.session), false, 'the rejected video id is not kept for a retry');
+});
+
+test('a failed upload says what will happen next, which is nothing on its own, and never names a step the screen lacks', async (t) => {
+  const s = setup(t);
+  s.youtube.refuseInsert = 'The request metadata specifies an invalid video title.';
+  await s.run();
+  assert.match(s.catalog.edit.error, /^Not uploaded to YouTube: YouTube refused it \(/);
+  assert.match(s.catalog.edit.error, /Nothing more happens to this video on its own/);
+});
+
+test('a missing finished file is said as a missing file, not as YouTube refusing it', async (t) => {
+  const s = setup(t);
+  fs.rmSync(s.paths.video);
+  const { result } = await s.run();
+  assert.equal(result.outcome, 'failed', result.reason);
+  assert.ok(s.catalog.edit.error.startsWith(UPLOAD_PROBLEM_PREFIX));
+  assert.match(s.catalog.edit.error, /finished video is not on the Mac Mini/);
+  assert.match(s.catalog.edit.error, /YouTube was not asked/);
+  assert.doesNotMatch(s.catalog.edit.error, /refused|send the cut back/i);
+  assert.equal(s.youtube.starts, 0);
+});
+
+test('when a saved session has expired, the channel is checked before the new one opens', async (t) => {
+  const s = setup(t, { channel: 'Somebody Else', status: 'uploading' });
+  // A session note from an earlier try, which YouTube no longer knows (404).
+  fs.writeFileSync(s.paths.session, JSON.stringify({ sessionUrl: 'https://upload.example/session/gone', bytes: FILE_BYTES }));
+  const { result } = await s.run();
+  assert.equal(result.outcome, 'outage', result.reason);
+  assert.equal(s.youtube.channelReads, 1, 'the channel was asked before a new session');
+  assert.equal(s.youtube.starts, 0, 'no new session opened for another channel');
+  assert.match(s.alarms[0], /"Somebody Else", not "Dane of Earth"/);
+  assert.ok(fs.existsSync(s.paths.video));
+});
+
+test('the channel is asked once per job, not again for a session it already checked', async (t) => {
+  const s = setup(t);
+  const { result } = await s.run();
+  assert.equal(result.outcome, 'uploaded', result.reason);
+  assert.equal(s.youtube.channelReads, 1);
+});
+
+test('answers that give no ground stop the upload instead of rewinding forever', async (t) => {
+  const s = setup(t);
+  s.youtube.noRange = true;
+  const { result, job } = await s.run();
+  assert.equal(result.outcome, 'outage', result.reason);
+  assert.match(result.reason, /without taking any of them/);
+  assert.equal(s.youtube.pieces.length, yt.MAX_NO_PROGRESS, 'it stopped after the cap, not later');
+  assert.equal(job.attempts, 0, 'YouTube misbehaving is not charged to the video');
+  assert.ok(fs.existsSync(s.paths.video));
 });
 
 test('a refused sign-in stops, alarms with the fix, spends no attempt and leaves the edit finished', async (t) => {
@@ -377,6 +435,9 @@ test('the client reads YouTube\'s answers: Range header, and whose problem each 
   assert.equal(yt.nextByteFrom('bytes=0-8388607'), 8388608);
   assert.equal(yt.nextByteFrom(null), 0);
   assert.equal(yt.classify({ status: 403, json: { error: { errors: [{ reason: 'quotaExceeded' }] } } }), 'quota');
+  // YouTube's daily upload cap is a 400 (SC-842 send-back): waiting, never "this video is bad".
+  assert.equal(yt.classify({ status: 400, json: { error: { errors: [{ reason: 'uploadLimitExceeded' }] } } }), 'quota');
+  assert.equal(yt.classify({ status: 429, json: { error: { errors: [{ reason: 'rateLimitExceeded' }] } } }), 'quota');
   assert.equal(yt.classify({ status: 401, json: {} }), 'auth');
   assert.equal(yt.classify({ status: 503, json: {} }), 'machine');
   assert.equal(yt.classify({ status: 0, json: {} }), 'machine');
