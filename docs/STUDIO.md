@@ -950,6 +950,83 @@ one costs 1. So upload count is the limit that matters, at 100 a day, far above
 what Reel Spinner will make. The project's own figures are on the Google Cloud
 console's Quotas page for `starcaster-498505` (a browser login).
 
+### The upload (Reel Spinner step 6c)
+
+Once a video is finished, the Mini uploads it to **Dane of Earth as Private**
+(SC-842). Nothing is ever made public by the Mini: the card on **Assets ›
+Footage › Rough cuts** reads **"Approved — on YouTube (private)."** with an
+**Open in YouTube Studio** link, and Dane makes it public there with one click.
+
+**How it gets there.** A watcher asks the database every minute for
+`finished` edits (and `uploading` ones a restart left mid-way) and queues one
+`upload` job each, run one at a time right after the finished-video stage.
+The job checks the sign-in belongs to Dane of Earth before any new upload
+session opens (including one opened because a saved session had expired),
+moves the edit to `uploading` (its text is locked from then, so what goes up
+is what he approved), sends the file, reads the video back from YouTube until
+it is there and not rejected, moves the edit to `on_youtube` with the video's
+id, reads that back — and **only then** deletes `~/Studio/finished/<edit id>.mp4`
+and its sidecar. Files: `workers/studio/youtubeUpload.js` (the calls) and
+`workers/studio/uploadPass.js` (the watcher and the job).
+
+**What goes up.** The title, description and tags from the edit's row,
+Private, category People & Blogs, not made for kids. The description was
+written (6a) before music was picked, so its ending is rebuilt with the
+music credit the track's licence needs (`composeDescription`), never adding
+the invitation twice.
+
+**A dropped connection resumes; it never restarts.** The upload is YouTube's
+resumable kind, in 8 MB pieces. Its address is saved beside the file
+(`<edit id>.upload.json`) before the first byte goes, so after a dropped line,
+a crash or a restart the next try asks YouTube how many bytes it has and
+carries on from there. The video's id is written to that file the moment
+YouTube names it, so a try whose database write failed only redoes the write:
+**a retry never uploads twice.**
+
+**When it stops:**
+
+- **the day's upload allowance is used up**: it waits until the allowance
+  resets at midnight Pacific (1 AM Mountain), no attempt counted. YouTube says
+  this as a **400** `uploadLimitExceeded` for the channel's daily cap, and a
+  403 or 429 for the project's quota or a rate limit; all of them wait.
+- **the sign-in is refused, or belongs to another channel**: stopped, tried
+  hourly, and the bus hears once per six hours (`reel-spinner-youtube-upload`)
+  with the fix, `npm run studio:youtube-login`. The next sign-in PROVED good
+  clears it: the channel check passing, or YouTube showing the uploaded video.
+  A token that merely refreshed proves neither, so it clears nothing.
+- **no answer, a YouTube hiccup, the database not answering**: tried again
+  in 15 minutes, no attempt counted, carrying on where it stopped. Three
+  answers in a row that take none of a piece also count as a hiccup, so a
+  confused session cannot hold the Mini sending the same bytes forever.
+- **YouTube refuses the upload** (a 4xx about the video, or a rejection when
+  it is read back), **or the finished file is not on the Mini**: the edit
+  moves to `failed`, and the card shows it under Approved with the reason
+  ("Not uploaded to YouTube: …"). A missing file is said as a missing file,
+  with "YouTube was not asked". A video rejected on read-back also has its
+  session note removed, so its rejected id is never read back again, but
+  only once the edit reads `failed`: if that write does not land, the note
+  stays, so the retry does not send the whole file a second time.
+- **the video is already up, and only the database write is left**: the
+  retry skips the upload AND the text (title, music credit, end card), so a
+  shelf or end card changed since cannot hold the write back.
+- **an upload job that failed every attempt** is not queued again every six
+  hours; it waits until the edit itself changes (the finished-video watch's
+  rule, `blockedHold` in `finalRenderPass.js`).
+
+**A failed upload stops there.** Nothing moves a `failed` edit on by itself,
+and a rough-cut job for the same recording (queued when a sibling short is
+sent back, or the moments are re-scored) skips it too
+(`videoEditsStore.isUploadProblem`): rendering it again would erase the
+reason and put an approved video back in front of Dane as waiting for review.
+and the Rough cuts screen has no button that sends one again yet (the website
+sets only approved, skipped and sent_back). Every reason ends by saying so,
+rather than naming a step the screen does not offer. These edits are read on
+their own, newest first (`listUploadProblemEdits`), so old machine failures can
+never push them off the screen.
+
+**A finished file is never deleted before YouTube confirms the video.** A
+failed, refused or unconfirmed upload leaves it on the Mini.
+
 ### Titles, descriptions and tags (Reel Spinner step 6a)
 
 Every rough cut gets a YouTube title, description and tags, written by the
@@ -1061,6 +1138,12 @@ For an agent session working on this, not for day-to-day use.
   check and roughCutPass.js's sound line-up). Tests
   `scripts/builder/studioFinalRender.test.js`. 6c finds the file with
   `finishedPathsFor`.
+- The upload (Reel Spinner 6c, SC-842): `workers/studio/youtubeUpload.js`
+  (the YouTube calls and the resumable loop; every failure says whose it is:
+  auth, quota, refused, expired, machine) and `workers/studio/uploadPass.js`
+  (the `upload.watch` watcher and the `upload` job). Tests
+  `scripts/builder/studioUpload.test.js`, which play YouTube's resumable
+  protocol with a fake `fetch`.
 - The pipeline: `workers/studio/` — `drive.js` (watcher), `ingest.js`,
   `probe.js`, `proxy.js`, `queue.js` (the local work list on the Mini, SQLite,
   deliberately not Supabase — the queue writes thousands of rows per video).

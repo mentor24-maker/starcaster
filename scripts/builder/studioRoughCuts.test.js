@@ -301,6 +301,43 @@ test('a waiting rough cut is shown even when the project has more edits than one
   }
 });
 
+test('an approved video that did not upload is shown, and old machine failures neither push it off nor count as truncation', async () => {
+  const ctx = withRoute();
+  try {
+    const { editId } = await waitingEdit(ctx, SCOPE_A);
+    const rows = ctx.db.data.get('video_edits');
+    const base = rows.find((r) => r.id === editId);
+    const { EDIT_READ_LIMIT } = require('../../routes/studioRoughCuts.js');
+    const { UPLOAD_PROBLEM_PREFIX } = require('../../lib/videoEditsStore.js');
+    // More old machine failures than one read takes, all OLDER than the upload problem.
+    for (let i = 0; i < EDIT_READ_LIMIT + 5; i += 1) {
+      rows.push({
+        ...base,
+        id: `c0000000-0000-4000-8000-${String(i).padStart(12, '0')}`,
+        kind: 'short', moment_index: i, status: 'failed', error: 'ffmpeg could not render it',
+        updated_at: new Date(Date.UTC(2020, 0, 1) + i * 1000).toISOString(),
+      });
+    }
+    const notUploaded = 'd0000000-0000-4000-8000-000000000001';
+    rows.push({
+      ...base, id: notUploaded, kind: 'short', moment_index: 999, status: 'failed',
+      error: `${UPLOAD_PROBLEM_PREFIX}YouTube refused it (invalid title)`,
+      updated_at: new Date(Date.UTC(2026, 10, 22)).toISOString(),
+    });
+    const { res, json } = await call(ctx.route, '/api/studio/rough-cuts', SCOPE_A);
+    assert.equal(res.statusCode, 200, res.body);
+    const data = json().data;
+    const shown = data.edits.find((e) => e.id === notUploaded);
+    assert.ok(shown, 'the approved video that did not upload is on the screen');
+    assert.equal(shown.group, 'approved');
+    assert.match(shown.uploadProblem, /invalid title/);
+    assert.equal(data.counts.approved, 1, 'machine failures are not counted');
+    assert.equal(data.truncated, false, 'old machine failures are never read, so they cannot truncate the read');
+  } finally {
+    ctx.restore();
+  }
+});
+
 test('each rough cut names its music in words, and says when none was picked', async () => {
   const ctx = withRoute();
   try {

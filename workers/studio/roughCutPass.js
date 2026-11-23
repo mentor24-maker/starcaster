@@ -443,9 +443,15 @@ async function startRendering(catalog, edit, scope) {
   return catalog.moveEdit(current.id, 'rendering', {}, scope);
 }
 
-/** Which edits this run renders, full edit first. `review` and later are never touched. */
+/**
+ * Which edits this run renders, full edit first. `review` and later are never
+ * touched — and neither is a `failed` edit the UPLOAD stopped (SC-842): that
+ * one was approved, and rendering it again would erase its reason and move it
+ * back to waiting for review, so Dane's approval would be lost.
+ */
 function editsToRender(edits) {
-  const waiting = edits.filter((e) => ['draft', 'failed', 'rendering'].includes(e.status));
+  const waiting = edits.filter((e) => ['draft', 'failed', 'rendering'].includes(e.status)
+    && !videoEditsStore.isUploadProblem(e));
   return waiting.sort((a, b) => (a.kind === b.kind ? (a.momentIndex ?? 0) - (b.momentIndex ?? 0) : (a.kind === 'full' ? -1 : 1)));
 }
 
