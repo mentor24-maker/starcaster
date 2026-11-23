@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { KEYWORDS_PATH, type Keywords } from './youtube-creators';
+import { KEYWORDS_PATH, announceKeywords, onKeywordsSaved, type Keywords } from './youtube-creators';
 import type { OutreachChannel, OutreachStage } from './outreach-wizard-panel';
 
 /**
@@ -107,15 +107,21 @@ export function firstRunSteps(channel: OutreachChannel, keywords: Keywords | { e
     stage: 'connect',
   });
 
+  // Chosen AND matching what the Mini is signed in as. A mismatch is not
+  // done: Connect flags it, and nothing would post as the chosen account.
+  const mismatch = !!account?.expectedAccount && !!account?.observedAccount
+    && account.expectedAccount !== account.observedAccount; // the same test Connect flags it by
   steps.push({
     key: 'account',
     title: 'Choose the account it posts as',
-    done: account ? !!account.expectedAccount : null,
+    done: account ? !!account.expectedAccount && !mismatch : null,
     sentence: !account
       ? 'Cannot tell until the account can be read.'
-      : account.expectedAccount
-        ? `${label} posts as ${account.expectedAccount}.`
-        : `Click Post as this account in Connect — one click. Nothing posts on ${label} until you do.`,
+      : mismatch
+        ? `${label} is set to post as ${account.expectedAccount}, but the Mini is signed in as ${account.observedAccount}. In Connect, click Post as this account, or sign the Mini in as ${account.expectedAccount}.`
+        : account.expectedAccount
+          ? `${label} posts as ${account.expectedAccount}.`
+          : `Click Post as this account in Connect — one click. Nothing posts on ${label} until you do.`,
     next: 'Saved at once. Then pick the keywords the creators are found by.',
     stage: 'connect',
   });
@@ -213,6 +219,8 @@ export default function FirstRunPath({ channel, onShowStage, onChanged }: {
     }
   }, []);
   useEffect(() => { void load(); }, [load]);
+  // A save in Find creators shows here at once, not after a reload.
+  useEffect(() => onKeywordsSaved((saved) => { setKeywords(saved); setDraft(saved.keywords.join(', ')); }), []);
 
   const save = async () => {
     const api = getApi();
@@ -222,7 +230,7 @@ export default function FirstRunPath({ channel, onShowStage, onChanged }: {
       const list = draft.split(',').map((k) => k.trim()).filter(Boolean);
       const reply = await api(KEYWORDS_PATH, { method: 'PUT', body: JSON.stringify({ keywords: list }) });
       const saved = (reply?.data as Keywords) || null;
-      if (saved) { setKeywords(saved); setDraft(saved.keywords.join(', ')); }
+      if (saved) { setKeywords(saved); setDraft(saved.keywords.join(', ')); announceKeywords(saved); }
       setNotice('Keywords saved.');
       onChanged();
     } catch (err) {
@@ -248,7 +256,7 @@ export default function FirstRunPath({ channel, onShowStage, onChanged }: {
             {s.state === 'now' || s.state === 'cannot_tell' ? (
               <>
                 <p className="outreach-wizard-muted" data-step-next>{`Next: ${s.next}`}</p>
-                {s.key === 'keywords' && s.state === 'now' ? (
+                {s.key === 'keywords' && s.state === 'now' && keywords && !('error' in keywords) ? (
                   <form className="outreach-wizard-connect-form" onSubmit={(e) => { e.preventDefault(); void save(); }}>
                     <label htmlFor={inputId}>Keywords</label>
                     <input id={inputId} type="text" className="outreach-wizard-account-input" value={draft} onChange={(e) => setDraft(e.target.value)} />

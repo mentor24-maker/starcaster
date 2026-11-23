@@ -63,4 +63,11 @@ describe("isFirstRun", () => {
     expect(isFirstRun(channel({ replies: 1 }))).toBe(false);
     expect(isFirstRun(channel({ repliesState: "cannot_tell" }))).toBe(false);
   });
+
+  it("an account chosen but not the one the Mini is signed in as is not done (SC-916 send-back)", () => {
+    const mismatch = { expectedAccount: "Dane of Earth", observedAccount: "Dane Christensen", confirmedAt: null, checkRequestedAt: null, browserCheckedAt: null };
+    const steps = firstRunSteps(channel({ account: mismatch }), saved);
+    expect(steps[1].state).toBe("now");
+    expect(steps[1].sentence).toContain("set to post as Dane of Earth, but the Mini is signed in as Dane Christensen");
+  });
 });

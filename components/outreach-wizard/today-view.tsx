@@ -50,7 +50,7 @@ export type WaitingReply = {
   createdAt: string;
 };
 
-type Row = Record<string, any>;
+export type Row = Record<string, any>;
 
 function str(v: unknown): string {
   return typeof v === 'string' ? v : '';
@@ -61,50 +61,58 @@ function clip(text: string, max = 280): string {
   return t.length > max ? `${t.slice(0, max - 1)}…` : t;
 }
 
+/**
+ * What one row of a channel's list replies to — a heading, its link, a line of
+ * context — and what its words are called. Shared by the walk-through and by
+ * Write replies' list of decided replies (SC-916), so the two never describe
+ * the same reply differently.
+ */
+export function rowContext(channel: TodayChannelKey, row: Row): { boxLabel: string; title: string; url: string; detail: string } {
+  if (channel === 'substack') {
+    const reply = row.kind === 'reply';
+    return {
+      boxLabel: reply ? 'Your Reply' : 'Your Note',
+      title: reply ? 'A reply on Substack' : str(row.contentTitle) || 'A Note on Substack',
+      url: reply ? str(row.targetUrl) : str(row.contentUrl),
+      detail: clip(reply ? str(row.targetText) : str(row.ideaText)),
+    };
+  }
+  if (channel === 'reddit') {
+    return {
+      boxLabel: 'Your Comment',
+      title: str(row.postTitle) || 'A Reddit post',
+      url: str(row.targetUrl),
+      detail: clip(row.parentCommentText
+        ? `${str(row.parentCommentAuthor) || 'Someone'} wrote: ${str(row.parentCommentText)}`
+        : `${row.subreddit ? `r/${str(row.subreddit)}` : ''}${row.postBody ? ` · ${str(row.postBody)}` : ''}`.replace(/^ · /, '')),
+    };
+  }
+  const videoId = str(row.videoId);
+  return {
+    boxLabel: 'Your Comment',
+    title: str(row.videoTitle) || videoId || 'A YouTube video',
+    url: videoId ? `https://www.youtube.com/watch?v=${encodeURIComponent(videoId)}` : '',
+    detail: str(row.channelName),
+  };
+}
+
 /** The drafts in one channel's list that are waiting for Approve or Reject, oldest first. */
 export function waitingFrom(channel: TodayChannelKey, channelLabel: string, rows: unknown): WaitingReply[] {
   const list = (Array.isArray(rows) ? rows : []) as Row[];
   const out: WaitingReply[] = [];
   for (const row of list) {
     if (!row || row.status !== 'draft' || !row.id) continue;
-    const base = {
+    // Substack ideas (restacks, likes) are not replies yet.
+    if (channel === 'substack' && row.kind !== 'note' && row.kind !== 'reply') continue;
+    out.push({
       channel,
       channelLabel,
       id: String(row.id),
       options: Array.isArray(row.draftOptions) ? (row.draftOptions as DraftOption[]) : [],
       draftText: str(row.finalText) || str(row.draftText),
       createdAt: str(row.createdAt),
-    };
-    if (channel === 'substack') {
-      if (row.kind !== 'note' && row.kind !== 'reply') continue; // ideas are not replies yet
-      const reply = row.kind === 'reply';
-      out.push({
-        ...base,
-        boxLabel: reply ? 'Your Reply' : 'Your Note',
-        title: reply ? 'A reply on Substack' : str(row.contentTitle) || 'A Note on Substack',
-        url: reply ? str(row.targetUrl) : str(row.contentUrl),
-        detail: clip(reply ? str(row.targetText) : str(row.ideaText)),
-      });
-    } else if (channel === 'reddit') {
-      out.push({
-        ...base,
-        boxLabel: 'Your Comment',
-        title: str(row.postTitle) || 'A Reddit post',
-        url: str(row.targetUrl),
-        detail: clip(row.parentCommentText
-          ? `${str(row.parentCommentAuthor) || 'Someone'} wrote: ${str(row.parentCommentText)}`
-          : `${row.subreddit ? `r/${str(row.subreddit)}` : ''}${row.postBody ? ` · ${str(row.postBody)}` : ''}`.replace(/^ · /, '')),
-      });
-    } else {
-      const videoId = str(row.videoId);
-      out.push({
-        ...base,
-        boxLabel: 'Your Comment',
-        title: str(row.videoTitle) || videoId || 'A YouTube video',
-        url: videoId ? `https://www.youtube.com/watch?v=${encodeURIComponent(videoId)}` : '',
-        detail: str(row.channelName),
-      });
-    }
+      ...rowContext(channel, row),
+    });
   }
   return out.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
 }
@@ -284,13 +292,19 @@ export default function TodayView({ channels, scopeLabel, onChanged, startSignal
   // The Write replies stage asked to start: walk from here (SC-916).
   // Only a CHANGE starts it: a view that mounts with a value already set (a
   // channel tab opened after the button was used on another) does not.
+  // A walk already under way (or starting) is NOT restarted: that would reset
+  // the tally and the position and throw away an edited, unapproved wording
+  // (SC-916 send-back). The press then only brings the walk into sight.
   const startRef = useRef(start);
   startRef.current = start;
+  const walkingRef = useRef(false);
+  walkingRef.current = busy === 'start' || current !== null;
   const seenSignal = useRef(startSignal);
   useEffect(() => {
     if (startSignal === seenSignal.current) return;
     seenSignal.current = startSignal;
     hostRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+    if (walkingRef.current) return;
     void startRef.current();
   }, [startSignal]);
 

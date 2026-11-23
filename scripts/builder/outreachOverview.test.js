@@ -220,6 +220,22 @@ test('replies count the ideas still to be drafted, so Write replies can draft th
   assert.equal(st.state, 'needs_you');
 });
 
+test('Substack: only Notes and replies are drafts to write; restacks and likes wait to be decided as they are (SC-916 send-back)', () => {
+  const rows = [
+    { status: 'idea', kind: 'note' }, { status: 'idea', kind: 'reply' },
+    { status: 'idea', kind: 'restack' }, { status: 'idea', kind: 'like' }, { status: 'idea', kind: 'restack' },
+    { status: 'draft', kind: 'reply' },
+  ];
+  const st = overview.substackRepliesStage(rows);
+  assert.equal(st.toWriteCount, 2, 'the drafter refuses restacks and likes, so they are never offered to it');
+  assert.equal(st.toDecideCount, 3);
+  assert.equal(st.waitingCount, 1);
+  assert.match(st.sentence, /^2 ideas waiting to be written, 1 Note or reply waiting for your approval, 3 restacks and likes waiting for your Approve or Reject\.$/);
+  const onlyRestacks = overview.substackRepliesStage([{ status: 'idea', kind: 'restack' }]);
+  assert.equal(onlyRestacks.state, 'needs_you', 'a restack waiting for him is his to do');
+  assert.match(onlyRestacks.sentence, /^1 restack or like waiting for your Approve or Reject\.$/);
+});
+
 test('the route answers GET only, needs a project, and is closed to a client site admin', async () => {
   assert.ok(PROJECT_ADMIN_SESSION_DENY_PREFIXES.includes('/api/outreach'));
   function fakeRes() {

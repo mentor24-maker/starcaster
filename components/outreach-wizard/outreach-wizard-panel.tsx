@@ -7,9 +7,10 @@ import RedditSubreddits from './reddit-subreddits';
 import RedditConversations from './reddit-conversations';
 import YoutubeConversations from './youtube-conversations';
 import LearnControls from './learn-controls';
-import TodayView, { TODAY_SOURCES, type TodayChannelKey } from './today-view';
+import TodayView from './today-view';
 import SubstackWriters from './substack-writers';
 import FirstRunPath, { isFirstRun } from './first-run-path';
+import RepliesControls from './replies-controls';
 import { MiniLimitBanner } from '../settings/mini-ai-limit';
 import { BuilderCollapseIcon } from '../builder/builder-collapse-icon';
 
@@ -38,9 +39,10 @@ export { PROJECT_SWITCH_EVENT };
  *   Find conversations  ./youtube-conversations.tsx (16/19),
  *                   ./substack-conversations.tsx (14/19),
  *                   ./reddit-conversations.tsx (18/19).
- *   Write replies   RepliesControls below: drafts the ideas waiting to be
- *                   written, and walks the waiting replies in the Today view
- *                   (./today-view.tsx, SC-642).
+ *   Write replies   ./replies-controls.tsx: drafts the ideas waiting to be
+ *                   written, walks the waiting replies in the Today view
+ *                   (./today-view.tsx, SC-642), decides Substack's restacks
+ *                   and likes, and lists the replies already decided.
  *   Learn           ./learn-controls.tsx (13/19).
  * A channel with no reply approved yet also gets ./first-run-path.tsx, the
  * five steps from Connect to its first approved reply (SC-916). The first
@@ -347,94 +349,6 @@ export function ConnectControls({ channel, onChanged, onCheckAsked }: {
   );
 }
 
-function plural(n: number, one: string, many: string): string {
-  return `${n} ${n === 1 ? one : many}`;
-}
-
-/** The idea rows in one channel's list: written, but not yet drafted. */
-export function ideasFrom(rows: unknown): Array<{ id: string }> {
-  return (Array.isArray(rows) ? rows : [])
-    .filter((r: any) => r && r.status === 'idea' && r.id)
-    .map((r: any) => ({ id: String(r.id) }));
-}
-
-/**
- * Write replies, on this screen (SC-916). Two jobs, each the channel's own
- * endpoint: draft the ideas still waiting to be written (POST …/:id/draft,
- * one at a time, as each channel's own screen does), and walk the drafts
- * waiting for Approve or Reject — which is the Today view's walk-through,
- * started from here rather than duplicated.
- */
-export function RepliesControls({ channel, stage, onWalk, onChanged }: {
-  channel: OutreachChannel;
-  stage: OutreachStage & { toWriteCount?: number };
-  onWalk: () => void;
-  onChanged: () => void;
-}): React.ReactElement | null {
-  const [busy, setBusy] = useState(false);
-  const [lines, setLines] = useState<string[]>([]);
-  if (stage.state === 'cannot_tell') return null;
-  const waiting = stage.waitingCount || 0;
-  const toWrite = stage.toWriteCount || 0;
-  const source = TODAY_SOURCES[channel.key as TodayChannelKey];
-
-  const writeDrafts = async () => {
-    const api = getApp()?.api;
-    if (typeof api !== 'function' || !source) return;
-    setBusy(true);
-    setLines([]);
-    const out: string[] = [];
-    try {
-      const listed = await api(source.base);
-      const ideas = ideasFrom(listed?.data);
-      let written = 0;
-      for (const idea of ideas) {
-        try {
-          await api(`${source.base}/${encodeURIComponent(idea.id)}/draft`, { method: 'POST', body: '{}' });
-          written += 1;
-        } catch (err) {
-          out.push(`One was not drafted: ${errorText(err, 'unknown error')}`);
-        }
-      }
-      out.unshift(ideas.length
-        ? `${plural(written, 'draft', 'drafts')} written${written < ideas.length ? `, ${ideas.length - written} not` : ''}.${written ? ' They are waiting for you below.' : ''}`
-        : 'Nothing was waiting to be written any more.');
-    } catch (err) {
-      out.unshift(`The ${channel.label} list could not be read, so nothing was drafted: ${errorText(err, 'unknown error')}`);
-    } finally {
-      setBusy(false);
-      setLines(out);
-      onChanged();
-    }
-  };
-
-  return (
-    <div className="outreach-wizard-replies" data-replies={channel.key}>
-      {waiting ? (
-        <div className="outreach-wizard-stage-actions">
-          <button type="button" className="btn btn-primary" disabled={busy} onClick={onWalk}>
-            {`Work through ${plural(waiting, 'waiting reply', 'waiting replies')}`}
-          </button>
-        </div>
-      ) : null}
-      {toWrite && source ? (
-        <div className="outreach-wizard-stage-actions">
-          <button type="button" className={waiting ? 'btn' : 'btn btn-primary'} disabled={busy} onClick={() => void writeDrafts()}>
-            {busy ? 'Writing drafts…' : `Write ${plural(toWrite, 'draft', 'drafts')}`}
-          </button>
-          <p className="outreach-wizard-muted">Each draft takes under a minute to write.</p>
-        </div>
-      ) : null}
-      {waiting ? (
-        <p className="outreach-wizard-muted">Each one opens in Today, above: choose a wording, edit it if you like, then Approve or Reject. Approved replies are posted by the Mini within the channel&apos;s pace.</p>
-      ) : !toWrite ? (
-        <p className="outreach-wizard-muted">{`No ${channel.label} replies are waiting for you. Replies are written from Find conversations: click Write Replies on one there, and it comes back here for your Approve or Reject.`}</p>
-      ) : null}
-      {lines.map((l) => <p key={l} className="outreach-wizard-notice" role="status">{l}</p>)}
-    </div>
-  );
-}
-
 /**
  * One stage. Its header (number, name, state word) is a button that opens and
  * closes it (task SC-886); a closed stage keeps its one-line sentence, so
@@ -443,7 +357,8 @@ export function RepliesControls({ channel, stage, onWalk, onChanged }: {
  *
  * A done stage is reopened from its header, so it needs no way out to another
  * screen: the pencil that used to lead back to one (task 86bcuar8y) went with
- * the other screens (SC-916).
+ * the other screens (SC-916). What the pencil reached — replies already
+ * approved or rejected — is Write replies' "Show decided replies".
  */
 function StageRow({ stage, index, open, expanded, onToggle, channelKey, children }: {
   stage: OutreachStage;

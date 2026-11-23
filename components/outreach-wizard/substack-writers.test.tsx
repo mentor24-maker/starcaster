@@ -119,4 +119,28 @@ describe("SubstackWriters", () => {
     expect(container!.textContent).toContain("The Substack writer list could not be read: PostgREST said no");
     expect(container!.textContent).not.toContain("No writers found yet");
   });
+
+  it("a keywords read that fails says so — never 'No keywords yet' (SC-916 send-back)", async () => {
+    const api = (window as any).App.api;
+    (window as any).App.api = async (path: string, options?: RequestInit) => {
+      if (path === "/api/outreach/keywords") throw new Error("Server said 500");
+      return api(path, options);
+    };
+    await mount();
+    const line = container!.querySelector<HTMLElement>("[data-keywords-line]")!;
+    expect(line.textContent).toContain("Your keywords could not be read, so Find writers cannot search yet: Server said 500.");
+    expect(line.getAttribute("role")).toBe("alert");
+    expect(container!.textContent).not.toContain("No keywords yet");
+    expect(button("Find writers").disabled).toBe(true);
+  });
+
+  it("a save made in another section shows here at once", async () => {
+    keywords = { keywords: [], source: "none" };
+    await mount();
+    expect(button("Find writers").disabled).toBe(true);
+    const { announceKeywords } = await import("./youtube-creators");
+    await act(async () => announceKeywords({ keywords: ["padel"], source: "saved" }));
+    expect(button("Find writers").disabled).toBe(false);
+    expect(container!.textContent).toContain("on your keywords: padel.");
+  });
 });

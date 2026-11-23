@@ -555,7 +555,7 @@ describe("Write replies is worked on this screen (SC-916)", () => {
     withReplies((o) => {
       o.channels[2].stages[3] = { ...o.channels[2].stages[3], state: "needs_you", sentence: "2 posts waiting to be written.", waitingCount: 0, toWriteCount: 2, next: null, inline: true } as OutreachStage;
     }, (path) => {
-      if (path === "/api/engage/reddit-comments/items") {
+      if (path === "/api/engage/reddit-comments/items?status=idea&limit=1000") {
         return { ok: true, data: [{ id: "i1", status: "idea" }, { id: "i2", status: "idea" }, { id: "d1", status: "draft" }] };
       }
       if (path === "/api/engage/reddit-comments/items/i2/draft") throw new Error("The post is still being read");

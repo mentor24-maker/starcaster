@@ -8,7 +8,7 @@ import {
   type Candidate,
 } from '../substack-miner/substack-miner-panel';
 import { RowIcon, SortHeader, filterRows, sortRows, type SortState, type SortValue } from './outreach-table';
-import { KEYWORDS_PATH, type Keywords } from './youtube-creators';
+import { KEYWORDS_PATH, onKeywordsSaved, type Keywords } from './youtube-creators';
 
 /**
  * Substack's Find creators stage, worked on the Outreach screen itself —
@@ -76,6 +76,8 @@ function writerName(c: Candidate): string {
 export default function SubstackWriters({ onChanged }: { onChanged?: () => void }): React.ReactElement {
   const [writers, setWriters] = useState<Candidate[] | null>(null);
   const [keywords, setKeywords] = useState<Keywords | null>(null);
+  // A failed keywords read is said as one, never shown as "No keywords yet" (landmine 17).
+  const [keywordsError, setKeywordsError] = useState('');
   const [readError, setReadError] = useState('');
   const [seedText, setSeedText] = useState('');
   const [busy, setBusy] = useState('');
@@ -97,9 +99,17 @@ export default function SubstackWriters({ onChanged }: { onChanged?: () => void 
       setWriters(null);
       setReadError(`The Substack writer list could not be read: ${errorText(list.reason)}`);
     }
-    setKeywords(words.status === 'fulfilled' ? ((words.value?.data as Keywords) || null) : null);
+    if (words.status === 'fulfilled') {
+      setKeywords((words.value?.data as Keywords) || ({ keywords: [], source: 'none' } as Keywords));
+      setKeywordsError('');
+    } else {
+      setKeywords(null);
+      setKeywordsError(`Your keywords could not be read, so Find writers cannot search yet: ${errorText(words.reason)}. Reload to try again.`);
+    }
   }, []);
   useEffect(() => { void load(); }, [load]);
+  // A save under Getting started or YouTube's Find creators shows here at once.
+  useEffect(() => onKeywordsSaved((saved) => { setKeywords(saved); setKeywordsError(''); }), []);
 
   const call = async (path: string, body: unknown, method = 'POST') => {
     const api = getApi();
@@ -178,8 +188,12 @@ export default function SubstackWriters({ onChanged }: { onChanged?: () => void 
         />
         <button type="submit" className="btn btn-save" disabled={!!busy || !seedText.trim()}>{busy === 'add' ? 'Adding…' : 'Add writers'}</button>
       </form>
-      <p className="outreach-wizard-muted">
-        {keywordList.length
+      <p className={keywordsError ? 'outreach-wizard-error' : 'outreach-wizard-muted'} role={keywordsError ? 'alert' : undefined} data-keywords-line>
+        {keywordsError
+          ? keywordsError
+          : !keywords
+            ? 'Reading your keywords…'
+            : keywordList.length
           ? `Find writers searches the web for Substack writers on your keywords: ${keywordList.join(', ')}. It can take a few minutes.`
           : 'No keywords yet, so there is nothing to search for. Add them under Getting started above, or in YouTube\'s Find creators — the three channels share one list.'}
       </p>

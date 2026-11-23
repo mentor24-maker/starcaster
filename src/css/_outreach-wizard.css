@@ -1171,6 +1171,41 @@ p.reddit-sub-rule {
   min-width: 0;
 }
 
+/* Write replies' restacks/likes and decided replies (SC-916 send-back). */
+.outreach-wizard-wordless {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.outreach-wizard-reply-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.outreach-wizard-reply-item {
+  border: 1px solid var(--border-light);
+  border-radius: 6px;
+  padding: var(--space-2) var(--space-3);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.outreach-wizard-reply-head,
+.outreach-wizard-reply-text {
+  margin: 0 0 var(--space-1);
+}
+
+.outreach-wizard-reply-text {
+  white-space: pre-wrap;
+}
+
 @media (max-width: 600px) {
   .outreach-first-run {
     padding: var(--space-3) var(--space-4);
