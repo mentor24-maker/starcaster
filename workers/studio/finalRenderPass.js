@@ -247,6 +247,42 @@ function editChangedAt(edit) {
 }
 
 /**
+ * Should a watcher leave this edit alone because of a BLOCKED job for it on
+ * `stage`? The reason (a string) when it should, null when it may be queued.
+ * Shared by every watcher that queues one job per edit (final render, upload),
+ * so "gave up after every attempt" means the same thing in each:
+ *
+ *   - a job that FAILED every attempt the queue allows holds the edit until
+ *     the edit itself changes; retrying it every six hours would do the same
+ *     work to fail the same way;
+ *   - when the edit HAS changed since, that exhausted row is stood down
+ *     (queue.clearBlock) before a new job is queued. queue.block() writes onto
+ *     the subject's existing blocked row, so left in place, a later reasoned
+ *     block would land on it, keep its attempts and stamp it newer than the
+ *     edit, and the edit would never come back;
+ *   - a job blocked WITH A REASON holds it for six hours (RETRY_BLOCKED_AFTER_MS).
+ */
+function blockedHold({ queue, stage, blocked, edit, now = Date.now, maxAttempts = DEFAULT_MAX_ATTEMPTS }) {
+  const id = text(edit && edit.id);
+  const mine = blocked.filter((j) => text(j.subjectId).toLowerCase() === id.toLowerCase());
+  const changedAt = editChangedAt(edit);
+  const gaveUp = mine.find((j) => exhaustedFailure(j, maxAttempts)
+    && (changedAt == null || changedAt <= Number(j.updatedAt)));
+  if (gaveUp) {
+    return `its job ${gaveUp.id} failed all ${gaveUp.attempts} attempts (${gaveUp.lastError}); it is not tried again until the edit changes`
+      + (changedAt == null ? ' (and the edit\'s last change could not be read, so it stays held)' : '');
+  }
+  const outlived = changedAt != null
+    && mine.some((j) => exhaustedFailure(j, maxAttempts) && changedAt > Number(j.updatedAt));
+  if (outlived) {
+    queue.clearBlock({ stage, subjectKind: SUBJECT_VIDEO_EDIT, subjectId: text(mine[0].subjectId) || id });
+    return null;
+  }
+  const held = mine.find((j) => !exhaustedFailure(j, maxAttempts) && now() - Number(j.updatedAt) < RETRY_BLOCKED_AFTER_MS);
+  return held ? `its job ${held.id} is blocked: ${held.lastError}` : null;
+}
+
+/**
  * The watcher. An edit whose job was BLOCKED in the last six hours is left
  * alone: its reason is in the queue, and queueing it every minute would read
  * the same notes for the same answer. An edit whose render FAILED every
@@ -263,33 +299,9 @@ async function watchApproved({ queue, env = process.env, options = {}, catalog =
   const skipped = [];
   for (const edit of approved.data) {
     const id = text(edit.id);
-    let mine = blocked.filter((j) => text(j.subjectId).toLowerCase() === id.toLowerCase());
-    const changedAt = editChangedAt(edit);
-    const gaveUp = mine.find((j) => exhaustedFailure(j, maxAttempts)
-      && (changedAt == null || changedAt <= Number(j.updatedAt)));
-    // The edit changed after a job that failed every attempt: stand that job
-    // down BEFORE queueing the new one. queue.block() writes onto the
-    // subject's existing blocked row, so left in place, a later reasoned
-    // block ("no end card") would land on the exhausted row, keep its five
-    // attempts and stamp it newer than the edit, and fixing the note would
-    // never bring the edit back. Cleared, the next block starts a fresh row.
-    const outlived = !gaveUp && changedAt != null
-      && mine.some((j) => exhaustedFailure(j, maxAttempts) && changedAt > Number(j.updatedAt));
-    if (outlived) {
-      queue.clearBlock({ stage: STAGE_FINAL_RENDER, subjectKind: SUBJECT_VIDEO_EDIT, subjectId: text(mine[0].subjectId) || id });
-      mine = [];
-    }
-    if (gaveUp) {
-      skipped.push({
-        editId: id,
-        why: `its job ${gaveUp.id} failed all ${gaveUp.attempts} attempts (${gaveUp.lastError}); it is not tried again until the edit changes`
-          + (changedAt == null ? ' (and the edit\'s last change could not be read, so it stays held)' : ''),
-      });
-      continue;
-    }
-    const held = mine.find((j) => !exhaustedFailure(j, maxAttempts) && now() - Number(j.updatedAt) < RETRY_BLOCKED_AFTER_MS);
-    if (held) {
-      skipped.push({ editId: id, why: `its job ${held.id} is blocked: ${held.lastError}` });
+    const hold = blockedHold({ queue, stage: STAGE_FINAL_RENDER, blocked, edit, now, maxAttempts });
+    if (hold) {
+      skipped.push({ editId: id, why: hold });
       continue;
     }
     const { job, created } = enqueueFinalRender(queue, { editId: id, why: 'approved' });
@@ -720,6 +732,7 @@ module.exports = {
   resolveMusicDir,
   previousTrackOf,
   exhaustedFailure,
+  blockedHold,
   realCatalog,
   realProbe,
   realPictureDuration,
