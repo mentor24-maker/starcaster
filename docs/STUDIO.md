@@ -130,6 +130,23 @@ going quiet. The "one run at a time" lock is released if the job is stopped
 naming a process that is not a media-intake run — is taken over and said so in
 the log, so a restart mid-pass cannot stop uploads for good.
 
+**When Google stops accepting the MacBook's sign-in, Dane is told on a ticket**
+(task SC-879). The sign-in rclone uses expires now and then — it did from
+2026-10-19 to 10-26 and again on 2026-11-18 — and until then the only report
+was the bus, which does not reach him. Now the first pass Google refuses
+(rclone says `invalid_grant`) assigns him the ticket **"Google Drive sign-in
+needed on the MacBook"** on the tracker, saying since when (Mountain time), how
+many recordings are waiting, and the fix: on the MacBook, run
+`rclone config reconnect gdrive:` in Terminal and sign in as **mentorofaio**.
+Nothing is lost while it waits. The next upload that works rewrites the ticket
+to "Nothing needed" and un-assigns him; it is only rewritten when what it says
+changes, never on every pass. Only a refused sign-in does this: a dropped
+network or a full Drive is not fixed by signing in, so those stay on the bus.
+If the MacBook cannot reach the tracker, the log says the ticket was NOT
+written and the next pass tries again. `npm run media:intake -- --dry-run`
+sends nothing: it asks Drive whether the sign-in works and prints the ticket it
+would write. Why the sign-in expires at all is SC-885.
+
 ## Videos in the Photos "Studio" album arrive by themselves (Media intake · 3 of 5)
 
 Put a video into an album called **Studio** in Apple Photos — on the iPhone

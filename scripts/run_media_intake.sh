@@ -3,10 +3,13 @@
 # One scheduled media-intake pass — what launchd runs every 15 minutes
 # (scripts/install_media_intake.sh). Ticket 86bcfgyxp.
 #
-# The pass itself (scripts/media_intake.mjs) needs no secrets: it reads iCloud
-# Drive and uploads through rclone, which keeps its own Google sign-in. Only the
-# two bookkeeping steps after it go through npm, and so through Doppler, the
-# same way the relay's do (scripts/run_bus_relay.sh):
+# The uploads themselves need no secrets: the pass reads iCloud Drive and
+# uploads through rclone, which keeps its own Google sign-in. When Google
+# refuses that sign-in, the pass also rewrites the ticket "Google Drive sign-in
+# needed on the MacBook" through the ticket door, which brings its own Doppler
+# (task SC-879); a write that fails is said in the log and the bus post below
+# still goes out. The two bookkeeping steps after it go through npm, and so
+# through Doppler, the same way the relay's do (scripts/run_bus_relay.sh):
 #
 #   exit 0     -> a beat for `media-intake` (clears its failure alarm too)
 #   exit 3     -> nothing: the pass was skipped because another run holds the

@@ -623,3 +623,156 @@ test('photos: the Drive name carries the date taken, and no slash survives', () 
     'Photos - 2026-10-09 18.04.11 - a-b.MOV');
   assert.strictEqual(intake.photosDriveName({ original_filename: 'IMG_9.MOV' }), 'Photos - IMG_9.MOV');
 });
+
+// --- the Drive sign-in ticket (task SC-879) ---------------------------------
+
+const signin = require('../../lib/driveSigninTicket.js');
+
+// What rclone printed on the MacBook on 2026-11-18, word for word in its shape.
+const REFUSED_STDERR = [
+  '2026/11/18 12:22:04 ERROR : Zoom - m - v.mp4: Failed to copy: couldn\'t fetch token: invalid_grant: '
+    + 'maybe token expired? - try refreshing with "rclone config reconnect gdrive:"',
+  '2026/11/18 12:22:04 ERROR : Attempt 1/3 failed with 1 errors',
+  '2026/11/18 12:22:05 ERROR : Attempt 2/3 failed with 1 errors',
+  '2026/11/18 12:22:06 ERROR : Attempt 3/3 failed with 1 errors',
+].join('\n');
+// rclone wraps EVERY token failure in "maybe token expired?", a dead network included.
+const NETWORK_STDERR = 'Failed to copy: couldn\'t fetch token: Post "https://oauth2.googleapis.com/token": '
+  + 'dial tcp: lookup oauth2.googleapis.com: no such host: maybe token expired? - try refreshing with '
+  + '"rclone config reconnect gdrive:"';
+
+test('a refused Drive sign-in is told apart from every other rclone failure', async () => {
+  assert.equal(intake.isSigninRefusal(REFUSED_STDERR), true);
+  assert.equal(intake.isSigninRefusal('oauth2: "invalid_grant" "Token has been expired or revoked."'), true);
+  assert.equal(intake.isSigninRefusal(NETWORK_STDERR), false, 'a DNS failure is not "sign in again"');
+  assert.equal(intake.isSigninRefusal('googleapi: Error 403: The user\'s Drive storage quota has been exceeded'), false);
+
+  const refused = intake.rcloneUploader({ run: async () => ({ status: 1, stdout: '', stderr: REFUSED_STDERR }) });
+  // The refusal is on the FIRST line; the message keeps only the last three. It must still be seen.
+  const err = await refused.upload('/tmp/v.mp4', 'v.mp4').then(() => null, (e) => e);
+  assert.equal(err.signinRefused, true);
+  assert.match(err.message, /Google refused the Drive sign-in/);
+
+  const blip = intake.rcloneUploader({ run: async () => ({ status: 1, stdout: '', stderr: NETWORK_STDERR }) });
+  const other = await blip.upload('/tmp/v.mp4', 'v.mp4').then(() => null, (e) => e);
+  assert.ok(other && !other.signinRefused);
+
+  assert.deepEqual(await intake.rcloneUploader({ run: async () => ({ status: 0, stdout: '' }) }).probe(), { ok: true });
+  const probed = await refused.probe();
+  assert.equal(probed.ok, false);
+  assert.equal(probed.signinRefused, true);
+});
+
+test('a pass whose upload is refused reports it as a sign-in refusal; an ordinary failure does not', async () => {
+  const s = scratch();
+  const now = Date.parse('2026-11-18T19:22:00Z');
+  record(s.root, '2026-11-18 12.16.00 test 1', 'video1.mp4', 'a', now - 10 * MIN);
+  const ledgerFile = s.ledgerFile;
+  // Cutover before the recording, so it counts as new.
+  fs.mkdirSync(path.dirname(ledgerFile), { recursive: true });
+  fs.writeFileSync(ledgerFile, JSON.stringify({ ...intake.readLedger(ledgerFile).ledger, cutoverAt: new Date(now - 60 * MIN).toISOString() }));
+
+  const refusedUp = intake.rcloneUploader({ run: async () => ({ status: 1, stdout: '', stderr: REFUSED_STDERR }) });
+  const report = await intake.runPass({ root: s.root, ledgerFile, uploader: refusedUp, now });
+  assert.equal(report.failed.length, 1);
+  assert.equal(report.failed[0].signinRefused, true);
+  assert.deepEqual(signin.signinVerdict([report]), { verdict: 'refused', waiting: 1 });
+
+  const blipUp = intake.rcloneUploader({ run: async () => ({ status: 1, stdout: '', stderr: NETWORK_STDERR }) });
+  const blipReport = await intake.runPass({ root: s.root, ledgerFile, uploader: blipUp, now });
+  assert.equal(blipReport.failed.length, 1);
+  assert.equal(blipReport.failed[0].signinRefused, undefined);
+  assert.equal(signin.signinVerdict([blipReport]).verdict, 'unknown');
+
+  assert.equal(signin.signinVerdict([{ sent: [{}], failed: [] }]).verdict, 'working');
+  assert.equal(signin.signinVerdict([{ sent: [], failed: [] }]).verdict, 'unknown');
+});
+
+function fakeWriter(result = { ok: true, id: 'SC-1', url: 'http://tracker/t/SC-1' }) {
+  const calls = [];
+  const write = async (rendered, remembered) => { calls.push({ rendered, remembered }); return result; };
+  return { calls, write };
+}
+
+test('the sign-in ticket: written once on a refusal, not rewritten for nothing new, cleared when it works', async () => {
+  const broke = Date.parse('2026-11-18T19:22:00Z');
+  const w = fakeWriter();
+
+  const first = await signin.report({ state: {}, verdict: 'refused', waiting: 1, now: broke, write: w.write });
+  assert.equal(first.outcome, 'written');
+  assert.equal(w.calls.length, 1);
+  const body = w.calls[0].rendered.body;
+  assert.equal(w.calls[0].rendered.assign, true, 'Dane is assigned while it is broken');
+  assert.match(body, /Nov 18/);
+  assert.match(body, /12:22 PM MST/, 'the date it broke, in Mountain time');
+  assert.match(body, /rclone config reconnect gdrive:/);
+  assert.match(body, /mentorofaio/);
+  assert.match(body, /1 recording waiting/);
+
+  // Fifteen minutes later, still refused, nothing new: no rewrite, and the date stays the FIRST refusal.
+  const second = await signin.report({ state: first.state, verdict: 'refused', waiting: 1, now: broke + 15 * MIN, write: w.write });
+  assert.equal(second.outcome, 'unchanged');
+  assert.equal(w.calls.length, 1);
+  assert.equal(second.state.brokenSince, new Date(broke).toISOString());
+
+  // A pass that reached Drive neither way changes nothing.
+  const quiet = await signin.report({ state: second.state, verdict: 'unknown', write: w.write });
+  assert.equal(quiet.outcome, 'nothing');
+  assert.equal(w.calls.length, 1);
+
+  // A second recording waiting is news: rewritten, same date.
+  const more = await signin.report({ state: quiet.state, verdict: 'refused', waiting: 2, now: broke + 30 * MIN, write: w.write });
+  assert.equal(more.outcome, 'written');
+  assert.match(w.calls[1].rendered.body, /2 recordings waiting/);
+  assert.match(w.calls[1].rendered.body, /12:22 PM MST/);
+  assert.equal(w.calls[1].remembered, 'SC-1', 'the ticket it wrote is the one it rewrites');
+
+  // He signs in again; the next upload works: cleared, unassigned.
+  const fixed = await signin.report({ state: more.state, verdict: 'working', now: broke + 60 * MIN, write: w.write });
+  assert.equal(fixed.outcome, 'written');
+  assert.equal(w.calls[2].rendered.assign, false, 'Dane is unassigned once it works');
+  assert.match(w.calls[2].rendered.body, /Nothing needed/);
+  assert.equal(fixed.state.brokenSince, null);
+
+  // Working again and again: never rewritten.
+  const still = await signin.report({ state: fixed.state, verdict: 'working', now: broke + 75 * MIN, write: w.write });
+  assert.equal(still.outcome, 'unchanged');
+  assert.equal(w.calls.length, 3);
+});
+
+test('a sign-in ticket that could not be written is reported as NOT sent, and tried again next pass', async () => {
+  const now = Date.parse('2026-11-18T19:22:00Z');
+  const failing = fakeWriter({ ok: false, why: 'the tracker on the Mini did not answer' });
+  const out = await signin.report({ state: {}, verdict: 'refused', waiting: 1, now, write: failing.write });
+  assert.equal(out.outcome, 'failed');
+  assert.match(out.lines.join('\n'), /could NOT write/);
+  assert.match(out.lines.join('\n'), /has NOT been told/);
+  assert.match(out.lines.join('\n'), /did not answer/);
+  assert.doesNotMatch(out.lines.join('\n'), /wrote the/);
+  assert.equal(out.state.ticket, undefined, 'a failed write is not remembered as written');
+  assert.equal(out.state.brokenSince, new Date(now).toISOString(), 'but the date it broke is kept');
+
+  // A writer that throws is the same failure, never a crash.
+  const throwing = await signin.report({ state: {}, verdict: 'refused', write: async () => { throw new Error('door exited 1'); } });
+  assert.equal(throwing.outcome, 'failed');
+
+  const ok = fakeWriter();
+  const retry = await signin.report({ state: out.state, verdict: 'refused', waiting: 1, now: now + 15 * MIN, write: ok.write });
+  assert.equal(retry.outcome, 'written', 'the next pass tries again');
+  assert.match(ok.calls[0].rendered.body, /12:22 PM MST/, 'still dated from the first refusal');
+});
+
+test('a dry run prints the sign-in ticket it would write and writes nothing', async () => {
+  const w = fakeWriter();
+  const out = await signin.report({ state: {}, verdict: 'refused', waiting: 0, dryRun: true, write: w.write });
+  assert.equal(out.outcome, 'dry-run');
+  assert.equal(w.calls.length, 0);
+  assert.match(out.lines.join('\n'), /would write the "Google Drive sign-in needed on the MacBook" ticket \(assign Dane: true\)/);
+  assert.deepEqual(out.state, {}, 'nothing remembered');
+});
+
+test('a probe while broken: working clears, a refusal stays, anything else tells nothing', () => {
+  assert.equal(signin.probeVerdict({ ok: true }).verdict, 'working');
+  assert.deepEqual(signin.probeVerdict({ ok: false, signinRefused: true }, 3), { verdict: 'refused', waiting: 3 });
+  assert.equal(signin.probeVerdict({ ok: false, signinRefused: false, why: 'no such host' }).verdict, 'unknown');
+});
