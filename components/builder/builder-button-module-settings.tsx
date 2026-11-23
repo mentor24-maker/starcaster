@@ -156,6 +156,19 @@ export function BuilderButtonModuleSettings({
               rendersVia: "BuilderTemplatePreview"
             },
             {
+              // SC-907. Beside the Link it gates, as on the Image module, and
+              // the same key. Off unless ticked, so no live button changes.
+              // Not in email templates: an email's button already opens the
+              // reader's browser.
+              key: "newTab",
+              label: "Open in New Tab",
+              width: "check",
+              control: "checkbox",
+              fallback: "false",
+              visibleWhen: () => !isEmailTemplate,
+              rendersVia: "BuilderTemplatePreview"
+            },
+            {
               key: "href",
               label: "Link",
               width: "full",
