@@ -48,7 +48,11 @@ const PATH_REWRITES: Array<[RegExp, string, string]> = [
   [/^\/api\/admin\/themes(\/|$)/, '/api/builder/themes$1', 'themes'],
   // What links to the pages about to be deleted (task 86bcxn69z).
   [/^\/api\/admin\/page-links\/inbound$/, '/api/builder/page-links/inbound', 'pages'],
-  [/^\/api\/admin\/polls(\/|$)/, '/api/polls$1', 'polls']
+  [/^\/api\/admin\/polls(\/|$)/, '/api/polls$1', 'polls'],
+  // The booking calendar (SC-909). The server serves it at /api/booking, not
+  // /api/admin/booking: server-side, an /api/admin path skips project
+  // resolution (routes/index.js), so it would have no tenant to filter by.
+  [/^\/api\/admin\/booking(\/|$)/, '/api/booking$1', 'booking']
 ];
 
 function jsonResponse(body: JsonObject, status = 200): Response {
