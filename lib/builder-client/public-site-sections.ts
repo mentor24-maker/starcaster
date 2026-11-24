@@ -27,6 +27,8 @@ export const PRIVATE_ONLY_MODULE_TYPES: ReadonlySet<string> = new Set([
   // it. Both are listed now (86bbuhph0).
   "admin-blog-links",
   "admin-related-articles",
+  // The Booking Manager (SC-910): every booking's visitor name and email.
+  "admin-booking-manager",
 ]);
 
 export function isPrivateOnlyModuleType(type: string): boolean {

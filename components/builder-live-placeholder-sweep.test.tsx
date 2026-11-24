@@ -116,6 +116,7 @@ const ADMIN_ALLOWED: Record<string, string> = {
   // noticed; both are removed by filterPublicSections now.
   "admin-blog-links": "STRIPPED — the blog tag manager; filterPublicSections removes it from every public page",
   "admin-related-articles": "STRIPPED — the related-articles picker; same filter",
+  "admin-booking-manager": "STRIPPED — the booking manager (SC-910); same filter",
 };
 
 /**

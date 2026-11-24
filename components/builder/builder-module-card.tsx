@@ -144,6 +144,7 @@ import { SpiralityTasksSample } from "./builder-spirality-tasks-module";
 import { BuilderAdminSiteSettingsModuleSettings } from "./builder-admin-site-settings-module-settings";
 import { BuilderAdminBlogLinksModuleSettings } from "./builder-admin-blog-links-module-settings";
 import { BuilderAdminRelatedArticlesModuleSettings } from "./builder-admin-related-articles-module-settings";
+import { BuilderBookingManagerModuleSettings } from "./builder-booking-manager-module-settings";
 import { BuilderAdminSupportFormModuleSettings } from "./builder-admin-support-form-module-settings";
 import { BuilderCurrentPollModuleSettings } from "./builder-current-poll-module-settings";
 import { BuilderSocialModuleSettings } from "./builder-social-module-settings";
@@ -2492,6 +2493,28 @@ function renderModulePreview(module: BuilderTemplateModule) {
     );
   }
 
+  if (module.type === "admin-booking-manager") {
+    const showTitle = module.settings.showTitle !== "false";
+    const title     = module.settings.panelTitle || "Booking Manager";
+    const row = (label: string, value: string, last = false) => (
+      <div style={{ display: "flex", gap: 8, justifyContent: "space-between", padding: "5px 9px", borderBottom: last ? undefined : "1px solid #f0f4f8", fontSize: 11 }}>
+        <span style={{ fontWeight: 600, color: "#18324a" }}>{label}</span>
+        <span style={{ color: "#5b7489" }}>{value}</span>
+      </div>
+    );
+    return (
+      <div className="builder-module-preview-copy">
+        {showTitle && <div style={{ fontWeight: 700, fontSize: 14, color: "#18324a", marginBottom: 8 }}>{title}</div>}
+        <div style={{ fontSize: 11, color: "#8ba9be", marginBottom: 4 }}>Availability · Meeting · Messaging · Bookings</div>
+        <div style={{ border: "1px solid #c9dcea", borderRadius: 7, overflow: "hidden", background: "#fff" }}>
+          {row("Mon to Fri", "9:00 AM to 5:00 PM")}
+          {row("Meeting length", "30 minutes")}
+          {row("Upcoming bookings", "listed with their CRM contact", true)}
+        </div>
+      </div>
+    );
+  }
+
   if (module.type === "admin-site-settings") {
     const showTitle = module.settings.showTitle !== "false";
     const title     = module.settings.panelTitle || "Site Settings";
@@ -3415,6 +3438,7 @@ export function BuilderModuleCard({
     const isAdminSupportFormModule = module.type === "admin-support-form";
     const isAdminBlogLinksModule = module.type === "admin-blog-links";
     const isAdminRelatedArticlesModule = module.type === "admin-related-articles";
+    const isAdminBookingManagerModule = module.type === "admin-booking-manager";
     const isPollRuntimeModule = isCurrentPollModule || module.type === "previous-results";
     // The rich-text editor left the shared chrome on 2026-08-15: its
     // Background / Alignment / margins / Width now live on the D8 axes in
@@ -3483,7 +3507,8 @@ export function BuilderModuleCard({
       isAdminSiteSettingsModule ||
       isAdminSupportFormModule ||
       isAdminBlogLinksModule ||
-      isAdminRelatedArticlesModule;
+      isAdminRelatedArticlesModule ||
+      isAdminBookingManagerModule;
 
     /**
      * The module's internal name. Rendered in ONE of two places and never
@@ -3776,6 +3801,8 @@ export function BuilderModuleCard({
               <BuilderAdminBlogLinksModuleSettings module={module} onUpdateModule={onUpdateModule} />
             ) : isAdminRelatedArticlesModule ? (
               <BuilderAdminRelatedArticlesModuleSettings module={module} onUpdateModule={onUpdateModule} />
+            ) : isAdminBookingManagerModule ? (
+              <BuilderBookingManagerModuleSettings module={module} onUpdateModule={onUpdateModule} />
             ) : isAdminSiteSettingsModule ? (
               <BuilderAdminSiteSettingsModuleSettings module={module} onUpdateModule={onUpdateModule} />
             ) : isAdminSupportFormModule ? (

@@ -157,6 +157,7 @@ const NEVER_INDEXED_MODULE_TYPES = new Set([
   "blog-category-manager",
   "blog-card-manager",
   "event-manager",
+  "admin-booking-manager",
   "navigation",
   "tractor-nav",
   "galaxy",
