@@ -514,8 +514,10 @@ export function BuilderCarouselModuleSettings({
             // format already showed first — falling back to the position when
             // the item is still blank.
             const itemName = (isCards ? item.title : item.imageAlt) || `${Noun} ${index + 1}`;
-            // Link and Alt text always; Title and Link label with the copy.
-            const leftFieldCount = showItemCopy ? 4 : 2;
+            // Link and Alt text always; Title and Link label with the copy;
+            // and "New Tab" whenever the item has a link (SC-908) — it is one
+            // more field in the column, so the thumbnail spans one more row.
+            const leftFieldCount = (showItemCopy ? 4 : 2) + (item.linkUrl ? 1 : 0);
             // The thumbnail goes right after the FIRST field in the column, so
             // the grid puts it on that field's row and it spans down beside
             // the rest. Placed any earlier, the first field's label would drop
@@ -604,17 +606,25 @@ export function BuilderCarouselModuleSettings({
                     valueKind="path"
                     allowSections
                     value={item.linkUrl}
-                    onChange={(linkUrl) => updateItem(item.id, { linkUrl })}
+                    // Clearing the link clears its new-tab choice too, so a
+                    // link added later starts unticked rather than quietly
+                    // bringing back the old choice.
+                    onChange={(linkUrl) => updateItem(item.id, linkUrl ? { linkUrl } : { linkUrl, newTab: "" })}
                     noneLabel="— No link —"
                     placeholder="/path-or-url"
                     ariaLabel={`${Noun} ${index + 1} link`}
                   />
                 </BuilderModuleField>
-                {/* "Open in new tab" (SC-908), beside the Link it gates and only
-                    once there is one. Off unless ticked, so no slide saved
-                    before today changes. Labelled "New Tab", not "Open in New
-                    Tab": the longer label widened this grid's label track and
-                    squeezed the Image box below its neighbours at 1440px
+                {/* With captions off, Link is the column's FIRST field, so the
+                    thumbnail must come straight after it (see thumbFor above);
+                    placed after New Tab, the picture started a row late and
+                    left the first row's right side empty (review, SC-908). */}
+                {showItemCopy ? null : thumbFor("beside")}
+                {/* "Open in new tab" (SC-908), right under the Link it gates
+                    and only once there is one. Off unless ticked, so no slide
+                    saved before today changes. Labelled "New Tab", not "Open in
+                    New Tab": the longer label widened this grid's label track
+                    and squeezed the Image box below its neighbours at 1440px
                     (check:panels). Its aria-label says the whole thing. */}
                 {item.linkUrl ? (
                   <BuilderModuleField label="New Tab" width="check" className="builder-card-field--a">
@@ -626,7 +636,6 @@ export function BuilderCarouselModuleSettings({
                     />
                   </BuilderModuleField>
                 ) : null}
-                {showItemCopy ? null : thumbFor("beside")}
                 {showItemCopy ? (
                   <BuilderModuleField label="Link Label" width="text-md" className="builder-card-field--a">
                     <input

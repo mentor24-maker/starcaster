@@ -2954,9 +2954,9 @@ function migrateCarouselSettings(settings: Record<string, string>) {
     iconImageUrl: str(entry?.iconImageUrl),
     // "Open in new tab" (SC-908). This runs on EVERY load and rebuilds each
     // item from the names listed here, so a field missing from this list is
-    // stripped from the page the next time it is saved. Carried only when
-    // present, so items saved before the setting existed are left as they were.
-    ...(entry?.newTab !== undefined ? { newTab: str(entry.newTab) } : {})
+    // stripped from the page the next time it is saved. An item saved before
+    // the setting existed reads "" — same tab — exactly as before.
+    newTab: str(entry?.newTab)
   });
 
   const hasItems = typeof settings.items === "string" && settings.items !== "";

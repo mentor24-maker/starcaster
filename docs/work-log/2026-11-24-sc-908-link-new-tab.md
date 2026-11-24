@@ -31,3 +31,21 @@ whichever ticket gives Blog Post Card a real renderer.
 Three browser checks (`check:render`) now read the finished links on a real
 page and fail if a ticked item does not open a new tab or an unticked one does.
 Each was broken on purpose once and seen to fail.
+
+### Rework after review (same day)
+
+Review found the new "New Tab" box knocked the Carousel settings panel out of
+line: with captions off, each slide's picture started a row late and left an
+empty gap, and in both formats the picture stopped one row short because the
+panel still counted the old number of fields. In Feature Cards the box sat on
+its own line instead of next to the Link it controls.
+
+Fixed: the Carousel picture is back on the first row and now counts the New
+Tab box; in Feature Cards the box sits directly under its Link. Clearing a link
+now also clears its new-tab choice, so a link added later starts unticked.
+
+The panel-layout check (`check:panels`) never looked at those pictures at all,
+which is how this got through. It now does: it checks each slide's picture
+starts on the first row and spans every field beside it, and the test page now
+has a slide with a ticked box and a carousel with captions off. Both mistakes
+were put back on purpose and the check caught each one.

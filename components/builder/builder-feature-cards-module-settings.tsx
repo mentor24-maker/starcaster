@@ -471,7 +471,9 @@ export function BuilderFeatureCardsModuleSettings({
                   valueKind="path"
                   allowSections
                   value={card.linkUrl}
-                  onChange={(linkUrl) => updateCard(card.id, { linkUrl })}
+                  // Clearing the link clears its new-tab choice, so a link added
+                  // later starts unticked (SC-908).
+                  onChange={(linkUrl) => updateCard(card.id, linkUrl ? { linkUrl } : { linkUrl, newTab: "" })}
                   noneLabel="— No link —"
                   placeholder="/path-or-url"
                   ariaLabel={`${cardName} link`}
@@ -486,22 +488,16 @@ export function BuilderFeatureCardsModuleSettings({
                   aria-label={`${cardName} link text`}
                 />
               </BuilderModuleField>
-              <BuilderModuleField label="Alt Text" width="text-md" className="builder-card-field--b">
-                <input
-                  type="text"
-                  value={card.imageAlt}
-                  onChange={(event) => updateCard(card.id, { imageAlt: event.target.value })}
-                  placeholder="Describe the image"
-                  aria-label={`${cardName} alt text`}
-                />
-              </BuilderModuleField>
-              {/* "Open in new tab" (SC-908). Only once the card has a link: a
-                  box that gates nothing would be a setting that does nothing.
-                  Off unless ticked, so no card saved before today changes.
-                  "New Tab" to match the Carousel's item grid, where the longer
-                  label squeezed the Image box (check:panels at 1440px). */}
+              {/* "Open in new tab" (SC-908), in the Link's own column directly
+                  under it — the closest it can sit to the Link it gates (D9):
+                  the same row is Title's, and two controls in one cell would
+                  break the lattice. So a linked card reads Title | Link,
+                  Link Text | New Tab, then Alt Text; an unlinked card keeps
+                  the 2x2. Only once the card has a link: a box that gates
+                  nothing would be a setting that does nothing. Off unless
+                  ticked, so no card saved before today changes. */}
               {card.linkUrl ? (
-                <BuilderModuleField label="New Tab" width="check" className="builder-card-field--a">
+                <BuilderModuleField label="New Tab" width="check" className="builder-card-field--b">
                   <input
                     type="checkbox"
                     checked={card.newTab === "true"}
@@ -510,6 +506,15 @@ export function BuilderFeatureCardsModuleSettings({
                   />
                 </BuilderModuleField>
               ) : null}
+              <BuilderModuleField label="Alt Text" width="text-md" className={card.linkUrl ? "builder-card-field--a" : "builder-card-field--b"}>
+                <input
+                  type="text"
+                  value={card.imageAlt}
+                  onChange={(event) => updateCard(card.id, { imageAlt: event.target.value })}
+                  placeholder="Describe the image"
+                  aria-label={`${cardName} alt text`}
+                />
+              </BuilderModuleField>
 
               {showSymbolColumn ? (
                 <BuilderModuleField label="Icon" width="select-md" className="builder-card-field--wide">

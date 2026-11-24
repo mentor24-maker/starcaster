@@ -111,6 +111,98 @@ describe.each([
     await mount(type, { [key]: items({ linkUrl: "https://example.com/", newTab: "true" }) }, Editor);
     expect(boxes(/opens in a new tab/)[0].checked).toBe(true);
   });
+
+  it("clears the choice when the link is cleared, so a link added later starts unticked", async () => {
+    const harness = await mount(type, { [key]: items({ linkUrl: "https://example.com/", newTab: "true" }) }, Editor);
+    // Let the picker finish loading its (mocked, empty) page list.
+    await act(async () => {});
+    const select = Array.from(document.querySelectorAll<HTMLSelectElement>("select")).find((el) =>
+      / link$/.test(el.getAttribute("aria-label") ?? "")
+    );
+    if (!select) throw new Error("No link picker found");
+    act(() => {
+      select.value = "";
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(parse(harness.module())[0].linkUrl).toBe("");
+    expect(parse(harness.module())[0].newTab).toBe("");
+    expect(boxes(/opens in a new tab/)).toHaveLength(0);
+  });
+});
+
+describe("carousel — the thumbnail sits beside the item's whole column (SC-908 review)", () => {
+  /**
+   * The thumbnail must follow the column's FIRST field in the markup, and
+   * span one row per field. "New Tab" is one more field on a linked item, and
+   * the first build put it between Link and the thumbnail with captions off,
+   * and left the span a row short in both formats.
+   */
+  function leftFieldsAndThumb() {
+    const grid = document.querySelector(".builder-cards-panel-fields")!;
+    const children = Array.from(grid.children);
+    const head = children.findIndex((el) => el.classList.contains("builder-card-editor-head"));
+    const out: { fields: string[]; thumbAfter: string | null; rows: string } = { fields: [], thumbAfter: null, rows: "" };
+    let last: string | null = null;
+    for (const el of children.slice(head + 1)) {
+      if (el.classList.contains("builder-card-editor-head") || el.classList.contains("builder-card-field--wide")) break;
+      if (el.classList.contains("builder-card-thumb--beside")) {
+        out.thumbAfter = last;
+        out.rows = (el as HTMLElement).style.getPropertyValue("--builder-card-thumb-rows");
+        continue;
+      }
+      if (el.classList.contains("builder-card-field--a")) {
+        last = (el.querySelector(".builder-module-field-label")?.textContent ?? "").trim();
+        out.fields.push(last);
+      }
+    }
+    return out;
+  }
+
+  it.each([
+    ["captions off", "false", ["Link", "New Tab", "Alt Text"], "Link"],
+    ["captions on", "true", ["Caption Title", "Link", "New Tab", "Link Label", "Alt Text"], "Caption Title"]
+  ])("%s: starts after the first field and spans every field", async (_name, showCaptions, fields, first) => {
+    await mount(
+      "carousel",
+      { format: "slideshow", showCaptions, items: items({ linkUrl: "https://example.com/", imageUrl: "/a.png" }) },
+      BuilderCarouselModuleSettings as unknown as Editor
+    );
+    const found = leftFieldsAndThumb();
+    expect(found.fields).toEqual(fields);
+    expect(found.thumbAfter).toBe(first);
+    expect(found.rows).toBe(String(fields.length));
+  });
+});
+
+describe("feature-cards — New Tab sits in the Link's column, under it (SC-908 review)", () => {
+  it("places New Tab in the Link's pair-column, right after Link Text, with Alt Text below", async () => {
+    await mount(
+      "feature-cards",
+      { cards: items({ linkUrl: "https://example.com/" }) },
+      BuilderFeatureCardsModuleSettings as unknown as Editor
+    );
+    const grid = document.querySelector(".builder-cards-panel-fields")!;
+    const fields = Array.from(grid.querySelectorAll(":scope > .builder-module-field")).map((el) => ({
+      label: (el.querySelector(".builder-module-field-label")?.textContent ?? "").trim(),
+      column: el.classList.contains("builder-card-field--a") ? "a" : el.classList.contains("builder-card-field--b") ? "b" : "wide"
+    }));
+    expect(fields.slice(0, 5)).toEqual([
+      { label: "Title", column: "a" },
+      { label: "Link", column: "b" },
+      { label: "Link Text", column: "a" },
+      { label: "New Tab", column: "b" },
+      { label: "Alt Text", column: "a" }
+    ]);
+  });
+
+  it("keeps the 2x2 on a card with no link", async () => {
+    await mount("feature-cards", { cards: items({ linkUrl: "" }) }, BuilderFeatureCardsModuleSettings as unknown as Editor);
+    const grid = document.querySelector(".builder-cards-panel-fields")!;
+    const altText = Array.from(grid.querySelectorAll(":scope > .builder-module-field")).find(
+      (el) => (el.querySelector(".builder-module-field-label")?.textContent ?? "").trim() === "Alt Text"
+    );
+    expect(altText?.classList.contains("builder-card-field--b")).toBe(true);
+  });
 });
 
 describe("carousel — the choice survives a load", () => {
@@ -119,13 +211,13 @@ describe("carousel — the choice survives a load", () => {
    * names on EVERY load (it folds the retired slideshow/slider shapes in), so
    * a field it does not list is stripped the next time the page is saved.
    */
-  it("keeps newTab through the normalizer, and adds nothing to an item that never had it", () => {
+  it("keeps newTab through the normalizer, and reads an item that never had it as same-tab", () => {
     const settings = normalizeBuilderModuleSettingsForType("carousel", {
       items: items({ linkUrl: "https://example.com/", newTab: "true" }, { linkUrl: "/old" })
     });
     const parsed = JSON.parse(settings.items) as Array<Record<string, string>>;
     expect(parsed[0].newTab).toBe("true");
-    expect("newTab" in parsed[1]).toBe(false);
+    expect(parsed[1].newTab).toBe("");
   });
 });
 
