@@ -1141,6 +1141,87 @@ function assertStacks(stacks, width) {
   };
 }
 
+/*
+ * THE ITEM THUMBNAIL BESIDE ITS FIELDS (SC-908 review, 2026-11-24).
+ *
+ * The Carousel's item manager puts each item's picture in the right-hand
+ * tracks, starting on the row of the item's FIRST left-column field and
+ * spanning one row per left-column field (`--builder-card-thumb-rows`). Both
+ * halves are hand-kept in the editor: the thumbnail's position in the markup
+ * and the count it is given. A new field in the column (SC-908's "New Tab")
+ * broke both at once and every other measurement here stayed green, because
+ * none of them looks at the thumbnail: the picture started a row late,
+ * leaving the first row's right side empty, and stopped a row short.
+ *
+ * Two questions per visible thumbnail, each a geometric fact, not a count
+ * the editor wrote about itself:
+ *   - does it START on the first field's row? (its top is above the bottom
+ *     of the first field's control)
+ *   - does it SPAN exactly the fields in its column? (the declared row count
+ *     equals the left-column fields actually rendered between the item's head
+ *     and its first full-width row)
+ */
+function measureCardThumbs(page) {
+  return page.evaluate(() => {
+    const visible = (el) => !!el && el.getBoundingClientRect().width > 0 && el.getBoundingClientRect().height > 0;
+    const out = [];
+    for (const thumb of document.querySelectorAll('.builder-cards-panel-fields .builder-card-thumb--beside')) {
+      if (!visible(thumb)) continue;
+      // Walk back to the item's head, then forward to its first wide row.
+      let head = thumb.previousElementSibling;
+      while (head && !head.classList.contains('builder-card-editor-head')) head = head.previousElementSibling;
+      if (!head) { out.push({ name: '(no item head)', uncomparable: true }); continue; }
+      const name = ((head.querySelector('.builder-card-editor-name') || {}).textContent || '').trim() || '(unnamed item)';
+      const leftFields = [];
+      for (let el = head.nextElementSibling; el; el = el.nextElementSibling) {
+        if (el.classList.contains('builder-card-editor-head') || el.classList.contains('builder-card-field--wide')) break;
+        if (!el.classList.contains('builder-card-field--a')) continue;
+        const label = el.querySelector('.builder-module-field-label');
+        const control = el.querySelector('.builder-module-field-control');
+        if (!visible(label) || !visible(control)) continue;
+        leftFields.push({
+          label: (label.textContent || '').trim(),
+          controlTop: Math.round(control.getBoundingClientRect().top),
+          controlBottom: Math.round(control.getBoundingClientRect().bottom)
+        });
+      }
+      const declared = Number(getComputedStyle(thumb).getPropertyValue('--builder-card-thumb-rows').trim());
+      out.push({
+        name,
+        thumbTop: Math.round(thumb.getBoundingClientRect().top),
+        declared: Number.isFinite(declared) && declared > 0 ? declared : null,
+        leftFields,
+        uncomparable: !leftFields.length
+      });
+    }
+    return out;
+  });
+}
+
+function assertCardThumbs(thumbs, width) {
+  const failures = [];
+  for (const t of thumbs) {
+    if (t.uncomparable) continue;
+    const first = t.leftFields[0];
+    if (t.thumbTop > first.controlBottom) {
+      failures.push(
+        `${width}px carousel item "${t.name}": its thumbnail starts BELOW the item's first field ("${first.label}", `
+        + `control bottom y=${first.controlBottom}, thumbnail top y=${t.thumbTop}), leaving that row's right side `
+        + 'empty. The thumbnail must come straight after the FIRST left-column field in the markup '
+        + '(components/builder/builder-carousel-module-settings.tsx, thumbFor("beside")).'
+      );
+    }
+    if (t.declared !== t.leftFields.length) {
+      failures.push(
+        `${width}px carousel item "${t.name}": its thumbnail spans ${t.declared ?? '(unset)'} row(s) but the column `
+        + `beside it renders ${t.leftFields.length} field(s) (${t.leftFields.map((f) => f.label).join(', ')}). `
+        + '`leftFieldCount` in builder-carousel-module-settings.tsx must count every field the item shows.'
+      );
+    }
+  }
+  return { failures, measured: thumbs.filter((t) => !t.uncomparable).length };
+}
+
 function assertLattice(panels, width) {
   const failures = [];
 
@@ -2178,6 +2259,7 @@ const stackByWidth = new Map();    // width -> pairs compared
 const stackUncomparable = new Map(); // "panel: lower under upper" -> widths
 let columnGridsSeen = 0;
 const cellControlsByWidth = new Map(); // width -> multi-column cells whose controls were measured
+const cardThumbsByWidth = new Map(); // width -> carousel item thumbnails measured beside their fields (SC-908)
 const stripsByWidth = new Map();      // width -> columns actually measured for dead space
 const stripUnmeasured = new Map();    // "<panel> (<shape>)" -> the widths it could not be measured at
 /*
@@ -2320,6 +2402,10 @@ for (const width of WIDTHS) {
     const cellControls = assertCellControls(await measureCellControls(page), width);
     allFailures.push(...cellControls.failures);
     cellControlsByWidth.set(width, cellControls.measured);
+
+    const cardThumbs = assertCardThumbs(await measureCardThumbs(page), width);
+    allFailures.push(...cardThumbs.failures);
+    cardThumbsByWidth.set(width, cardThumbs.measured);
   } finally {
     await browser.close();
   }
@@ -2448,6 +2534,18 @@ if (cellBlindWidths.length) {
     `No multi-column cell's controls were measured at ${cellBlindWidths.join('/')}px, so the\n` +
     '"controls stay inside the cell" check compared nothing. The fixture\'s two-column row\n' +
     '(`PANEL_CHECK_MULTI_COLUMN_SECTION`) is what it reads; re-seed, or the cell markup moved.');
+}
+
+/*
+ * NO CAROUSEL THUMBNAIL MEASURED IS BLIND, NOT GREEN (SC-908). The fixture's
+ * slideshow carousels are what draw one beside its fields.
+ */
+const thumbBlindWidths = WIDTHS.filter((w) => !(cardThumbsByWidth.get(w) > 0));
+if (thumbBlindWidths.length) {
+  blind.push(
+    `No carousel item thumbnail was measured beside its fields at ${thumbBlindWidths.join('/')}px, so\n` +
+    'the "thumbnail starts on the first field\'s row and spans the column" check compared\n' +
+    'nothing. The fixture\'s carousels are what it reads; re-seed, or the thumbnail markup moved.');
 }
 
 /*
@@ -2789,6 +2887,10 @@ console.log(
 console.log(
   `Cell controls: every control stayed inside its cell in `
   + WIDTHS.map((w) => `${cellControlsByWidth.get(w) || 0} multi-column cell(s) at ${w}px`).join(', ') + '.'
+);
+console.log(
+  'Item thumbnails: each started on its first field\'s row and spanned its column in '
+  + WIDTHS.map((w) => `${cardThumbsByWidth.get(w) || 0} carousel item(s) at ${w}px`).join(', ') + '.'
 );
 
 console.log(stripNote());

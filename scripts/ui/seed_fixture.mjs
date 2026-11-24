@@ -141,7 +141,9 @@ const buildTuned = (ids) => ({
       cards: JSON.stringify([
         {
           id: 'card-1', title: 'Court Fees & Lesson Prices', body: 'Rates, resident and guest.',
-          linkUrl: '/delray-beach-tennis-center-court-fees', linkLabel: 'See Prices',
+          // newTab ticked (SC-908): the box only renders on a linked card,
+          // and an unticked fixture never draws the ticked state.
+          linkUrl: '/delray-beach-tennis-center-court-fees', linkLabel: 'See Prices', newTab: 'true',
           imageUrl: '/images/courts.jpg', imageAlt: 'Clay courts at sunrise',
           icon: '★', iconImageUrl: '/images/icon-racquet.svg',
         },
@@ -244,6 +246,7 @@ const buildTuned = (ids) => ({
           // that takes its height from its picture measures nothing.
           imageUrl: '/images/Gemini_Generated_starcaster_banner.png', imageAlt: 'Junior players gathered at the net',
           linkUrl: '/delray-champions-junior-tennis-high-performance', linkLabel: 'See the schedule',
+          newTab: 'true',
           icon: '', iconImageUrl: '',
         },
         {
@@ -1300,6 +1303,26 @@ const buildPanelCheckSection = (ids) => {
           format: 'cards',
           cardWidth: '280',
           gap: '16',
+        },
+      };
+    })(),
+    // A THIRD carousel: slideshow with captions OFF (SC-908 review). With
+    // captions off the item column is just Link, New Tab (on a linked item)
+    // and Alt Text, and the thumbnail has to sit straight after Link — the
+    // one arrangement the captions-on carousel above can never draw. Item 1
+    // linked and ticked, item 2 unlinked, so a linked and an unlinked item
+    // are measured in the same panel.
+    (() => {
+      const base = createEmptyModule('carousel', 'main');
+      return {
+        ...base,
+        id: 'module-panel-check-carousel-no-captions',
+        name: 'Plain Slideshow',
+        settings: {
+          ...base.settings,
+          ...TUNED.carousel.settings,
+          format: 'slideshow',
+          showCaptions: 'false',
         },
       };
     })(),
