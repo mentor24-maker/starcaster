@@ -1,4 +1,4 @@
-## 2026-11-24 — Add an open-in-new-tab choice to the other Builder modules that have links (#PR)
+## 2026-11-24 — Add an open-in-new-tab choice to the other Builder modules that have links (#1096)
 
 Last week the Button got an **Open in New Tab** checkbox (#1094). This does
 the same for the other modules whose links a visitor clicks and which had no
