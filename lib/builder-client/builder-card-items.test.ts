@@ -19,6 +19,8 @@ describe("parseBuilderCardItems", () => {
       imageAlt: "",
       linkUrl: "",
       linkLabel: "",
+      // A card saved before SC-908 has no new-tab choice: it stays in the tab.
+      newTab: "",
       icon: "",
       iconImageUrl: ""
     });
@@ -82,7 +84,7 @@ describe("parseBuilderCardItems", () => {
 
   it("creates blank cards with a full field set", () => {
     expect(Object.keys(createBuilderCardItem(1)).sort()).toEqual(
-      ["body", "icon", "iconImageUrl", "id", "imageAlt", "imageUrl", "linkLabel", "linkUrl", "title"]
+      ["body", "icon", "iconImageUrl", "id", "imageAlt", "imageUrl", "linkLabel", "linkUrl", "newTab", "title"]
     );
   });
 });
