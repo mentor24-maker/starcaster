@@ -1841,6 +1841,98 @@ export const RENDER_CONTRACTS = [
     expect: expectMenuTargets({ ticked: true, unticked: false, legacy: false }),
   },
   {
+    id: 'carousel-item-open-in-new-tab-opens-a-new-tab',
+    why:
+      'A Carousel slide linking to another website took the visitor off the client\'s site, with no ' +
+      'way to open it in its own tab (SC-908, operator 2026-11-22: "Check for any other modules that ' +
+      'include the ability to link that should have an \'open in new tab\' option"). The choice is ' +
+      'per item: a ticked item\'s link must carry target="_blank" WITH rel="noopener noreferrer", and ' +
+      'an unticked item and one saved before the setting existed must carry neither.',
+    section: {
+      layout: 'single',
+      modules: [{
+        type: 'carousel',
+        settings: {
+          format: 'cards',
+          items: JSON.stringify([
+            { id: 'ticked', title: 'Shop', linkUrl: 'https://shop.example.com/', newTab: 'true' },
+            { id: 'unticked', title: 'About', linkUrl: 'https://about.example.com/', newTab: 'false' },
+            { id: 'legacy', title: 'Old', linkUrl: 'https://old.example.com/' },
+          ]),
+        },
+      }],
+    },
+    selector: '.builder-preview-carousel-link',
+    read: ['display'],
+    series: {
+      count: 1, everyMs: 0, read: ['display'], attrs: ['target', 'rel'],
+      selectors: {
+        ticked: 'a.builder-preview-carousel-link[href="https://shop.example.com/"]',
+        unticked: 'a.builder-preview-carousel-link[href="https://about.example.com/"]',
+        legacy: 'a.builder-preview-carousel-link[href="https://old.example.com/"]',
+      },
+    },
+    expect: expectMenuTargets({ ticked: true, unticked: false, legacy: false }),
+  },
+  {
+    id: 'feature-card-open-in-new-tab-opens-a-new-tab',
+    why:
+      'A Feature Card\'s link had no way to open in a new tab (SC-908). Per card, like the Carousel: ' +
+      'ticked carries target="_blank" with rel="noopener noreferrer"; unticked and pre-existing cards ' +
+      'carry neither, so no live card changed behaviour.',
+    section: {
+      layout: 'single',
+      modules: [{
+        type: 'feature-cards',
+        settings: {
+          cards: JSON.stringify([
+            { id: 'ticked', title: 'Shop', linkUrl: 'https://shop.example.com/', linkLabel: 'Shop', newTab: 'true' },
+            { id: 'unticked', title: 'About', linkUrl: 'https://about.example.com/', linkLabel: 'About', newTab: 'false' },
+            { id: 'legacy', title: 'Old', linkUrl: 'https://old.example.com/', linkLabel: 'Old' },
+          ]),
+        },
+      }],
+    },
+    selector: '.builder-preview-feature-card-link',
+    read: ['display'],
+    series: {
+      count: 1, everyMs: 0, read: ['display'], attrs: ['target', 'rel'],
+      selectors: {
+        ticked: 'a.builder-preview-feature-card-link[href="https://shop.example.com/"]',
+        unticked: 'a.builder-preview-feature-card-link[href="https://about.example.com/"]',
+        legacy: 'a.builder-preview-feature-card-link[href="https://old.example.com/"]',
+      },
+    },
+    expect: expectMenuTargets({ ticked: true, unticked: false, legacy: false }),
+  },
+  {
+    id: 'headline-rotator-open-links-in-new-tab-opens-a-new-tab',
+    why:
+      'A Headline Rotator\'s links had no way to open in a new tab (SC-908). One box covers every ' +
+      'headline, stored in its own key rather than inside the headlines text. A ticked rotator\'s ' +
+      'links carry target="_blank" with rel="noopener noreferrer"; an unticked one and one saved ' +
+      'before the setting existed carry neither.',
+    section: {
+      layout: 'single',
+      modules: [
+        { type: 'headline-rotator', settings: { linksNewTab: 'true', headlines: JSON.stringify([{ id: 'a', label: 'Shop', href: 'https://shop.example.com/' }]) } },
+        { type: 'headline-rotator', settings: { linksNewTab: 'false', headlines: JSON.stringify([{ id: 'b', label: 'About', href: 'https://about.example.com/' }]) } },
+        { type: 'headline-rotator', settings: { headlines: JSON.stringify([{ id: 'c', label: 'Old', href: 'https://old.example.com/' }]) } },
+      ],
+    },
+    selector: '.builder-preview-headline-rotator',
+    read: ['display'],
+    series: {
+      count: 1, everyMs: 0, read: ['display'], attrs: ['target', 'rel'],
+      selectors: {
+        ticked: '.builder-preview-headline-rotator > a[href="https://shop.example.com/"]',
+        unticked: '.builder-preview-headline-rotator > a[href="https://about.example.com/"]',
+        legacy: '.builder-preview-headline-rotator > a[href="https://old.example.com/"]',
+      },
+    },
+    expect: expectMenuTargets({ ticked: true, unticked: false, legacy: false }),
+  },
+  {
     id: 'menu-item-linked-to-a-renamed-page-follows-it',
     why:
       'A navigation menu item had only a typed address box, so renaming a page broke the site menu ' +

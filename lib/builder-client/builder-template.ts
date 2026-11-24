@@ -2911,6 +2911,8 @@ const CAROUSEL_CAPTION_POSITIONS = new Set([
  *   slider     sliderItems [{ id, title, body, imageUrl, imageAlt, linkUrl,
  *                            linkLabel, icon, iconImageUrl }]
  *
+ * (Since SC-908 an item may also carry `newTab`, its "Open in new tab".)
+ *
  * A slide is a card with only its picture filled in, so `url` → `imageUrl`
  * and `alt` → `imageAlt` and the rest arrive empty. Nothing is discarded in
  * either direction, and the surviving shape is the card — deliberately the
@@ -2949,7 +2951,12 @@ function migrateCarouselSettings(settings: Record<string, string>) {
     linkUrl: str(entry?.linkUrl),
     linkLabel: str(entry?.linkLabel),
     icon: str(entry?.icon),
-    iconImageUrl: str(entry?.iconImageUrl)
+    iconImageUrl: str(entry?.iconImageUrl),
+    // "Open in new tab" (SC-908). This runs on EVERY load and rebuilds each
+    // item from the names listed here, so a field missing from this list is
+    // stripped from the page the next time it is saved. Carried only when
+    // present, so items saved before the setting existed are left as they were.
+    ...(entry?.newTab !== undefined ? { newTab: str(entry.newTab) } : {})
   });
 
   const hasItems = typeof settings.items === "string" && settings.items !== "";
@@ -4170,6 +4177,8 @@ export function createEmptyModule(
                         minHeight: HEADLINE_ROTATOR_DEFAULT_MIN_HEIGHT,
                         fadeDuration: "800",
                         displaySpeed: "3000",
+                        // SC-908: off, so a new rotator's links stay in the tab.
+                        linksNewTab: "false",
                         headlines: JSON.stringify([])
                       }
                       : type === "breadcrumb"

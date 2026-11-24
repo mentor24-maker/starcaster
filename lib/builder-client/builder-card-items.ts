@@ -29,6 +29,12 @@ export type BuilderCardItem = {
   imageAlt: string;
   linkUrl: string;
   linkLabel: string;
+  /**
+   * "Open in new tab" for this card's link (SC-908): `"true"` opens one,
+   * anything else (including a card saved before the setting existed, which
+   * parses as `""`) keeps the link in the same tab.
+   */
+  newTab: string;
   icon: string;
   /**
    * The card's icon as a picture instead of a typed symbol. Held alongside
@@ -74,6 +80,7 @@ export function parseBuilderCardItems(
         imageAlt: str(source.imageAlt),
         linkUrl: str(source.linkUrl),
         linkLabel: str(source.linkLabel),
+        newTab: str(source.newTab),
         icon: str(source.icon),
         iconImageUrl: toImageUrl(source.iconImageUrl)
       };
@@ -97,6 +104,7 @@ export function createBuilderCardItem(index: number, idPrefix = "card"): Builder
     imageAlt: "",
     linkUrl: "",
     linkLabel: "",
+    newTab: "",
     icon: "",
     iconImageUrl: ""
   };

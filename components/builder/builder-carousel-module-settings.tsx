@@ -610,6 +610,22 @@ export function BuilderCarouselModuleSettings({
                     ariaLabel={`${Noun} ${index + 1} link`}
                   />
                 </BuilderModuleField>
+                {/* "Open in new tab" (SC-908), beside the Link it gates and only
+                    once there is one. Off unless ticked, so no slide saved
+                    before today changes. Labelled "New Tab", not "Open in New
+                    Tab": the longer label widened this grid's label track and
+                    squeezed the Image box below its neighbours at 1440px
+                    (check:panels). Its aria-label says the whole thing. */}
+                {item.linkUrl ? (
+                  <BuilderModuleField label="New Tab" width="check" className="builder-card-field--a">
+                    <input
+                      type="checkbox"
+                      checked={item.newTab === "true"}
+                      onChange={(event) => updateItem(item.id, { newTab: event.target.checked ? "true" : "false" })}
+                      aria-label={`${Noun} ${index + 1} opens in a new tab`}
+                    />
+                  </BuilderModuleField>
+                ) : null}
                 {showItemCopy ? null : thumbFor("beside")}
                 {showItemCopy ? (
                   <BuilderModuleField label="Link Label" width="text-md" className="builder-card-field--a">

@@ -3024,7 +3024,7 @@ function PollCategoryListModuleEditor({
   );
 }
 
-function HeadlineRotatorModuleEditor({
+export function HeadlineRotatorModuleEditor({
   module,
   themeColors = [],
   onUpdateModule
@@ -3078,6 +3078,12 @@ function HeadlineRotatorModuleEditor({
   return (
     <>
       <div className="builder-slider-design-grid">
+        {/* "Open links in new tab" (SC-908). One box for every headline: the
+            headlines are stored as one block of text, so a per-headline choice
+            would mean changing that format. Its own setting key, never written
+            into `headlines`. Destination comes first (D9). Off unless ticked,
+            so no live headline changes. */}
+        <label className="field builder-checkbox-field"><span>Open Links in New Tab</span><input type="checkbox" checked={module.settings.linksNewTab === "true"} onChange={(e) => updateSetting("linksNewTab", e.target.checked ? "true" : "false")} /></label>
         <label className="field"><span>Font Size (px)</span><input type="number" min="10" max="120" value={module.settings.fontSize ?? HEADLINE_ROTATOR_DEFAULT_FONT_SIZE} onChange={(e) => updateSetting("fontSize", e.target.value)} /></label>
         <label className="field">
           <span>Color</span>

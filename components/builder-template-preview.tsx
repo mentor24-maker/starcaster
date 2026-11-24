@@ -12186,7 +12186,13 @@ function CarouselPreview({
   /** A whole item wrapped in its link, when it has one. */
   const linked = (item: (typeof items)[number], children: React.ReactNode) =>
     item.linkUrl ? (
-      <Link className="builder-preview-carousel-link" href={item.linkUrl}>
+      // "Open in new tab" (SC-908): only an explicit "true" opens one, with
+      // rel="noopener noreferrer" — the same pair a menu item gets.
+      <Link
+        className="builder-preview-carousel-link"
+        href={item.linkUrl}
+        {...navLinkTargetProps({ target: item.newTab === "true" ? "_blank" : undefined })}
+      >
         {children}
       </Link>
     ) : (
@@ -12512,7 +12518,14 @@ function HeadlineRotatorPreview({
         const opacity = getEntryOpacity(index);
 
         return entry.href ? (
-          <Link href={entry.href} key={entry.id} style={getPositionedHeadlineStyle(entry, opacity)}>
+          <Link
+            href={entry.href}
+            key={entry.id}
+            style={getPositionedHeadlineStyle(entry, opacity)}
+            // "Open links in new tab" (SC-908): one module-wide setting, never
+            // stored inside the headlines text. Off unless ticked.
+            {...navLinkTargetProps({ target: module.settings.linksNewTab === "true" ? "_blank" : undefined })}
+          >
             {entry.label}
           </Link>
         ) : (
@@ -13308,7 +13321,12 @@ function FeatureCardsModulePreview({
             </div>
 
             {href && linkLabel ? (
-              <Link className="builder-preview-feature-card-link" href={href}>
+              <Link
+                className="builder-preview-feature-card-link"
+                href={href}
+                // "Open in new tab" (SC-908), per card; off unless ticked.
+                {...navLinkTargetProps({ target: card.newTab === "true" ? "_blank" : undefined })}
+              >
                 {linkLabel}
                 {showArrow ? <span aria-hidden="true"> →</span> : null}
               </Link>

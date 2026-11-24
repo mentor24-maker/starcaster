@@ -495,6 +495,21 @@ export function BuilderFeatureCardsModuleSettings({
                   aria-label={`${cardName} alt text`}
                 />
               </BuilderModuleField>
+              {/* "Open in new tab" (SC-908). Only once the card has a link: a
+                  box that gates nothing would be a setting that does nothing.
+                  Off unless ticked, so no card saved before today changes.
+                  "New Tab" to match the Carousel's item grid, where the longer
+                  label squeezed the Image box (check:panels at 1440px). */}
+              {card.linkUrl ? (
+                <BuilderModuleField label="New Tab" width="check" className="builder-card-field--a">
+                  <input
+                    type="checkbox"
+                    checked={card.newTab === "true"}
+                    onChange={(event) => updateCard(card.id, { newTab: event.target.checked ? "true" : "false" })}
+                    aria-label={`${cardName} opens in a new tab`}
+                  />
+                </BuilderModuleField>
+              ) : null}
 
               {showSymbolColumn ? (
                 <BuilderModuleField label="Icon" width="select-md" className="builder-card-field--wide">
