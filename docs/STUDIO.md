@@ -11,12 +11,13 @@ This is Phase 1: the pipeline and the list. Nothing here edits a video yet.
 ## What happens to a video, step by step
 
 1. **You put a file in one of two Drive folders.** Both live in
-   **mentorofaio's** Google Drive, under My Drive › Projects › Starcaster › Studio
-   (since 2026-10-09; see "Which Google account owns what" below).
-   - [`/Studio/Inbox/`](https://drive.google.com/drive/folders/1NBKTjYhQsrVr8seF2r2IXXqBt8-Go0GV)
+   **mentorofaio's** Google Drive, under My Drive › Projects › Starcaster ›
+   **Studio-probe** (since 2026-10-09; see "Which Google account owns what"
+   below — the folder is still named `Studio-probe`, not `Studio`).
+   - [`Studio-probe/Inbox/`](https://drive.google.com/drive/folders/1NBKTjYhQsrVr8seF2r2IXXqBt8-Go0GV)
      — camera footage: you on camera, the wide shot, a phone take. The
      pipeline works out which is which from the file itself.
-   - [`/Studio/Plates/`](https://drive.google.com/drive/folders/1XvwqpBHsjB5_QEOCa0_IBl9sWQJYW3dZ)
+   - [`Studio-probe/Plates/`](https://drive.google.com/drive/folders/1XvwqpBHsjB5_QEOCa0_IBl9sWQJYW3dZ)
      — screen recordings and anything else that is a picture to put *into* an
      edit. Files here are never sent for transcription, because a screen
      recording has no speech and transcribing silence costs money.
@@ -46,10 +47,16 @@ Two Google accounts are involved, and the split is deliberate (Dane's
 decision, 2026-10-08; moved 2026-10-09):
 
 - **mentorofaio@gmail.com owns the folders.** It has the 2 TB plan with room
-  for the video that is coming. `My Drive › Projects › Starcaster › Studio`
-  (folder id `17HZZDNlGAcxWUxbMBdlywnn-Tjf4pfD7`) holds `Inbox`
+  for the video that is coming. `My Drive › Projects › Starcaster ›
+  Studio-probe` (folder id `17HZZDNlGAcxWUxbMBdlywnn-Tjf4pfD7`) holds `Inbox`
   (`1NBKTjYhQsrVr8seF2r2IXXqBt8-Go0GV`) and `Plates`
   (`1XvwqpBHsjB5_QEOCa0_IBl9sWQJYW3dZ`).
+  **The folder's real name is `Studio-probe`**, left over from when it was
+  first made to test the move; it is due a rename to `Studio`, and renaming it
+  is safe because the pipeline knows it by id, never by name. Until then,
+  look for `Studio-probe` — and do **not** pick `Studio (old — moved to
+  mentorofaio 2026-10-09)`, which is mentor24's retired folder and is not
+  watched.
 - **mentor24@gmail.com is the worker's sign-in.** Its Drive token is what the
   worker watches and downloads with. It sees the Studio folders because the
   `Starcaster` folder above them has been shared with mentor24 as Editor since
@@ -147,12 +154,77 @@ written and the next pass tries again. `npm run media:intake -- --dry-run`
 sends nothing: it asks Drive whether the sign-in works and prints the ticket it
 would write. Why the sign-in expires at all is SC-885.
 
+## Sending a video from the iPhone
+
+**This is the way to get an iPhone take into the Studio** (task SC-878,
+proved 2026-11-25). You pick each video yourself, on the phone, and it goes
+straight to the Inbox through the **Google Drive app** — no MacBook, no
+iCloud download, nothing else on the phone sent anywhere.
+
+**Once, to set it up:**
+
+1. Install the **Google Drive** app from the App Store if it is not there.
+2. Open it, tap your picture at the top right, and make sure it says
+   **mentorofaio@gmail.com**. If it does not, add that account and switch to
+   it. The storage comes out of whichever account uploads (see "Which Google
+   account owns what" above), and mentorofaio is the one with 2 TB.
+3. Go to **Files › Projects › Starcaster › Studio-probe › Inbox**, tap the
+   three dots next to **Inbox**, and tap **Add to Starred**. From then on it
+   is one tap away under **Starred**.
+
+**Each time you want to send a video:**
+
+1. Open the Google Drive app and go to the **Inbox** (Starred › Inbox).
+2. Tap **+** (bottom right) › **Upload** › **Photos and Videos**.
+3. Pick the video (or several) and tap **Upload**. Keep the app open until it
+   finishes; a long take can take a few minutes.
+
+The Mac Mini picks it up on its next look at the Inbox, and it appears under
+**Assets › Footage** like any other file.
+
+**What was checked on the real thing** (IMG_2124.MOV, uploaded 2026-11-25 at
+10:19 AM MT, read off the file after it arrived):
+
+- It landed in `Studio-probe/Inbox`, **uploaded as mentorofaio**.
+- It is the **original file**, not a re-encoded copy: HEVC, 1920×1080 `.MOV`,
+  14 seconds, 15.3 MB.
+- The iPhone's own labels survived: `com.apple.quicktime.make` = Apple,
+  `com.apple.quicktime.model` = iPhone 15 Pro Max,
+  `com.apple.quicktime.creationdate` = 2026-11-24 09:33:54 −0700. Probe reads
+  the device from those, so the take is filed as **iPhone** rather than
+  `unknown`, and the iPhone/Zoom line-up (below) has the real recording time
+  to pair it with.
+
+**Routes that were tried and do not work** (2026-11-22 to 11-24), so nobody
+spends an evening on them again:
+
+- **An iPhone Shortcut that saves into Drive.** The Shortcut's "Save File"
+  folder picker goes through Apple's Files app, and on Dane's phone it shows
+  "Content Unavailable — unknown error" on the `Starcaster` folder every time,
+  even though the Google Drive app browses the same folder fine. That is
+  Google's Files integration failing, not a missed step.
+- **Giving the MacBook permission to download originals.** Neither a
+  scheduled job nor an interactive terminal session gets a Photos prompt from
+  macOS, so neither can fetch an original that only iCloud holds. It would
+  take a separate signed Mac app, which is more to build and keep than the
+  phone route above.
+- **Turning on "Download Originals to this Mac".** Not acceptable: the
+  library is about 4,900 videos and 13,000 photos.
+
 ## Videos in the Photos "Studio" album arrive by themselves (Media intake · 3 of 5)
 
 Put a video into an album called **Studio** in Apple Photos — on the iPhone
 (**Photos › Albums**, then a video's share button › **Add to Album** ›
 **Studio**) or on the Mac — and the same 15-minute job on the MacBook sends it
 to the Inbox. iCloud Photos carries it from the phone to the Mac's library.
+
+**For iPhone videos, use the phone route above instead.** This album route
+only works for a video whose original is already on the MacBook. The
+MacBook's Photos keeps most originals in iCloud only ("Optimize Mac
+Storage"), and macOS will not let a scheduled job download them, so those
+videos fail every pass with PERMISSION DENIED — on 2026-11-18, 9 of the 13
+videos in the album. The job is still installed; whether to switch it off is
+Dane's call and is recorded on SC-878.
 
 - **Only that album.** Nothing outside **Studio** is ever sent, so family
   videos stay out. The album is checked twice: by the tool that reads Photos
@@ -313,7 +385,7 @@ Required — the worker cannot do its job without these:
 | Setting | What it controls |
 |---|---|
 | `STUDIO_PROJECT_ID` | Which StarCaster project the footage is filed under. Without it the pipeline refuses to file anything, rather than filing it under no project |
-| `STUDIO_DRIVE_INBOX_FOLDER_ID`, `STUDIO_DRIVE_PLATES_FOLDER_ID` | The two Drive folders it watches — mentorofaio's `Studio/Inbox` and `Studio/Plates`, shared with the worker's account. A wrong id shows up as "nothing new arrives" plus a blocked watch job naming the folder |
+| `STUDIO_DRIVE_INBOX_FOLDER_ID`, `STUDIO_DRIVE_PLATES_FOLDER_ID` | The two Drive folders it watches — mentorofaio's `Studio-probe/Inbox` and `Studio-probe/Plates`, shared with the worker's account. A wrong id shows up as "nothing new arrives" plus a blocked watch job naming the folder |
 | `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` | The database the catalog is written to (`SUPABASE_SERVICE_ROLE_KEY` is accepted in place of the key) |
 | `GOOGLE_DRIVE_CLIENT_ID`, `GOOGLE_DRIVE_CLIENT_SECRET`, `GOOGLE_DRIVE_REFRESH_TOKEN` | The Google Drive sign-in it reads and downloads with |
 
