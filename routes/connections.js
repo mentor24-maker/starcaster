@@ -45,6 +45,7 @@ const projectConnectionsStore = require('../lib/projectConnectionsStore');
 const projectSocialCredentialsStore = require('../lib/projectSocialCredentialsStore');
 const { makeActive, storeAccounts } = require('../lib/connections/completeConnection');
 const verifySweep = require('../lib/connections/verifySweep');
+const { isGenericCallbackPath, finishRedirectCallback } = require('../lib/connections/redirectCallback');
 /**
  * The fitness test for a cause a client will read, and the limit behind it.
  *
@@ -402,6 +403,14 @@ function routeParts(pathname) {
 async function handle(req, res, pathname, method) {
   const normalizedPath = normalizeApiPathname(pathname);
   if (normalizedPath !== PREFIX && !normalizedPath.startsWith(`${PREFIX}/`)) return false;
+
+  // A provider's sign-in coming back (SC-913). Before the project check: the
+  // browser carries no session or project header here, and the signed state
+  // is what names the project (lib/connections/redirectCallback.js).
+  if (method === 'GET' && isGenericCallbackPath(normalizedPath)) {
+    await finishRedirectCallback(req, res, normalizedPath, getUrlObj(req).searchParams);
+    return true;
+  }
 
   const scope = scopeFromRequest(req);
   if (!scope.projectId) {

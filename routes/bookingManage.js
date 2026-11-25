@@ -34,6 +34,18 @@ const { checkEndpointLimit } = require('../lib/rateLimiter');
 const store = require('../lib/bookingStore');
 const { freeSlots, isSlotFree } = require('../lib/bookingAvailability');
 const { sendBookingEmails, requestSiteOrigin } = require('../lib/bookingEmails');
+const googleSync = require('../lib/bookingGoogleSync');
+
+/**
+ * The project's Google busy blocks, minus the meeting's own time: its own
+ * event is on the Google Calendar too, and must not stop the visitor moving it
+ * by a quarter hour (SC-913). Subtracted, not matched: Google clips and joins
+ * blocks (lib/bookingGoogleSync.js, busyWithoutBooking).
+ */
+async function busyExceptOwn(scope, booking, fromMs, toMs) {
+  const google = await googleSync.busyTimes(scope, fromMs, toMs);
+  return googleSync.busyWithoutBooking(google.busy, booking);
+}
 const shared = require('./bookingPublic');
 
 const DAY = 86400000;
@@ -93,13 +105,16 @@ async function handleDetails(req, res) {
   let slots = [];
   if (booking.status === 'booked' && !hasHappened(booking, now)) {
     const to = now + shared.windowDays(calendar) * DAY;
-    const booked = await shared.bookedAround(calendar, now, to, scope);
+    const [booked, busy] = await Promise.all([
+      shared.bookedAround(calendar, now, to, scope),
+      busyExceptOwn(scope, booking, now, to),
+    ]);
     // "Could not read the bookings" must never read as "everything is free".
     if (!booked.ok) return sendErr(res, booked.status || 500, `Could not read the bookings: ${booked.error}`);
     try {
       // Their own meeting does not block them: they may move it by a quarter hour.
       const others = booked.data.filter((b) => b.id !== booking.id);
-      slots = freeSlots({ calendar, bookings: others, from: now, to, now })
+      slots = freeSlots({ calendar, bookings: others, busy, from: now, to, now })
         .filter((slot) => slot.startsAt !== booking.startsAt);
     } catch (error) {
       return sendErr(res, 500, `The booking calendar's settings could not be read: ${error.message}`);
@@ -134,6 +149,8 @@ async function handleCancel(req, res) {
     if (cancelled.status === 409) return already();
     return sendErr(res, cancelled.status || 500, cancelled.error || 'The meeting could not be cancelled');
   }
+  // Remove the Google Calendar event (SC-913); a failure is marked on the booking.
+  await googleSync.syncBooking({ kind: 'cancelled', booking: cancelled.data, calendar, scope });
   const emails = await sendBookingEmails({
     kind: 'cancelled',
     booking: cancelled.data,
@@ -170,14 +187,18 @@ async function handleReschedule(req, res) {
     return sendErr(res, 400, 'That is already your meeting\'s time. Please pick a different one.', { code: 'SAME_TIME' });
   }
   const end = start + calendar.meetingMinutes * MINUTE;
-  const booked = await shared.bookedAround(calendar, start, end, scope);
+  const gapMs = (Number(calendar.gapMinutes) || 0) * MINUTE;
+  const [booked, busy] = await Promise.all([
+    shared.bookedAround(calendar, start, end, scope),
+    busyExceptOwn(scope, booking, start - gapMs, end + gapMs),
+  ]);
   if (!booked.ok) return sendErr(res, booked.status || 500, `Could not read the bookings: ${booked.error}`);
   const others = booked.data.filter((b) => b.id !== booking.id);
   let offered;
   let free;
   try {
     offered = isSlotFree({ calendar, bookings: [], now }, start, end);
-    free = offered && isSlotFree({ calendar, bookings: others, now }, start, end);
+    free = offered && isSlotFree({ calendar, bookings: others, busy, now }, start, end);
   } catch (error) {
     return sendErr(res, 500, `The booking calendar's settings could not be read: ${error.message}`);
   }
@@ -194,9 +215,12 @@ async function handleReschedule(req, res) {
     }
     return sendErr(res, moved.status || 500, moved.error || 'The meeting could not be moved');
   }
+  // Move the Google Calendar event before the emails, so they carry its Meet link.
+  const synced = await googleSync.syncBooking({ kind: 'rescheduled', booking: moved.data, calendar, scope });
+  const movedBooking = synced.booking || moved.data;
   const emails = await sendBookingEmails({
     kind: 'rescheduled',
-    booking: moved.data,
+    booking: movedBooking,
     previous: { startsAt: booking.startsAt, endsAt: booking.endsAt },
     calendar,
     projectId: scope.projectId,

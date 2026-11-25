@@ -66,7 +66,122 @@ export type Booking = {
   /** How the latest booking emails went (SC-912): "sent", "failed", or null when none were tried. */
   notifyStatus?: string | null;
   notifyError?: string;
+  /** The Google Meet link, when the connected Google Calendar made one (SC-913). */
+  meetLink?: string;
+  /** How the booking's Google step went: "synced", "failed", or null when Google was never involved. */
+  googleSyncStatus?: string | null;
+  googleSyncError?: string;
 };
+
+/**
+ * What a booking row says about its Google Meet link (SC-913). A booked
+ * meeting whose Google step FAILED gets a note and a Retry button; one with a
+ * link gets the link. Cancelled meetings and projects with no Google Calendar
+ * say nothing.
+ */
+export function bookingMeetState(
+  booking: Pick<Booking, "status" | "meetLink" | "googleSyncStatus" | "googleSyncError">,
+): { kind: "link"; href: string } | { kind: "missing"; note: string; href?: string } | null {
+  const failed = booking.googleSyncStatus === "failed";
+  const why = String(booking.googleSyncError || "").trim();
+  if (booking.status === "cancelled") {
+    // A cancel whose Google event could not be removed: that event still keeps
+    // the time busy for every visitor, so the row says so and offers Retry
+    // (review, SC-913 round 2).
+    if (!failed) return null;
+    return { kind: "missing", note: why ? `Still on Google Calendar: ${why}` : "Still on Google Calendar" };
+  }
+  if (booking.status !== "booked") return null;
+  const link = String(booking.meetLink || "").trim();
+  const href = link && /^https:\/\//.test(link) ? link : "";
+  if (failed) {
+    // A failed step outranks a link already stored: a MOVE that did not reach
+    // Google leaves the old event, link and all, at the old time (round 2).
+    if (href) {
+      return { kind: "missing", href, note: why ? `Google Calendar not updated: ${why}` : "Google Calendar not updated" };
+    }
+    return { kind: "missing", note: why ? `No Meet link yet: ${why}` : "No Meet link yet" };
+  }
+  if (href) return { kind: "link", href };
+  return null;
+}
+
+/** The Booking Manager's Google Calendar card, as GET /api/admin/booking/google answers. */
+export type GoogleCalendarStatus = {
+  configured: boolean;
+  connected: boolean;
+  accountLabel: string;
+  needsAttention: boolean;
+  lastError: string;
+};
+
+export function normalizeGoogleStatus(value: unknown): GoogleCalendarStatus {
+  const v = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+  return {
+    configured: v.configured === true,
+    connected: v.connected === true,
+    accountLabel: typeof v.accountLabel === "string" ? v.accountLabel : "",
+    needsAttention: v.needsAttention === true,
+    lastError: typeof v.lastError === "string" ? v.lastError : "",
+  };
+}
+
+/** The one line the Google Calendar card shows under its heading. */
+export function googleStatusLine(status: GoogleCalendarStatus): string {
+  if (status.connected) {
+    const who = status.accountLabel ? `Connected as ${status.accountLabel}.` : "Connected.";
+    return status.needsAttention && status.lastError ? `${who} ${status.lastError}` : who;
+  }
+  if (status.needsAttention) {
+    return status.lastError || "Google no longer accepts this connection. Connect it again.";
+  }
+  if (!status.configured) {
+    return "Google Calendar cannot be connected on this server yet: its Google app is not set up.";
+  }
+  return "Not connected. Connect it to give every booking a Google Meet link and hide the times you are busy.";
+}
+
+/**
+ * What Disconnect did to the project's bookings (SC-913 round 3): they let go
+ * of their Google events, which stay on the old Google Calendar. '' when no
+ * booking had one.
+ */
+export function disconnectBookingsNote(done: { released?: number; releaseError?: string }): string {
+  const problem = String(done.releaseError || "").trim();
+  if (problem) return `Some bookings could not be updated: ${problem}.`;
+  const n = Number(done.released) || 0;
+  if (n <= 0) return "";
+  return n === 1
+    ? "1 booking no longer points at its Google event; that event stays on the old Google Calendar."
+    : `${n} bookings no longer point at their Google events; those events stay on the old Google Calendar.`;
+}
+
+/**
+ * The Google sign-in's outcome, when it came back in THIS tab (pop-ups
+ * blocked): the callback sends the browser back here with
+ * `connect_provider=google_calendar` and `connect_notice` or `connect_error`
+ * on the hash (lib/connections/redirectCallback.js). Null when the hash holds
+ * no Google Calendar outcome. `hash` is what is left for the address once the
+ * outcome is read, so a reload does not show it twice.
+ */
+export function readGoogleConnectReturn(rawHash: string): { ok: boolean; message: string; hash: string } | null {
+  const bare = String(rawHash || "").replace(/^#/, "");
+  const parts = bare.split("&").filter(Boolean);
+  const read = (key: string): string | null => {
+    const part = parts.find((p) => p.startsWith(`${key}=`));
+    if (part === undefined) return null;
+    const value = part.slice(key.length + 1);
+    try { return decodeURIComponent(value); } catch { return value; }
+  };
+  if (read("connect_provider") !== "google_calendar") return null;
+  const error = read("connect_error");
+  const notice = read("connect_notice");
+  if (error === null && notice === null) return null;
+  const kept = parts.filter((p) => !p.startsWith("connect_")).join("&");
+  return error !== null
+    ? { ok: false, message: error || "Google Calendar was not connected.", hash: kept ? `#${kept}` : "" }
+    : { ok: true, message: notice || "Google Calendar is connected.", hash: kept ? `#${kept}` : "" };
+}
 
 /**
  * What a booking row says about its emails (SC-912). Only a FAILED send is
