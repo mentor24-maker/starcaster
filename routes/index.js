@@ -68,6 +68,7 @@ const polls       = require('./polls');
 const platformScreenshots = require('./platformScreenshots');
 const crm         = require('./crm');
 const booking     = require('./booking');
+const bookingPublic = require('./bookingPublic');
 const blog        = require('./blog');
 const events      = require('./events');
 const studio      = require('./studio');
@@ -161,6 +162,9 @@ const ROUTE_MODULES = [
   polls,
   crm,
   booking,
+  // The visitor's booking door (SC-911). Ahead of publicSite, which owns the
+  // rest of /api/public and would answer this path 404.
+  bookingPublic,
   blog,
   events,
   studio,

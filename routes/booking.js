@@ -21,7 +21,8 @@
  *
  * Every call is scoped to the active project; another project's calendar or
  * booking is a 404 exactly like one that does not exist. No public access:
- * visitors book through slice 3 (SC-911), which will add its own narrow door.
+ * visitors read free times and book through routes/bookingPublic.js
+ * (/api/public/booking, SC-911), a separate narrow door.
  */
 
 const { sendOk, sendErr, parseJsonBody, getUrlObj } = require('./http');

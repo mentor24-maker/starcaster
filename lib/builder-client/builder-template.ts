@@ -161,6 +161,7 @@ export const BUILDER_MODULE_TYPES = [
   "admin-blog-links",
   "admin-related-articles",
   "admin-booking-manager",
+  "booking-calendar",
   "bug-report",
   "spirality-tasks"
 ] as const;
@@ -2678,6 +2679,7 @@ export function normalizeModuleType(value: unknown): BuilderTemplateModuleType {
     type === "admin-blog-links" ||
     type === "admin-related-articles" ||
     type === "admin-booking-manager" ||
+    type === "booking-calendar" ||
     type === "bug-report" ||
     type === "spirality-tasks"
   ) {
@@ -4586,6 +4588,17 @@ export function createEmptyModule(
                             // Defaults are the admin scaffold's own slugs.
                             managerPageUrl: "/admin-blog-manager",
                             postViewUrl: "/blog-post-view"
+                          }
+                      : type === "booking-calendar"
+                        ? {
+                            // The visitor's booking calendar (SC-911). An
+                            // empty calendarId shows the project's first
+                            // calendar; empty heading / accent follow the
+                            // calendar's own heading and the theme.
+                            calendarId: "",
+                            heading: "",
+                            accentColor: "",
+                            weekStartsOn: "0"
                           }
                       : type === "admin-booking-manager"
                         ? {

@@ -11,7 +11,8 @@ import { useBuilderPageSections } from "./builder-page-sections-context";
  * should be a matter of selecting the destination from a dropdown list,
  * which will automatically format the URL."
  *
- * One control, three sources (project pages, blog posts, CRM forms). It
+ * One control, four sources (project pages, blog posts, CRM forms, booking
+ * calendars). It
  * fetches the project's real data, offers it as options, writes the
  * derived value (path, slug, or id), and keeps a "Custom…" escape hatch
  * (C1's "Other"). If the fetch fails, it degrades to a plain text input —
@@ -19,7 +20,7 @@ import { useBuilderPageSections } from "./builder-page-sections-context";
  * option renders in Custom mode, so nothing saved ever breaks.
  */
 
-export type BuilderPickerSource = "pages" | "posts" | "crm-forms";
+export type BuilderPickerSource = "pages" | "posts" | "crm-forms" | "booking-calendars";
 export type BuilderPickerValueKind = "path" | "slug" | "id";
 
 /** A named section of a page, as a link picker offers it (task SC-852). */
@@ -153,6 +154,20 @@ export function loadPickerOptions(source: BuilderPickerSource): Promise<BuilderP
           path: `/${slug}`
         };
       });
+    }
+    if (source === "booking-calendars") {
+      // SC-911. Through the admin fetch: /api/admin/booking is rewritten to
+      // /api/booking with the project headers (builder-admin-fetch.ts).
+      const response = await builderAdminFetch("/api/admin/booking/calendars", { cache: "no-store" });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(`booking calendars could not be read (${response.status})`);
+      const calendars = Array.isArray(data?.data) ? data.data : [];
+      return calendars.map((calendar: { id?: string; name?: string }) => ({
+        id: String(calendar.id ?? ""),
+        label: String(calendar.name || "Untitled calendar"),
+        slug: String(calendar.id ?? ""),
+        path: String(calendar.id ?? "")
+      }));
     }
     const response = await fetch("/api/crm/forms", {
       credentials: "include",

@@ -158,6 +158,8 @@ const NEVER_INDEXED_MODULE_TYPES = new Set([
   "blog-card-manager",
   "event-manager",
   "admin-booking-manager",
+  // Live free times, not words worth finding (SC-911).
+  "booking-calendar",
   "navigation",
   "tractor-nav",
   "galaxy",

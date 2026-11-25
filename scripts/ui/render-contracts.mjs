@@ -540,6 +540,160 @@ export const RENDER_DIFFERENTIALS = [
   },
 ];
 
+/*
+ * The visitor's booking calendar (SC-911). The free times are served, so this
+ * needs no database. The served times sit in January 2027 on purpose: the
+ * module must OPEN on the month of the first free day, not on today's month.
+ * They are UTC instants; the module must show each on the browser's own clock
+ * and name the browser's zone, so the expected strings are worked out here
+ * with the same zone the browser on this machine uses.
+ */
+const BOOKING_SLOTS = [
+  { startsAt: '2027-01-12T16:00:00.000Z', endsAt: '2027-01-12T16:30:00.000Z' },
+  { startsAt: '2027-01-12T16:30:00.000Z', endsAt: '2027-01-12T17:00:00.000Z' },
+  { startsAt: '2027-01-19T17:00:00.000Z', endsAt: '2027-01-19T17:30:00.000Z' },
+];
+const bookingCalendarReply = (slots, days = 61) => ({
+  ok: true,
+  data: {
+    calendar: { id: 'cal_contract', name: 'Calls', timeZone: 'Pacific/Auckland', meetingMinutes: 30, heading: 'Book a call', intro: '' },
+    from: '2027-01-01T00:00:00.000Z',
+    to: '2027-03-01T00:00:00.000Z',
+    days,
+    slots,
+  },
+});
+const BOOKING_URL = /\/api\/public\/booking\/calendar/;
+
+function bookingCalendarContracts() {
+  const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const clock = (iso) => new Intl.DateTimeFormat('en-US', { timeZone: zone, hour: 'numeric', minute: '2-digit' }).format(new Date(iso));
+  const dayOf = (iso) => new Intl.DateTimeFormat('en-CA', { timeZone: zone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(iso));
+  const firstDay = dayOf(BOOKING_SLOTS[0].startsAt);
+  const timesThatDay = BOOKING_SLOTS.filter((s) => dayOf(s.startsAt) === firstDay).map((s) => clock(s.startsAt));
+  return [
+    {
+      id: 'booking-calendar-month-grid-is-seven-columns-and-opens-on-the-first-free-month',
+      why:
+        'The booking calendar is a month of whole weeks, seven to a row (SC-911): an off-by-one ' +
+        'puts every date under the wrong weekday, and a visitor books the wrong day. The served free ' +
+        'times are months ahead, so this also proves the calendar opens where the times are instead ' +
+        'of on an empty current month that reads as "nothing available".',
+      module: { type: 'booking-calendar', settings: {} },
+      serve: [{ url: BOOKING_URL, json: bookingCalendarReply(BOOKING_SLOTS) }],
+      emulate: { liveSite: true },
+      selector: '.builder-booking-calendar-grid',
+      read: ['display', 'gridTemplateColumns'],
+      expect(sample) {
+        if (sample.styles.display !== 'grid') return `the month renders as ${sample.styles.display}, not a grid — its CSS is not reaching the page.`;
+        const columns = String(sample.styles.gridTemplateColumns || '').trim().split(/\s+/).filter(Boolean);
+        if (columns.length !== 7) return `the month has ${columns.length} columns, not 7 — dates will sit under the wrong weekdays.`;
+        if (!/^\s*Sun/.test(sample.text)) return `the week begins "${sample.text.slice(0, 12)}", not Sunday (the default).`;
+        return null;
+      },
+    },
+    {
+      id: 'booking-calendar-shows-the-chosen-days-times-on-the-visitors-clock',
+      why:
+        'A visitor in another time zone must see the free times converted to their own clock (SC-911 ' +
+        'acceptance). Unit tests cover the arithmetic in lib/builder-client/booking-calendar.ts; this ' +
+        'proves a real click on a free day reaches the page as that day\'s times, on the browser\'s ' +
+        'own clock, and nothing addressed to the builder shows on the live page.',
+      module: { type: 'booking-calendar', settings: {} },
+      serve: [{ url: BOOKING_URL, json: bookingCalendarReply(BOOKING_SLOTS) }],
+      emulate: { liveSite: true },
+      click: [`.builder-booking-calendar-day.is-bookable[data-day="${firstDay}"]`],
+      selector: '.builder-booking-calendar-times',
+      read: ['display'],
+      expect(sample) {
+        // Intl puts a narrow no-break space before "AM" in some builds and a
+        // plain space in others; Node and Chromium need not agree.
+        const text = sample.text.replace(/\s+/g, ' ');
+        const missing = timesThatDay.map((t) => t.replace(/\s+/g, ' ')).filter((t) => !text.includes(t));
+        if (missing.length) return `after choosing ${firstDay}, the times ${missing.join(', ')} are missing — the list reads "${text}".`;
+        if (/Choose a day/.test(text)) return 'the click on a free day did not open its times.';
+        return null;
+      },
+    },
+    {
+      id: 'booking-calendar-names-the-visitors-time-zone',
+      why: 'The zone the times are shown in must be named on screen (SC-911 acceptance), and it must be the visitor\'s, not the operator\'s.',
+      module: { type: 'booking-calendar', settings: {} },
+      serve: [{ url: BOOKING_URL, json: bookingCalendarReply(BOOKING_SLOTS) }],
+      emulate: { liveSite: true },
+      selector: '.builder-booking-calendar-zone',
+      read: ['display'],
+      expect(sample) {
+        if (!sample.text.includes(`(${zone})`)) return `the zone line reads "${sample.text}" — it does not name the visitor's zone (${zone}).`;
+        return null;
+      },
+    },
+    {
+      id: 'booking-calendar-heading-setting-reaches-the-page',
+      why: 'The Heading setting overrides the calendar\'s own heading; a setting that never reaches the renderer is a dead control (E7).',
+      module: { type: 'booking-calendar', settings: { heading: 'Book a call with us' } },
+      serve: [{ url: BOOKING_URL, json: bookingCalendarReply(BOOKING_SLOTS) }],
+      emulate: { liveSite: true },
+      selector: '.builder-booking-calendar-heading',
+      read: ['display'],
+      expect(sample) {
+        if (sample.text !== 'Book a call with us') return `the heading reads "${sample.text}", not the Heading setting.`;
+        return null;
+      },
+    },
+    {
+      id: 'booking-calendar-with-no-free-time-says-how-far-ahead-it-looked',
+      why:
+        'An empty screen that does not say why reads as a broken one (landmine 17). A calendar with ' +
+        'no free time must tell the visitor so in their words — "No times available in the next N ' +
+        'days" — and never show them a note addressed to the builder (landmine 16).',
+      module: { type: 'booking-calendar', settings: {} },
+      serve: [{ url: BOOKING_URL, json: bookingCalendarReply([], 31) }],
+      emulate: { liveSite: true },
+      selector: '.builder-booking-calendar-empty',
+      read: ['display'],
+      expect(sample) {
+        if (!/No times available in the next 31 days\./.test(sample.text)) return `the empty state reads "${sample.text.slice(0, 80)}".`;
+        if (sample.box.height < 20) return `the empty state is ${sample.box.height}px tall — it renders as a blank box.`;
+        return null;
+      },
+    },
+    {
+      id: 'booking-calendar-with-no-free-time-shows-no-builder-note-on-the-live-page',
+      why: 'The partner of the contract above: on a live page the Booking Manager hint must not render (landmine 16).',
+      module: { type: 'booking-calendar', settings: {} },
+      serve: [{ url: BOOKING_URL, json: bookingCalendarReply([], 31) }],
+      emulate: { liveSite: true },
+      selector: '.builder-booking-calendar .builder-only-note',
+      absent: true,
+    },
+    {
+      id: 'booking-calendar-in-a-project-with-no-calendar-renders-nothing-live',
+      why:
+        'A project with no booking calendar has nothing to offer a visitor, so on a live page the ' +
+        'module renders nothing at all — not a heading over empty space, and not the Builder\'s ' +
+        '"create one on the Booking Manager" note (landmine 16). Paired with the Builder contract below.',
+      module: { type: 'booking-calendar', settings: { heading: 'Book a call' } },
+      serve: [{ url: BOOKING_URL, status: 404, json: { ok: false, error: { message: 'none', code: 'NO_CALENDAR' } } }],
+      emulate: { liveSite: true },
+      selector: '.builder-booking-calendar, .builder-only-note',
+      absent: true,
+    },
+    {
+      id: 'booking-calendar-in-a-project-with-no-calendar-tells-the-builder-why',
+      why: 'The same project in the Builder: the module must explain that there is no calendar yet and where to make one (landmine 17).',
+      module: { type: 'booking-calendar', settings: {} },
+      serve: [{ url: BOOKING_URL, status: 404, json: { ok: false, error: { message: 'none', code: 'NO_CALENDAR' } } }],
+      selector: '.builder-only-note',
+      read: ['display'],
+      expect(sample) {
+        if (!/no booking calendar yet/.test(sample.text)) return `the Builder note reads "${sample.text.slice(0, 80)}".`;
+        return null;
+      },
+    },
+  ];
+}
+
 export const RENDER_CONTRACTS = [
 
   /*
@@ -7317,6 +7471,8 @@ export const RENDER_CONTRACTS = [
       return null;
     },
   },
+  ...bookingCalendarContracts(),
+
 ];
 
 /** One frame reading the first six status groups' names under `root`, in page order. */
