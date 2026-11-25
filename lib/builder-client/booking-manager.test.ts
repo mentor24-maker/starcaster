@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   bookingEmailNote,
+  disconnectBookingsNote,
+  bookingMeetState,
+  googleStatusLine,
+  normalizeGoogleStatus,
+  readGoogleConnectReturn,
   addBlockedDate,
   addDayWindow,
   bookingContactHref,
@@ -114,5 +119,85 @@ describe("bookingEmailNote (SC-912)", () => {
     expect(bookingEmailNote({ notifyStatus: "failed", notifyError: "" })).toBe("Email not sent");
     expect(bookingEmailNote({ notifyStatus: "sent", notifyError: "" })).toBeNull();
     expect(bookingEmailNote({ notifyStatus: null })).toBeNull();
+  });
+});
+
+describe("Google Calendar on the Booking Manager (SC-913)", () => {
+  it("shows a booked meeting's Meet link", () => {
+    expect(bookingMeetState({ status: "booked", meetLink: "https://meet.google.com/abc-defg-hij", googleSyncStatus: "synced" }))
+      .toEqual({ kind: "link", href: "https://meet.google.com/abc-defg-hij" });
+  });
+
+  it("says why a booked meeting has no Meet link yet", () => {
+    expect(bookingMeetState({ status: "booked", meetLink: "", googleSyncStatus: "failed", googleSyncError: "Google could not be reached" }))
+      .toEqual({ kind: "missing", note: "No Meet link yet: Google could not be reached" });
+  });
+
+  it("says nothing for a project with no Google Calendar, or a cancelled meeting Google already let go", () => {
+    expect(bookingMeetState({ status: "booked", meetLink: "", googleSyncStatus: null })).toBeNull();
+    expect(bookingMeetState({ status: "cancelled", meetLink: "https://meet.google.com/x", googleSyncStatus: "synced" })).toBeNull();
+    expect(bookingMeetState({ status: "cancelled", meetLink: "", googleSyncStatus: null })).toBeNull();
+  });
+
+  it("a failed MOVE outranks the stored link: the note shows, with the link, so Retry is offered", () => {
+    expect(bookingMeetState({
+      status: "booked", meetLink: "https://meet.google.com/abc-defg-hij", googleSyncStatus: "failed",
+      googleSyncError: "the Google Calendar event could not be moved: Backend Error",
+    })).toEqual({
+      kind: "missing",
+      href: "https://meet.google.com/abc-defg-hij",
+      note: "Google Calendar not updated: the Google Calendar event could not be moved: Backend Error",
+    });
+  });
+
+  it("a cancelled meeting whose Google event could not be removed says so", () => {
+    expect(bookingMeetState({
+      status: "cancelled", meetLink: "https://meet.google.com/x", googleSyncStatus: "failed",
+      googleSyncError: "the Google Calendar event could not be removed: Backend Error",
+    })).toEqual({ kind: "missing", note: "Still on Google Calendar: the Google Calendar event could not be removed: Backend Error" });
+  });
+
+  it("never turns a non-https value into a link", () => {
+    expect(bookingMeetState({ status: "booked", meetLink: "javascript:alert(1)", googleSyncStatus: "synced" })).toBeNull();
+  });
+
+  it("names the connected account, and the reason when it needs attention", () => {
+    const base = normalizeGoogleStatus({ configured: true, connected: true, accountLabel: "owner@gmail.example" });
+    expect(googleStatusLine(base)).toBe("Connected as owner@gmail.example.");
+    expect(googleStatusLine({ ...base, needsAttention: true, lastError: "Could not renew it." }))
+      .toBe("Connected as owner@gmail.example. Could not renew it.");
+  });
+
+  it("reads a sign-in that came back in this tab, and leaves the rest of the address alone", () => {
+    expect(readGoogleConnectReturn("#tab=g&connect_provider=google_calendar&connect_notice=Connected%20as%20a%40b.example"))
+      .toEqual({ ok: true, message: "Connected as a@b.example", hash: "#tab=g" });
+    expect(readGoogleConnectReturn("#connect_provider=google_calendar&connect_error=You%20chose%20not%20to%20allow%20access"))
+      .toEqual({ ok: false, message: "You chose not to allow access", hash: "" });
+  });
+
+  it("ignores an address with no Google Calendar outcome on it", () => {
+    expect(readGoogleConnectReturn("")).toBeNull();
+    expect(readGoogleConnectReturn("#page=settingsConnectionsPage")).toBeNull();
+    expect(readGoogleConnectReturn("#connect_provider=x&connect_error=no")).toBeNull();
+    expect(readGoogleConnectReturn("#connect_provider=google_calendar")).toBeNull();
+  });
+
+  it("says plainly when the server cannot connect Google at all", () => {
+    expect(googleStatusLine(normalizeGoogleStatus({ configured: false, connected: false })))
+      .toMatch(/cannot be connected on this server yet/);
+    expect(googleStatusLine(normalizeGoogleStatus({ configured: true, connected: false })))
+      .toMatch(/^Not connected\./);
+  });
+});
+
+describe("disconnectBookingsNote", () => {
+  it("names how many bookings let go of their Google events, and that the events stay", () => {
+    expect(disconnectBookingsNote({ released: 0 })).toBe("");
+    expect(disconnectBookingsNote({})).toBe("");
+    expect(disconnectBookingsNote({ released: 1 })).toMatch(/^1 booking no longer points at its Google event; .*stays on the old Google Calendar/);
+    expect(disconnectBookingsNote({ released: 3 })).toMatch(/^3 bookings no longer point at their Google events/);
+  });
+  it("says when the bookings could not be updated, rather than a count", () => {
+    expect(disconnectBookingsNote({ released: 0, releaseError: "database busy" })).toBe("Some bookings could not be updated: database busy.");
   });
 });

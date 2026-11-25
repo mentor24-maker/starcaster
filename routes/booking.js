@@ -12,6 +12,12 @@
  *   GET   /api/booking/calendars/:id/availability     its free times (?from=&to=), the same
  *                                                     answer the visitor module will get
  *   POST  /api/booking/bookings/:id/cancel            cancel a booking, freeing its time
+ *                                                     (and removing its Google event)
+ *   POST  /api/booking/bookings/:id/google-sync       Retry: give a booking its Google
+ *                                                     event and Meet link (SC-913)
+ *   GET   /api/booking/google                         is Google Calendar connected, as whom
+ *   POST  /api/booking/google/connect                 where to send the browser to connect
+ *   DELETE /api/booking/google                        disconnect: revoke at Google, forget it
  *
  * WHY NOT /api/admin/booking. On the server, every /api/admin path skips the
  * step that resolves the request's project (routes/index.js, `isAdminRoute`),
@@ -29,6 +35,8 @@ const { sendOk, sendErr, parseJsonBody, getUrlObj } = require('./http');
 const { checkEndpointLimit } = require('../lib/rateLimiter');
 const store = require('../lib/bookingStore');
 const { freeSlots, MAX_RANGE_DAYS } = require('../lib/bookingAvailability');
+const googleSync = require('../lib/bookingGoogleSync');
+const { sendBookingEmails, requestSiteOrigin } = require('../lib/bookingEmails');
 
 const DAY = 86400000;
 
@@ -85,18 +93,25 @@ async function sendAvailability(req, res, calendarId, params, scope) {
     return sendResult(res, calendar, { notFound: 'That booking calendar does not exist in this project' });
   }
   // A meeting that starts the day before the range can still run into it.
-  const booked = await store.listBookings(500, calendar.data.id, {
-    from: new Date(from - DAY).toISOString(),
-    to: new Date(to).toISOString(),
-    status: 'booked',
-  }, scope);
+  const [booked, google] = await Promise.all([
+    store.listBookings(500, calendar.data.id, {
+      from: new Date(from - DAY).toISOString(),
+      to: new Date(to).toISOString(),
+      status: 'booked',
+    }, scope),
+    googleSync.busyTimes(scope, from, to),
+  ]);
   // "Could not read the bookings" must never read as "everything is free".
   if (!booked.ok) return sendErr(res, booked.status || 500, `Could not read the bookings: ${booked.error}`);
   try {
-    const slots = freeSlots({ calendar: calendar.data, bookings: booked.data, from, to, now });
+    const slots = freeSlots({ calendar: calendar.data, bookings: booked.data, busy: google.busy, from, to, now });
     return sendOk(res, 200, {
       calendarId: calendar.data.id,
       timeZone: calendar.data.timeZone,
+      // 'used': Google busy times are hidden; 'unavailable': Google could not
+      // be asked, so they are not; 'none': no Google Calendar connected.
+      googleBusy: !google.connected ? 'none' : google.unavailable ? 'unavailable' : 'used',
+      ...(google.unavailable ? { googleBusyError: google.unavailable } : {}),
       from: new Date(from).toISOString(),
       to: new Date(to).toISOString(),
       slots,
@@ -104,6 +119,96 @@ async function sendAvailability(req, res, calendarId, params, scope) {
   } catch (error) {
     return sendErr(res, 400, error.message, { code: 'INVALID' });
   }
+}
+
+/** The Booking Manager's Google Calendar card (SC-913). Never sends a token. */
+async function handleGoogle(req, res, pathname, method, scope) {
+  if (pathname === '/api/booking/google/connect') {
+    if (method !== 'POST') return sendErr(res, 405, 'Connect with POST', { code: 'METHOD_NOT_ALLOWED' });
+    if (checkEndpointLimit(req, res, 'booking.write')) return undefined;
+    let body = {};
+    try { body = (await parseJsonBody(req)) || {}; } catch { body = {}; }
+    const started = googleSync.startConnect(scope, {
+      returnTo: typeof body.returnTo === 'string' ? body.returnTo : '',
+      requestOrigin: req.headers?.origin || '',
+    });
+    if (!started.ok) return sendErr(res, started.status || 400, started.error, { code: started.code || 'CONNECT_START_FAILED' });
+    return sendOk(res, 200, started.data);
+  }
+  if (method === 'GET') return sendResult(res, await googleSync.googleStatus(scope));
+  if (method === 'DELETE') {
+    if (checkEndpointLimit(req, res, 'booking.write')) return undefined;
+    return sendResult(res, await googleSync.disconnect(scope));
+  }
+  return sendErr(res, 405, 'Use GET or DELETE', { code: 'METHOD_NOT_ALLOWED' });
+}
+
+/**
+ * Retry made or replaced the Meet link, so the visitor (and the owner) are
+ * emailed it (review, SC-913 round 3). Without this, a booking made while
+ * Google was down got its link on Retry and only the operator ever knew it;
+ * one whose event was deleted on Google left the visitor holding a dead link.
+ *
+ * "Different from the link the booking held before Retry" stands in for
+ * "different from the link the visitor was last sent": every email the booking
+ * gets carries the stored link, so the two only part when a Google step
+ * cleared or replaced it, which is exactly when the visitor needs a new email.
+ * Answers how the emails went, or null when none were due.
+ */
+async function emailNewMeetLink(req, before, synced, calendar, scope) {
+  const link = String(synced.meetLink || '').trim();
+  if (synced.status !== 'synced' || !link || link === String(before.meetLink || '').trim()) return null;
+  const booking = synced.booking || before;
+  if (booking.status !== 'booked') return null;
+  // A meeting already over has no call to join: no "your video call link"
+  // email for it (review, SC-913 round 4).
+  const endsMs = Date.parse(booking.endsAt);
+  if (Number.isFinite(endsMs) && endsMs <= Date.now()) return null;
+  const token = await store.getManageToken(booking.id, scope).catch(() => null);
+  const emails = await sendBookingEmails({
+    kind: 'meetlink',
+    booking: { ...booking, meetLink: link },
+    calendar,
+    projectId: scope.projectId,
+    origin: requestSiteOrigin(req),
+    manageToken: token && token.ok ? token.data : '',
+    scope,
+  });
+  return emails;
+}
+
+/** Retry the Google step for one booking: its event and Meet link, or its removal. */
+async function handleRetry(req, res, bookingId, scope) {
+  const found = await store.getBookingById(bookingId, scope);
+  if (!found.ok || !found.data) return sendResult(res, found, { notFound: 'That booking does not exist in this project' });
+  // A cancelled booking is retried only to remove its event from Google, when
+  // that removal failed: otherwise its time stays busy for every visitor and
+  // nothing could ever clear it (review, SC-913 round 2).
+  const cancelled = found.data.status !== 'booked';
+  if (cancelled && found.data.googleSyncStatus !== 'failed') {
+    return sendErr(res, 409, 'That booking is cancelled, so it gets no Meet link', { code: 'CONFLICT' });
+  }
+  const calendar = await store.getCalendarById(found.data.calendarId, scope);
+  const synced = await googleSync.syncBooking({
+    kind: 'retry',
+    booking: found.data,
+    calendar: calendar.ok ? calendar.data : null,
+    scope,
+  });
+  if (synced.status === 'skipped') {
+    return sendErr(res, 409, 'Google Calendar is not connected, so there is nothing to retry. Connect it first.', { code: 'NOT_CONNECTED' });
+  }
+  if (synced.status === 'failed') {
+    const lead = cancelled ? 'Still on Google Calendar' : synced.meetLink ? 'Google Calendar still not updated' : 'Still no Meet link';
+    return sendErr(res, 502, `${lead}: ${synced.error}`, { code: 'GOOGLE_SYNC_FAILED' });
+  }
+  // 'cleared': nothing is connected any more, so the booking's Google mark
+  // was removed rather than left with a Retry that could never succeed.
+  const emails = await emailNewMeetLink(req, found.data, synced, calendar.ok ? calendar.data : null, scope);
+  if (!emails) return sendOk(res, 200, synced.booking);
+  // Read back, so the row carries how the emails went (notify_status).
+  const after = await store.getBookingById(found.data.id, scope);
+  return sendOk(res, 200, after.ok && after.data ? after.data : synced.booking);
 }
 
 /** true when this module answered the request. */
@@ -166,6 +271,11 @@ async function handle(req, res, pathname, method) {
     return true;
   }
 
+  if (pathname === '/api/booking/google' || pathname === '/api/booking/google/connect') {
+    await handleGoogle(req, res, pathname, method, scope);
+    return true;
+  }
+
   const cancelMatch = pathname.match(/^\/api\/booking\/bookings\/([^/]+)\/cancel$/);
   if (cancelMatch) {
     if (method !== 'POST') {
@@ -173,7 +283,25 @@ async function handle(req, res, pathname, method) {
       return true;
     }
     if (checkEndpointLimit(req, res, 'booking.write')) return true;
-    sendResult(res, await store.cancelBooking(decodeURIComponent(cancelMatch[1]), scope));
+    const cancelled = await store.cancelBooking(decodeURIComponent(cancelMatch[1]), scope);
+    if (!cancelled.ok) {
+      sendResult(res, cancelled);
+      return true;
+    }
+    // Remove its Google event too (SC-913); a failure is marked on the booking.
+    const synced = await googleSync.syncBooking({ kind: 'cancelled', booking: cancelled.data, calendar: null, scope });
+    sendOk(res, 200, synced.booking || cancelled.data);
+    return true;
+  }
+
+  const syncMatch = pathname.match(/^\/api\/booking\/bookings\/([^/]+)\/google-sync$/);
+  if (syncMatch) {
+    if (method !== 'POST') {
+      sendErr(res, 405, 'Retry with POST', { code: 'METHOD_NOT_ALLOWED' });
+      return true;
+    }
+    if (checkEndpointLimit(req, res, 'booking.write')) return true;
+    await handleRetry(req, res, decodeURIComponent(syncMatch[1]), scope);
     return true;
   }
 

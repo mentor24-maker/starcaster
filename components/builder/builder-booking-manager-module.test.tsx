@@ -24,7 +24,13 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 
-type Store = { calendar: Record<string, unknown> | null; bookings: Array<Record<string, unknown>>; patches: unknown[] };
+type Store = {
+  calendar: Record<string, unknown> | null;
+  bookings: Array<Record<string, unknown>>;
+  patches: unknown[];
+  google?: Record<string, unknown>;
+  retries?: string[];
+};
 
 function makeStore(withCalendar = true): Store {
   return {
@@ -69,6 +75,16 @@ function stubApi(store: Store) {
       const b = store.bookings.find((x) => x.id === cancel[1]);
       if (!b) return json(404, { ok: false, error: { message: "That booking does not exist in this project" } });
       b.status = "cancelled";
+      return json(200, { ok: true, data: b });
+    }
+    if (href === "/api/booking/google" && method === "GET") {
+      return json(200, { ok: true, data: store.google || { configured: true, connected: false, accountLabel: "", needsAttention: false, lastError: "" } });
+    }
+    const retry = href.match(/^\/api\/booking\/bookings\/([^/]+)\/google-sync$/);
+    if (retry && method === "POST") {
+      (store.retries ||= []).push(retry[1]);
+      const b = store.bookings.find((x) => x.id === retry[1])!;
+      Object.assign(b, { meetLink: "https://meet.google.com/new-link-xyz", googleSyncStatus: "synced", googleSyncError: "" });
       return json(200, { ok: true, data: b });
     }
     return json(404, { ok: false, error: { message: `unexpected ${method} ${href}` } });
@@ -184,5 +200,45 @@ describe("Booking Manager", () => {
     await click(button(host, "Create Booking Calendar"));
     expect(store.calendar?.id).toBe("cal-new");
     expect(host.textContent).toContain("Save Availability");
+  });
+});
+
+describe("Booking Manager — Google Calendar (SC-913)", () => {
+  it("names the connected Google account and offers Disconnect, not Connect", async () => {
+    const store = makeStore();
+    store.google = { configured: true, connected: true, accountLabel: "owner@gmail.example", needsAttention: false, lastError: "" };
+    stubApi(store);
+    const el = await mount();
+    expect(el.querySelector("[data-google-status]")?.textContent).toBe("Connected as owner@gmail.example.");
+    const labels = Array.from(el.querySelectorAll(".booking-manager-google button")).map((b) => b.textContent);
+    expect(labels).toEqual(["Disconnect"]);
+  });
+
+  it("offers Connect when nothing is connected", async () => {
+    stubApi(makeStore());
+    const el = await mount();
+    const button = Array.from(el.querySelectorAll(".booking-manager-google button")).find((b) => b.textContent === "Connect Google Calendar");
+    expect(button).toBeTruthy();
+    expect((button as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("shows a booking's Meet link, and \"No Meet link yet\" with a Retry that fixes it", async () => {
+    const store = makeStore();
+    const soon = Date.now() + 86400000;
+    store.bookings = [
+      { id: "b1", calendarId: "cal1", status: "booked", visitorName: "Pat", visitorEmail: "pat@example.com", startsAt: new Date(soon).toISOString(), endsAt: new Date(soon + 1800000).toISOString(), crmContactId: null, meetLink: "https://meet.google.com/abc-defg-hij", googleSyncStatus: "synced" },
+      { id: "b2", calendarId: "cal1", status: "booked", visitorName: "Sam", visitorEmail: "sam@example.com", startsAt: new Date(soon + 7200000).toISOString(), endsAt: new Date(soon + 9000000).toISOString(), crmContactId: null, meetLink: "", googleSyncStatus: "failed", googleSyncError: "Google could not be reached" },
+    ];
+    stubApi(store);
+    const el = await mount();
+    const link = el.querySelector(".booking-manager-booking-meet a") as HTMLAnchorElement;
+    expect(link.href).toBe("https://meet.google.com/abc-defg-hij");
+    const missing = el.querySelector(".booking-manager-booking-meet.is-missing")!;
+    expect(missing.textContent).toContain("No Meet link yet: Google could not be reached");
+    await act(async () => (missing.querySelector("button") as HTMLButtonElement).click());
+    await settle();
+    expect(store.retries).toEqual(["b2"]);
+    expect(el.querySelector(".booking-manager-booking-meet.is-missing")).toBeNull();
+    expect(el.querySelectorAll(".booking-manager-booking-meet a").length).toBe(2);
   });
 });

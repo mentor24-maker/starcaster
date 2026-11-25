@@ -17,7 +17,7 @@ const path = require('path');
 const SQL_FILE = path.join(__dirname, '..', '..', 'docs', 'SQL', 'booking_setup.sql');
 // booking_notifications.sql (SC-912) runs after it and adds the email and
 // manage-link columns the store now writes.
-const SQL_TEXT = [SQL_FILE, path.join(__dirname, '..', '..', 'docs', 'SQL', 'booking_notifications.sql')]
+const SQL_TEXT = [SQL_FILE, path.join(__dirname, '..', '..', 'docs', 'SQL', 'booking_notifications.sql'), path.join(__dirname, '..', '..', 'docs', 'SQL', 'booking_google_calendar.sql')]
   .map((file) => fs.readFileSync(file, 'utf8'))
   .join('\n');
 const { parseSchemaText, createFakeDb } = require('./sqlSchemaFake.js');
@@ -73,9 +73,10 @@ test('both tables carry BOTH tenant columns and RLS', () => {
 });
 
 test('the SQL file says what breaks without it, and is safe to run twice', () => {
-  // Each file carries its own FEATURE line; the second also says what it runs after.
-  assert.equal((SQL_TEXT.match(/^-- FEATURE: \S.+$/gm) || []).length, 2);
+  // Each file carries its own FEATURE line; each later one says what it runs after.
+  assert.equal((SQL_TEXT.match(/^-- FEATURE: \S.+$/gm) || []).length, 3);
   assert.match(SQL_TEXT, /^-- RUN AFTER docs\/SQL\/booking_setup\.sql$/m);
+  assert.match(SQL_TEXT, /^-- RUN AFTER docs\/SQL\/booking_notifications\.sql$/m);
   const statements = SQL_TEXT
     .replace(/--.*$/gm, '')
     .replace(/\$\$[\s\S]*?\$\$/g, '$$$$')

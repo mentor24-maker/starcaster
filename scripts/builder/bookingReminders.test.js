@@ -16,7 +16,7 @@ const path = require('path');
  * instead of sending it and can be told to refuse.
  */
 
-const SQL_TEXT = ['booking_setup.sql', 'booking_notifications.sql', 'booking_reminders.sql']
+const SQL_TEXT = ['booking_setup.sql', 'booking_notifications.sql', 'booking_reminders.sql', 'booking_google_calendar.sql']
   .map((file) => fs.readFileSync(path.join(__dirname, '..', '..', 'docs', 'SQL', file), 'utf8'))
   .join('\n');
 const { parseSchemaText, createFakeDb } = require('./sqlSchemaFake.js');

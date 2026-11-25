@@ -207,6 +207,28 @@ const ROUND_TRIP_FIXTURES = {
       revoke: [{ status: 200, body: { revoked: true } }],
     },
   },
+  // Booking calendar, slice 5 of 6 (SC-913): a code-for-token exchange, then
+  // OpenID's userinfo to learn which Google account it is.
+  google_calendar: {
+    env: { GOOGLE_CALENDAR_CLIENT_ID: 'cal-client', GOOGLE_CALENDAR_CLIENT_SECRET: 'cal-secret' },
+    connect: { code: 'the-code' },
+    replies: {
+      exchange: [
+        {
+          status: 200,
+          body: {
+            access_token: 'ya29.access', refresh_token: '1//refresh', expires_in: 3599,
+            scope: 'openid email https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.freebusy',
+          },
+        },
+        { status: 200, body: { sub: '1098', email: 'owner@gmail.example' } },
+      ],
+      verify: [{ status: 200, body: { sub: '1098', email: 'owner@gmail.example' } }],
+      listAccounts: [{ status: 200, body: { sub: '1098', email: 'owner@gmail.example' } }],
+      refresh: [{ status: 200, body: { access_token: 'ya29.renewed', expires_in: 3599 } }],
+      revoke: [{ status: 200, body: {} }],
+    },
+  },
 };
 
 /** The four that are called WITH an account `exchange` handed back. */
