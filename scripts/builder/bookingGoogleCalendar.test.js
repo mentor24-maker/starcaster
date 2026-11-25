@@ -56,25 +56,40 @@ const ENV = {
 
 /** A pretend Google: one events list, a busy list, a switch to be unreachable. */
 function fakeGoogle() {
-  const g = { down: false, busy: [], events: new Map(), calls: [], nextId: 1, meetPending: false };
+  const g = {
+    down: false, hang: false, tokenRefuses: false, failCreate: false,
+    busy: [], events: new Map(), calls: [], nextId: 1, meetPending: false, meetLink: MEET,
+  };
   g.fetch = async (url, options = {}) => {
     const method = options.method || 'GET';
     g.calls.push({ url: String(url), method, body: options.body ? String(options.body) : '', auth: options.headers?.Authorization || '' });
     if (g.down) throw new Error('getaddrinfo ENOTFOUND www.googleapis.com');
+    // Hangs, ignoring the abort signal: the bound must hold anyway.
+    if (g.hang) return new Promise(() => {});
     const reply = (status, body) => ({ ok: status >= 200 && status < 300, status, statusText: '', json: async () => body });
     const u = new URL(String(url));
     if (u.hostname === 'oauth2.googleapis.com' && u.pathname === '/token') {
+      if (g.tokenRefuses) return reply(400, { error: 'invalid_grant', error_description: 'Token has been expired or revoked.' });
       return reply(200, { access_token: 'ya29.RENEWED-TOKEN', expires_in: 3599, token_type: 'Bearer' });
     }
     if (u.hostname === 'oauth2.googleapis.com' && u.pathname === '/revoke') return reply(200, {});
     if (u.pathname === '/calendar/v3/freeBusy') {
-      return reply(200, { calendars: { primary: { busy: g.busy.map((b) => ({ start: b.startsAt, end: b.endsAt })) } } });
+      // Like Google: blocks are clipped to the window asked about.
+      const asked = JSON.parse(options.body);
+      const lo = Date.parse(asked.timeMin);
+      const hi = Date.parse(asked.timeMax);
+      const busy = g.busy
+        .map((b) => [Math.max(lo, Date.parse(b.startsAt)), Math.min(hi, Date.parse(b.endsAt))])
+        .filter(([a, b]) => b > a)
+        .map(([a, b]) => ({ start: new Date(a).toISOString(), end: new Date(b).toISOString() }));
+      return reply(200, { calendars: { primary: { busy } } });
     }
     const m = /^\/calendar\/v3\/calendars\/primary\/events(?:\/([^/]+))?$/.exec(u.pathname);
     if (m) {
       const id = m[1] ? decodeURIComponent(m[1]) : '';
-      const withMeet = (ev, body) => (body?.conferenceData?.createRequest && !g.meetPending ? { ...ev, hangoutLink: MEET } : ev);
+      const withMeet = (ev, body) => (body?.conferenceData?.createRequest && !g.meetPending ? { ...ev, hangoutLink: g.meetLink } : ev);
       if (method === 'POST') {
+        if (g.failCreate) return reply(500, { error: { code: 500, message: 'Backend Error' } });
         const body = JSON.parse(options.body);
         const ev = withMeet({ id: `evt_${g.nextId++}`, ...body }, body);
         g.events.set(ev.id, ev);
@@ -495,4 +510,196 @@ test('Connect answers with a Google sign-in address carrying a signed state for 
   } finally {
     ctx.restore();
   }
+});
+
+// ── Review round 1 (SC-913) ─────────────────────────────────────────────────
+
+test('moving a meeting: its own time is cut out of a clipped or joined Google block, nothing else is', () => {
+  const sync = require('../../lib/bookingGoogleSync');
+  const own = { googleEventId: 'evt_1', startsAt: '2030-01-07T17:00:00.000Z', endsAt: '2030-01-07T17:30:00.000Z' };
+  // Asked about 17:15-17:45: Google clips the meeting's own event to 17:15-17:30.
+  assert.deepEqual(sync.busyWithoutBooking([{ startsAt: '2030-01-07T17:15:00.000Z', endsAt: '2030-01-07T17:30:00.000Z' }], own), []);
+  // Its own event joined with the next one (17:30-18:00) into one block: the next one stays busy.
+  assert.deepEqual(
+    sync.busyWithoutBooking([{ startsAt: '2030-01-07T17:00:00.000Z', endsAt: '2030-01-07T18:00:00.000Z' }], own),
+    [{ startsAt: '2030-01-07T17:30:00.000Z', endsAt: '2030-01-07T18:00:00.000Z' }]
+  );
+  // Joined on both sides.
+  assert.deepEqual(
+    sync.busyWithoutBooking([{ startsAt: '2030-01-07T16:00:00.000Z', endsAt: '2030-01-07T18:00:00.000Z' }], own),
+    [
+      { startsAt: '2030-01-07T16:00:00.000Z', endsAt: '2030-01-07T17:00:00.000Z' },
+      { startsAt: '2030-01-07T17:30:00.000Z', endsAt: '2030-01-07T18:00:00.000Z' },
+    ]
+  );
+  const elsewhere = { startsAt: '2030-01-07T19:00:00.000Z', endsAt: '2030-01-07T20:00:00.000Z' };
+  assert.deepEqual(sync.busyWithoutBooking([elsewhere], own), [elsewhere]);
+  // A booking with no Google event owns nothing there: the block is someone else's.
+  const exact = { startsAt: own.startsAt, endsAt: own.endsAt };
+  assert.deepEqual(sync.busyWithoutBooking([exact], { ...own, googleEventId: '' }), [exact]);
+});
+
+test('a Google that hangs is given up on within the bound, and the booking still stands with its emails', async () => {
+  const before = process.env.GOOGLE_CALENDAR_TIMEOUT_MS;
+  process.env.GOOGLE_CALENDAR_TIMEOUT_MS = '80';
+  const ctx = setup();
+  try {
+    await connectGoogle(ctx);
+    const cal = await openCalendar(ctx);
+    const [slot] = await slots(ctx, cal.id);
+    ctx.google.hang = true;
+    const started = Date.now();
+    const booking = await book(ctx, cal, slot);
+    assert.ok(Date.now() - started < 3000, `answered in ${Date.now() - started} ms`);
+    const row = rowOf(ctx, booking.id);
+    assert.equal(row.status, 'booked');
+    assert.equal(row.google_sync_status, 'failed');
+    assert.match(row.google_sync_error, /did not answer within/);
+    assert.equal(ctx.sent.length, 2, 'the emails still went');
+  } finally {
+    ctx.restore();
+    if (before === undefined) delete process.env.GOOGLE_CALENDAR_TIMEOUT_MS; else process.env.GOOGLE_CALENDAR_TIMEOUT_MS = before;
+  }
+});
+
+test('the Google call bound holds even when the request ignores its abort signal', async () => {
+  const google = require('../../lib/googleCalendar');
+  const started = Date.now();
+  const res = await google.fetchJson('https://www.googleapis.com/x', {}, () => new Promise(() => {}), 60);
+  assert.equal(res.ok, false);
+  assert.equal(res.code, 'GOOGLE_UNREACHABLE');
+  assert.ok(Date.now() - started < 1000);
+});
+
+test('only the Video call row is a link: an address in a visitor\'s note or name stays text', async () => {
+  const ctx = setup();
+  try {
+    await connectGoogle(ctx);
+    const cal = await openCalendar(ctx);
+    const [slot] = await slots(ctx, cal.id);
+    const res = await call(ctx.publicRoute, 'POST', '/api/public/booking/book', {
+      calendarId: cal.id, startsAt: slot.startsAt, ...VISITOR,
+      name: 'https://evil.example/name', note: 'https://evil.example/login',
+    });
+    assert.equal(res.status, 200, JSON.stringify(res.payload));
+    for (const message of ctx.sent) {
+      assert.doesNotMatch(message.html, /href="https:\/\/evil\.example/, 'no visitor text becomes a link');
+      assert.match(message.html, new RegExp(`href="${MEET}"`), 'the Meet link still is one');
+    }
+  } finally {
+    ctx.restore();
+  }
+});
+
+test('a lapsed token Google refuses to renew says "connect again", not Google\'s vague refusal', async () => {
+  const ctx = setup();
+  try {
+    await connectGoogle(ctx, { expiresAt: new Date(Date.now() - 60e3).toISOString() });
+    const cal = await openCalendar(ctx);
+    ctx.google.tokenRefuses = true;
+    const [slot] = await slots(ctx, cal.id);
+    const booking = await book(ctx, cal, slot);
+    const row = rowOf(ctx, booking.id);
+    assert.equal(row.status, 'booked');
+    assert.equal(row.google_sync_status, 'failed');
+    assert.match(row.google_sync_error, /connect Google Calendar again/);
+    assert.ok(!ctx.google.calls.some((c) => /\/events/.test(c.url)), 'the dead token is not used on an event');
+    assertNoTokenLeaked(ctx);
+  } finally {
+    ctx.restore();
+  }
+});
+
+test('moving a meeting whose event was deleted on Google makes a new one, and the email carries the NEW link', async () => {
+  const ctx = setup();
+  try {
+    await connectGoogle(ctx);
+    const cal = await openCalendar(ctx);
+    const free = await slots(ctx, cal.id);
+    const booking = await book(ctx, cal, free[0]);
+    const token = /[?&]token=([A-Za-z0-9_-]+)/.exec(ctx.sent[0].text)[1];
+    ctx.google.events.delete('evt_1');
+    const NEW = 'https://meet.google.com/new-link-xyz';
+    ctx.google.meetLink = NEW;
+    const moved = await call(ctx.manageRoute, 'POST', '/api/public/booking/manage/reschedule', { token, startsAt: free[4].startsAt });
+    assert.equal(moved.status, 200, JSON.stringify(moved.payload));
+    assert.equal(ctx.google.events.size, 1);
+    const row = rowOf(ctx, booking.id);
+    assert.equal(row.google_event_id, 'evt_2');
+    assert.equal(row.meet_link, NEW);
+    assert.equal(row.google_sync_status, 'synced');
+    const last = ctx.sent.slice(-2);
+    for (const message of last) {
+      assert.match(message.text, new RegExp(`Video call: ${NEW}`));
+      assert.doesNotMatch(message.text, new RegExp(MEET), 'never the dead link');
+    }
+  } finally {
+    ctx.restore();
+  }
+});
+
+test('deleted on Google and a new event cannot be made: the move stands and the email has no dead link', async () => {
+  const ctx = setup();
+  try {
+    await connectGoogle(ctx);
+    const cal = await openCalendar(ctx);
+    const free = await slots(ctx, cal.id);
+    const booking = await book(ctx, cal, free[0]);
+    const token = /[?&]token=([A-Za-z0-9_-]+)/.exec(ctx.sent[0].text)[1];
+    ctx.google.events.delete('evt_1');
+    ctx.google.failCreate = true;
+    const moved = await call(ctx.manageRoute, 'POST', '/api/public/booking/manage/reschedule', { token, startsAt: free[4].startsAt });
+    assert.equal(moved.status, 200, JSON.stringify(moved.payload));
+    const row = rowOf(ctx, booking.id);
+    assert.equal(row.google_sync_status, 'failed');
+    assert.equal(row.meet_link ?? null, null, 'the dead link is forgotten');
+    assert.equal(row.google_event_id ?? null, null);
+    assert.doesNotMatch(ctx.sent[ctx.sent.length - 1].text, /Video call/);
+  } finally {
+    ctx.restore();
+  }
+});
+
+test('Connect keeps the page it started from only when that page is on the request\'s own site', async () => {
+  const ctx = setup();
+  try {
+    const { verifyOAuthState } = require('../../lib/metaOAuthState');
+    const stateOf = (res) => verifyOAuthState(new URL(res.payload.data.authorizeUrl).searchParams.get('state')).data;
+    const page = 'https://client.example.com/admin/bookings#tab=google';
+    const same = await call(ctx.adminRoute, 'POST', '/api/booking/google/connect', { returnTo: page }, {
+      ...asOperator, headers: { host: 'client.example.com', origin: 'https://client.example.com' },
+    });
+    assert.equal(same.status, 200, JSON.stringify(same.payload));
+    assert.equal(stateOf(same).returnTo, page);
+    const foreign = await call(ctx.adminRoute, 'POST', '/api/booking/google/connect', { returnTo: 'https://evil.example/' }, {
+      ...asOperator, headers: { host: 'client.example.com', origin: 'https://client.example.com' },
+    });
+    assert.equal(stateOf(foreign).returnTo, '', 'another site is never a place to send the browser');
+    const noOrigin = await call(ctx.adminRoute, 'POST', '/api/booking/google/connect', { returnTo: page }, asOperator);
+    assert.equal(stateOf(noOrigin).returnTo, '');
+  } finally {
+    ctx.restore();
+  }
+});
+
+test('a renewal that fails on a token past its expiry is reported as that, never used', async () => {
+  const sync = require('../../lib/bookingGoogleSync');
+  const row = { provider: 'google_calendar', accountId: 'g1', status: 'connected' };
+  const store = {
+    listConnections: async () => ({ ok: true, data: [row] }),
+    getConnection: async () => ({ ok: true, data: { ...row, accessToken: 'tok', expiresAt: new Date(Date.now() - 1000).toISOString() } }),
+  };
+  const refused = async ({ connection }) => ({ ok: false, connection, note: 'invalid_grant', judged: true });
+  const lapsed = await sync.usableConnection({ projectId: 'p', userId: 'u' }, { store, refreshBeforeUse: refused });
+  assert.equal(lapsed.ok, false);
+  assert.match(lapsed.error, /connect Google Calendar again.*/);
+  assert.match(lapsed.error, /invalid_grant/);
+  const unreachable = async ({ connection }) => ({ ok: false, connection, note: 'timeout', judged: false });
+  const later = await sync.usableConnection({ projectId: 'p', userId: 'u' }, { store, refreshBeforeUse: unreachable });
+  assert.match(later.error, /could not be reached to renew/);
+  // Still inside its hour: the token works, so it is used.
+  const fresh = { ...store, getConnection: async () => ({ ok: true, data: { ...row, accessToken: 'tok', expiresAt: new Date(Date.now() + 600e3).toISOString() } }) };
+  const ok = await sync.usableConnection({ projectId: 'p', userId: 'u' }, { store: fresh, refreshBeforeUse: refused });
+  assert.equal(ok.ok, true);
+  assert.equal(ok.connection.accessToken, 'tok');
 });

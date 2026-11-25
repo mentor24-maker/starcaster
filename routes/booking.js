@@ -123,7 +123,12 @@ async function handleGoogle(req, res, pathname, method, scope) {
   if (pathname === '/api/booking/google/connect') {
     if (method !== 'POST') return sendErr(res, 405, 'Connect with POST', { code: 'METHOD_NOT_ALLOWED' });
     if (checkEndpointLimit(req, res, 'booking.write')) return undefined;
-    const started = googleSync.startConnect(scope);
+    let body = {};
+    try { body = (await parseJsonBody(req)) || {}; } catch { body = {}; }
+    const started = googleSync.startConnect(scope, {
+      returnTo: typeof body.returnTo === 'string' ? body.returnTo : '',
+      requestOrigin: req.headers?.origin || '',
+    });
     if (!started.ok) return sendErr(res, started.status || 400, started.error, { code: started.code || 'CONNECT_START_FAILED' });
     return sendOk(res, 200, started.data);
   }

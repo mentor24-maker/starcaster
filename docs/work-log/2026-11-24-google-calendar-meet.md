@@ -24,3 +24,25 @@ one database file that adds five fields to bookings, and setting up the
 Google app that the sign-in goes through (a Google Cloud screen and two secret
 values). Until then the Booking Manager says plainly that Google Calendar
 cannot be connected yet.
+
+**Fixes after review (same day).** Review found six real problems, all fixed
+with a test for each that was broken on purpose and watched fail:
+
+- A visitor moving their meeting by a little was told the new time was taken,
+  because Google reported the meeting's own slot as "busy" in a trimmed or
+  merged shape. Now only the meeting's own time is taken out of Google's busy
+  list; anything either side stays busy.
+- If Google hung instead of answering, the client's booking page hung with
+  it. Every Google call now gives up after five seconds and the booking goes
+  ahead without the Meet link (and says so).
+- Signing in from the Connections screen, or with pop-ups blocked, used to end
+  on a "you can close this window" page with the app gone. It now comes back
+  to the page the sign-in started from (or the Connections screen) and shows
+  how it went.
+- A visitor could put a web address in their name or note and it showed as a
+  clickable link in the owner's alert email. Now only the Meet link is a link.
+- When Google refuses to renew the sign-in, bookings now say "connect Google
+  Calendar again" instead of Google's vague "Invalid Credentials".
+- If the owner deleted the meeting on Google and the visitor then moved it,
+  the email went out with the dead Meet link. Now a fresh event and link are
+  made, and a dead link is never emailed.

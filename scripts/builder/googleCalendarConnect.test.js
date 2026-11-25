@@ -247,3 +247,59 @@ test('the result page cannot be broken out of by what Google or a visitor puts i
   const html = resultPage({ provider: 'google_calendar', ok: false, heading: 'x', message: '</script><script>alert(1)</script>' });
   assert.doesNotMatch(html, /<\/script><script>alert/);
 });
+
+/** Run the result page's script against a pretend window; report what it did. */
+function runResultPage(html, { opener = null } = {}) {
+  const vm = require('vm');
+  const script = /<script>([\s\S]*?)<\/script>/.exec(html)[1];
+  const did = { replaced: '', posted: null, closed: false };
+  const window = {
+    opener: opener && {
+      closed: false,
+      postMessage: (message, targetOrigin) => { did.posted = { message, targetOrigin }; },
+    },
+    close: () => { did.closed = true; },
+    location: { replace: (url) => { did.replaced = url; } },
+  };
+  vm.runInNewContext(script, { window });
+  return did;
+}
+
+test('with no pop-up behind it, the result page sends the browser back into the app with the outcome', () => withEnv(ENV, () => {
+  const { resultPage } = require(resolve('lib/connections/redirectCallback.js'));
+  // Started from the Booking Manager on a client's site: back to that page.
+  const page = 'https://client.example.com/admin/bookings#tab=google';
+  const back = runResultPage(resultPage({ provider: 'google_calendar', ok: true, heading: 'ok', message: 'Connected as a@b.example', returnTo: page }));
+  assert.equal(back.replaced, 'https://client.example.com/admin/bookings#tab=google&connect_provider=google_calendar&connect_notice=Connected%20as%20a%40b.example');
+  // Started from the Connections screen (no page recorded): back to that screen.
+  const fromConnections = runResultPage(resultPage({ provider: 'google_calendar', ok: false, heading: 'no', message: 'You chose not to allow access' }));
+  assert.match(fromConnections.replaced, /\/#page=settingsConnectionsPage&connect_provider=google_calendar&connect_error=You%20chose/);
+}));
+
+test('with a pop-up behind it, the result goes only to the site the sign-in started from, never "*"', () => withEnv(ENV, () => {
+  const { resultPage } = require(resolve('lib/connections/redirectCallback.js'));
+  const html = resultPage({ provider: 'google_calendar', ok: true, heading: 'ok', message: 'Connected as a@b.example', returnTo: 'https://client.example.com/admin/bookings' });
+  assert.doesNotMatch(html, /postMessage\(result, '\*'\)/);
+  const did = runResultPage(html, { opener: true });
+  assert.equal(did.posted.targetOrigin, 'https://client.example.com');
+  assert.equal(did.posted.message.provider, 'google_calendar');
+  assert.equal(did.closed, true);
+  assert.equal(did.replaced, '', 'the pop-up closes rather than navigating');
+}));
+
+test('the page a sign-in returns to rides in the signed state, and a callback brings it back', () => withEnv(ENV, async () => {
+  const { buildOAuthState, verifyOAuthState } = require(resolve('lib/metaOAuthState.js'));
+  const built = buildOAuthState({ projectId: 'proj_a', userId: 'u1', provider: 'google_calendar', returnTo: 'https://client.example.com/admin' });
+  assert.equal(verifyOAuthState(built.data).data.returnTo, 'https://client.example.com/admin');
+  const plain = buildOAuthState({ projectId: 'proj_a', userId: 'u1', provider: 'google_calendar' });
+  assert.equal(verifyOAuthState(plain.data).data.returnTo, '');
+  const ctx = setupRoute();
+  try {
+    await withFetch([], async () => {
+      const denied = await callback(ctx.route, { error: 'access_denied', state: built.data });
+      assert.match(denied.body, /client\.example\.com\/admin#connect_provider=google_calendar&amp;connect_error=|client\.example\.com\\\/admin#connect_provider/);
+    });
+  } finally {
+    ctx.restore();
+  }
+}));

@@ -126,6 +126,33 @@ export function googleStatusLine(status: GoogleCalendarStatus): string {
 }
 
 /**
+ * The Google sign-in's outcome, when it came back in THIS tab (pop-ups
+ * blocked): the callback sends the browser back here with
+ * `connect_provider=google_calendar` and `connect_notice` or `connect_error`
+ * on the hash (lib/connections/redirectCallback.js). Null when the hash holds
+ * no Google Calendar outcome. `hash` is what is left for the address once the
+ * outcome is read, so a reload does not show it twice.
+ */
+export function readGoogleConnectReturn(rawHash: string): { ok: boolean; message: string; hash: string } | null {
+  const bare = String(rawHash || "").replace(/^#/, "");
+  const parts = bare.split("&").filter(Boolean);
+  const read = (key: string): string | null => {
+    const part = parts.find((p) => p.startsWith(`${key}=`));
+    if (part === undefined) return null;
+    const value = part.slice(key.length + 1);
+    try { return decodeURIComponent(value); } catch { return value; }
+  };
+  if (read("connect_provider") !== "google_calendar") return null;
+  const error = read("connect_error");
+  const notice = read("connect_notice");
+  if (error === null && notice === null) return null;
+  const kept = parts.filter((p) => !p.startsWith("connect_")).join("&");
+  return error !== null
+    ? { ok: false, message: error || "Google Calendar was not connected.", hash: kept ? `#${kept}` : "" }
+    : { ok: true, message: notice || "Google Calendar is connected.", hash: kept ? `#${kept}` : "" };
+}
+
+/**
  * What a booking row says about its emails (SC-912). Only a FAILED send is
  * shown: it is the one the operator must act on (the visitor may not know
  * their time). null when there is nothing to say.

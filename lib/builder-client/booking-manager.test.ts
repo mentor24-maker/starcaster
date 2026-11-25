@@ -4,6 +4,7 @@ import {
   bookingMeetState,
   googleStatusLine,
   normalizeGoogleStatus,
+  readGoogleConnectReturn,
   addBlockedDate,
   addDayWindow,
   bookingContactHref,
@@ -145,6 +146,20 @@ describe("Google Calendar on the Booking Manager (SC-913)", () => {
     expect(googleStatusLine(base)).toBe("Connected as owner@gmail.example.");
     expect(googleStatusLine({ ...base, needsAttention: true, lastError: "Could not renew it." }))
       .toBe("Connected as owner@gmail.example. Could not renew it.");
+  });
+
+  it("reads a sign-in that came back in this tab, and leaves the rest of the address alone", () => {
+    expect(readGoogleConnectReturn("#tab=g&connect_provider=google_calendar&connect_notice=Connected%20as%20a%40b.example"))
+      .toEqual({ ok: true, message: "Connected as a@b.example", hash: "#tab=g" });
+    expect(readGoogleConnectReturn("#connect_provider=google_calendar&connect_error=You%20chose%20not%20to%20allow%20access"))
+      .toEqual({ ok: false, message: "You chose not to allow access", hash: "" });
+  });
+
+  it("ignores an address with no Google Calendar outcome on it", () => {
+    expect(readGoogleConnectReturn("")).toBeNull();
+    expect(readGoogleConnectReturn("#page=settingsConnectionsPage")).toBeNull();
+    expect(readGoogleConnectReturn("#connect_provider=x&connect_error=no")).toBeNull();
+    expect(readGoogleConnectReturn("#connect_provider=google_calendar")).toBeNull();
   });
 
   it("says plainly when the server cannot connect Google at all", () => {

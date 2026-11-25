@@ -9,7 +9,9 @@
  * then reads the status back from the server. The message is only a nudge to
  * re-read: what the card shows is always what the server says, so a message
  * from anywhere else can at most cause one extra read. Closing the window
- * early re-reads too.
+ * early re-reads too. With pop-ups blocked the sign-in happens in this tab
+ * and comes back to this page with the outcome on the hash
+ * (readGoogleConnectReturn).
  *
  * No token ever reaches this screen: GET /api/booking/google answers with the
  * account's email and the connection's state only.
@@ -19,6 +21,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   googleStatusLine,
   normalizeGoogleStatus,
+  readGoogleConnectReturn,
   type GoogleCalendarStatus,
 } from "@/lib/booking-manager";
 
@@ -52,6 +55,21 @@ export function BookingGoogleCard({ api, onChanged }: Props) {
 
   useEffect(() => { void load(); }, [load]);
 
+  // Back from Google in this same tab (pop-ups were blocked): show how it went,
+  // then take it off the address so a reload does not show it again.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const back = readGoogleConnectReturn(window.location.hash);
+    if (!back) return;
+    if (back.ok) setNote(back.message); else setError(back.message);
+    try {
+      window.history.replaceState(window.history.state, "", `${window.location.pathname}${window.location.search}${back.hash}`);
+    } catch { /* the message still shows */ }
+    onChanged?.();
+    // Once, on arrival.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     function onMessage(event: MessageEvent) {
       const data = event.data as { type?: string; provider?: string; ok?: boolean; message?: string } | null;
@@ -76,7 +94,11 @@ export function BookingGoogleCard({ api, onChanged }: Props) {
     // Opened inside the click, before any await, or the browser blocks it as a pop-up.
     const popup = window.open("", "starcaster-google-calendar", "width=520,height=700");
     try {
-      const started = await api<{ authorizeUrl: string }>("/google/connect", { method: "POST", body: "{}" });
+      // Where to come back to if the sign-in has no pop-up to report to.
+      const started = await api<{ authorizeUrl: string }>("/google/connect", {
+        method: "POST",
+        body: JSON.stringify({ returnTo: window.location.href }),
+      });
       if (!started?.authorizeUrl) throw new Error("Google did not give a sign-in address.");
       if (popup && !popup.closed) {
         popup.location.href = started.authorizeUrl;
@@ -89,7 +111,8 @@ export function BookingGoogleCard({ api, onChanged }: Props) {
           void load();
         }, 800);
       } else {
-        // Pop-ups blocked: go there in this tab instead; the page says when it is done.
+        // Pop-ups blocked: go there in this tab instead; Google's sign-in
+        // comes back to this page with the outcome on the address.
         window.location.href = started.authorizeUrl;
       }
     } catch (e) {

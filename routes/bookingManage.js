@@ -37,13 +37,14 @@ const { sendBookingEmails, requestSiteOrigin } = require('../lib/bookingEmails')
 const googleSync = require('../lib/bookingGoogleSync');
 
 /**
- * The project's Google busy blocks, minus the one that IS this meeting: its
- * own event is on the Google Calendar too, and must not stop the visitor
- * moving it by a quarter hour (SC-913).
+ * The project's Google busy blocks, minus the meeting's own time: its own
+ * event is on the Google Calendar too, and must not stop the visitor moving it
+ * by a quarter hour (SC-913). Subtracted, not matched: Google clips and joins
+ * blocks (lib/bookingGoogleSync.js, busyWithoutBooking).
  */
 async function busyExceptOwn(scope, booking, fromMs, toMs) {
   const google = await googleSync.busyTimes(scope, fromMs, toMs);
-  return google.busy.filter((b) => !(b.startsAt === booking.startsAt && b.endsAt === booking.endsAt));
+  return googleSync.busyWithoutBooking(google.busy, booking);
 }
 const shared = require('./bookingPublic');
 
