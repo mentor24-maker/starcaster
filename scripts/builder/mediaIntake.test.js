@@ -788,11 +788,13 @@ function unsendableAlbum() {
   return photos;
 }
 
-function scheduledPass(s, photos, photosEnabled) {
-  const up = fakeUploader(s.drive);
+/** One scheduled pass after a primed first run, with a new finished Zoom take waiting. */
+async function scheduledPass(s, photos, photosEnabled) {
+  const up = await primed(s, T0);
+  record(s.root, MEETING, 'video1.mp4', 'a finished zoom take', T0 + 5 * MIN);
   const lines = [];
   return intake.runScheduledPass({
-    zoom: () => intake.runPass({ root: s.root, ledgerFile: s.ledgerFile, uploader: up, now: T0 }),
+    zoom: () => intake.runPass({ root: s.root, ledgerFile: s.ledgerFile, uploader: up, now: T0 + 10 * MIN }),
     photos: () => photosRun(s, photos, up),
     photosEnabled,
     say: (l) => lines.push(l),
@@ -802,7 +804,6 @@ function scheduledPass(s, photos, photosEnabled) {
 
 test('SC-878: with the album pass off, an unsendable album video no longer fails the pass', async () => {
   const s = scratch();
-  record(s.root, MEETING, 'video1.mp4', 'a finished zoom take', T0 - 10 * MIN);
   const photos = unsendableAlbum();
   const r = await scheduledPass(s, photos, intake.photosAlbumEnabled({}));
   assert.strictEqual(r.code, 0, r.lines.join('\n'));
@@ -814,7 +815,6 @@ test('SC-878: with the album pass off, an unsendable album video no longer fails
 
 test('SC-878: switched back on, the same unsendable album video fails the pass (so the runner posts and does not beat)', async () => {
   const s = scratch();
-  record(s.root, MEETING, 'video1.mp4', 'a finished zoom take', T0 - 10 * MIN);
   const r = await scheduledPass(s, unsendableAlbum(), intake.photosAlbumEnabled({ MEDIA_INTAKE_PHOTOS_ALBUM: '1' }));
   assert.strictEqual(r.code, 1);
   assert.match(r.lines.join('\n'), /FAILED {3}Photos IMG_2114\.MOV \(IMG2114\) — PERMISSION DENIED/);
