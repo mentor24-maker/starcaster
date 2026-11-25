@@ -152,7 +152,33 @@ network or a full Drive is not fixed by signing in, so those stay on the bus.
 If the MacBook cannot reach the tracker, the log says the ticket was NOT
 written and the next pass tries again. `npm run media:intake -- --dry-run`
 sends nothing: it asks Drive whether the sign-in works and prints the ticket it
-would write. Why the sign-in expires at all is SC-885.
+would write.
+
+**Why the sign-in expires is still unknown, but it is not Google's "Testing"
+mode** (task SC-885, checked 2026-11-25). A Google app in Testing mode has
+every sign-in expire seven days after it is made, which would explain refusals
+every few weeks — so that was checked first:
+
+- rclone's `gdrive:` signs in through **its own Google app**, not rclone's
+  built-in one and not the one Studio's worker uses. That app lives in the
+  Google Cloud project **Starcaster** (`starcaster-498505`). The MacBook's
+  other rclone sign-in, `m24:`, is in Studio's project instead.
+- In Google Cloud Console, that project's **Google Auth Platform › Audience**
+  page says **Publishing status: In production** (User type External).
+  Dane read it on 2026-11-25. An In-production app's sign-ins do not expire
+  on a timer, so Testing mode is ruled out.
+- The upload log agrees: the 10-27 sign-in still worked 15 days later
+  (11-11), which a seven-day expiry would not allow.
+
+So nothing about the setup was changed. **A rebuilt MacBook keeps using the
+same app**: `gdrive:` must sign in through the Starcaster project's app (the
+one already in `~/.config/rclone/rclone.conf`; copy that file across, never
+paste the id or secret anywhere else), signed in as **mentorofaio**. If the
+refusals come back, the alert above still tells Dane; the causes left to look
+at are the ones Google names for a refused sign-in on an In-production app —
+the account's password changed, the access was removed under the Google
+account's security settings, or the app was signed in to so many times that
+Google dropped the oldest sign-in.
 
 ## Sending a video from the iPhone
 
