@@ -38,6 +38,8 @@ const WORDS = 'Scheduling posts made me write for a calendar instead of for a re
 const OTHER_WORDS = 'The part about rereading a draft out loud is the whole trick. I hear every sentence I would never say to a friend.';
 const THEIR_NOTE = 'https://substack.com/@someone/note/c-12345';
 const OTHER_NOTE = 'https://substack.com/@other/note/c-67890';
+// The exact link OpenClaw returned for a real reply on 2026-11-18 (SC-920).
+const PROFILE_NOTE = 'https://substack.com/profile/397402153-dane-christensen/note/c-391111888';
 
 const MINUTE = 60 * 1000;
 
@@ -122,6 +124,13 @@ function standIns({ behave = 'ok' } = {}) {
       case 'wrong-words':
         notes.set(String(seq), 'Something else entirely, which the agent wrote instead.');
         return answer({ done: true, noteUrl: url, screenshotPath: null, problem: null });
+      case 'bad-link':
+        // A link, but not one the Mini can read as a Note: it proves nothing either way.
+        return answer({ done: true, noteUrl: 'https://substack.com/@daneofearth/p/some-post', screenshotPath: null, problem: null });
+      case 'profile-link':
+        // The 2026-11-18 shape: a real reply, at a /profile/<id>-<name>/note/c-N address.
+        notes.set('391111888', words);
+        return answer({ done: true, noteUrl: PROFILE_NOTE, screenshotPath: null, problem: null });
       case 'returns-target':
         notes.set('12345', 'Their own Note, which says something else.');
         return answer({ done: true, noteUrl: THEIR_NOTE, screenshotPath: null, problem: null });
@@ -224,6 +233,10 @@ test('a Note link is read for its id; anything else is not a Note', () => {
   assert.equal(substack.parseNoteLink('https://daneofearth.substack.com/p/a-post').ok, false);
   assert.equal(substack.parseNoteLink('https://evil.example/@x/note/c-1').ok, false);
   assert.equal(substack.parseNoteLink('not a link').ok, false);
+  // SC-920: Substack's own /profile/<id>-<name>/ shape is a Note link too.
+  assert.deepEqual(substack.parseNoteLink(PROFILE_NOTE), { ok: true, noteId: '391111888' });
+  assert.deepEqual(substack.parseNoteLink('https://substack.com/profile/397402153/note/c-5'), { ok: true, noteId: '5' });
+  assert.equal(substack.parseNoteLink('https://substack.com/profile/397402153-dane-christensen').ok, false);
 });
 
 // ── The whole worker against the stand-ins ─────────────────────────────────
@@ -301,31 +314,87 @@ test('NO LINK MEANS FAILED: the browser says it posted a Note but returns no lin
   }
 });
 
-test('TEXT NOT FOUND MEANS FAILED: the link shows other words, or no Note at all', async () => {
-  for (const behave of ['wrong-words', 'link-to-nothing']) {
+// SC-920: OpenClaw has already said it posted, so a link that does not check
+// out proves the LINK is wrong, not that nothing went out. `failed` offers
+// Try again, which would post the same words in public twice; every one of
+// these is a hand check instead, never failed, and never offered again.
+test('NEVER FAILED AFTER "POSTED": an unreadable link, no Note at it, or other words at it are left for a hand check', async () => {
+  const cases = [
+    ['bad-link', 'note', /is not a link to a Note/],
+    ['bad-link', 'reply', /is not a link to a Note/],
+    ['link-to-nothing', 'note', /Substack has no Note at the link/],
+    ['wrong-words', 'note', /does not say what was approved/],
+    ['wrong-words', 'reply', /does not say what was approved/],
+  ];
+  for (const [behave, kind, why] of cases) {
     const env = withDb();
     try {
       await setLimits(env.store);
-      const note = await approved(env.store, 'note');
+      const item = await approved(env.store, kind);
       await poster.runPass({ adapters: [adapterFor(env, standIns({ behave }))] });
-      const row = await readRow(env, note.id);
-      assert.equal(row.status, 'failed', behave);
-      assert.match(row.error, behave === 'wrong-words' ? /does not say what was approved/ : /no Note at it/, behave);
+      const row = await readRow(env, item.id);
+      const label = `${behave} / ${kind}`;
+      assert.equal(row.status, 'posting', label);
+      assert.equal(row.needsHandCheck, true, label);
+      assert.match(row.error, why, label);
+      assert.match(row.error, /^OpenClaw says it posted/, label);
+      assert.match(row.error, /It will not be tried again\./, label);
+      assert.match(row.error, kind === 'reply' ? /look for the reply/ : /look for it/, label);
     } finally {
       env.restore();
     }
   }
 });
 
-test('a reply whose "proof" is the Note it replied to is failed — that link proves nothing', async () => {
+test('the verdict itself: a link that does not parse after "posted" is cannot-tell, not refuted', async () => {
+  const adapter = substack.createSubstackAdapter({
+    projectId: PROJECT,
+    store: {},
+    readNote: async () => { throw new Error('an unparseable link must never be read'); },
+    sleep: async () => {},
+  });
+  const check = await adapter.verify({ kind: 'reply', text: WORDS, targetUrl: THEIR_NOTE }, 'https://substack.com/@x/p/a-post', {});
+  assert.equal(check.verdict, 'cannot-tell');
+  assert.match(check.reason, /It will not be tried again\./);
+  assert.ok(check.reason.includes(THEIR_NOTE), check.reason);
+});
+
+test('a reply whose "proof" is the Note it replied to is left for a hand check — that link proves nothing, either way', async () => {
   const env = withDb();
   try {
     await setLimits(env.store);
     const reply = await approved(env.store, 'reply');
     await poster.runPass({ adapters: [adapterFor(env, standIns({ behave: 'returns-target' }))] });
     const row = await readRow(env, reply.id);
-    assert.equal(row.status, 'failed');
+    assert.equal(row.status, 'posting');
+    assert.equal(row.needsHandCheck, true);
     assert.match(row.error, /the Note being replied to/);
+    assert.match(row.error, /It will not be tried again\./);
+  } finally {
+    env.restore();
+  }
+});
+
+test('THE 2026-11-18 REPLY: a /profile/<id>-<name>/note/c-N link is proven and the row reads posted with that link', async () => {
+  const env = withDb();
+  try {
+    await setLimits(env.store);
+    const reply = await approved(env.store, 'reply');
+    await poster.runPass({ adapters: [adapterFor(env, standIns({ behave: 'profile-link' }))] });
+    const row = await readRow(env, reply.id);
+    assert.equal(row.status, 'posted', row.error);
+    assert.equal(row.postedUrl, PROFILE_NOTE);
+  } finally {
+    env.restore();
+  }
+});
+
+test('a reply may be aimed at a Note given by its /profile/ address', async () => {
+  const env = withDb();
+  try {
+    const made = await env.store.createItem({ kind: 'reply', source: 'target', targetUrl: PROFILE_NOTE }, SCOPE);
+    assert.equal(made.ok, true, made.error);
+    assert.equal(made.data.targetUrl, PROFILE_NOTE);
   } finally {
     env.restore();
   }
