@@ -776,3 +776,71 @@ test('a probe while broken: working clears, a refusal stays, anything else tells
   assert.deepEqual(signin.probeVerdict({ ok: false, signinRefused: true }, 3), { verdict: 'refused', waiting: 3 });
   assert.equal(signin.probeVerdict({ ok: false, signinRefused: false, why: 'no such host' }).verdict, 'unknown');
 });
+
+// --- SC-878: the Photos album pass is off; Zoom alone decides the exit -------
+
+/** A Studio album holding one video macOS will not download (the 2026-11-18 shape). */
+function unsendableAlbum() {
+  const photos = fakePhotos([photoItem('IMG2114', { name: 'IMG_2114.MOV' })]);
+  photos.exportOriginal = async () => {
+    throw new Error('PERMISSION DENIED — the original is only in iCloud and macOS will not let this job download it');
+  };
+  return photos;
+}
+
+/** One scheduled pass after a primed first run, with a new finished Zoom take waiting. */
+async function scheduledPass(s, photos, photosEnabled) {
+  const up = await primed(s, T0);
+  record(s.root, MEETING, 'video1.mp4', 'a finished zoom take', T0 + 5 * MIN);
+  const lines = [];
+  return intake.runScheduledPass({
+    zoom: () => intake.runPass({ root: s.root, ledgerFile: s.ledgerFile, uploader: up, now: T0 + 10 * MIN }),
+    photos: () => photosRun(s, photos, up),
+    photosEnabled,
+    say: (l) => lines.push(l),
+    warn: (l) => lines.push(l),
+  }).then((r) => ({ ...r, lines, up }));
+}
+
+test('SC-878: with the album pass off, an unsendable album video no longer fails the pass', async () => {
+  const s = scratch();
+  const photos = unsendableAlbum();
+  const r = await scheduledPass(s, photos, intake.photosAlbumEnabled({}));
+  assert.strictEqual(r.code, 0, r.lines.join('\n'));
+  assert.strictEqual(r.reports.length, 1, 'only the Zoom report');
+  assert.strictEqual(r.reports[0].sent.length, 1, 'the Zoom half still sends');
+  assert.deepStrictEqual(photos.exported, [], 'Photos was never touched');
+  assert.match(r.lines.join('\n'), /Photos album "Studio": OFF \(retired 2026-11-25, SC-878\)/);
+});
+
+test('SC-878: switched back on, the same unsendable album video fails the pass (so the runner posts and does not beat)', async () => {
+  const s = scratch();
+  const r = await scheduledPass(s, unsendableAlbum(), intake.photosAlbumEnabled({ MEDIA_INTAKE_PHOTOS_ALBUM: '1' }));
+  assert.strictEqual(r.code, 1);
+  assert.match(r.lines.join('\n'), /FAILED {3}Photos IMG_2114\.MOV \(IMG2114\) — PERMISSION DENIED/);
+});
+
+test('SC-878: the album opt-in is off unless set to a yes value', () => {
+  for (const v of [undefined, '', '0', 'no', 'off', 'false']) {
+    assert.strictEqual(intake.photosAlbumEnabled({ MEDIA_INTAKE_PHOTOS_ALBUM: v }), false, `"${v}" switched it on`);
+  }
+  for (const v of ['1', 'on', 'YES', ' true ']) {
+    assert.strictEqual(intake.photosAlbumEnabled({ MEDIA_INTAKE_PHOTOS_ALBUM: v }), true, `"${v}" left it off`);
+  }
+  assert.strictEqual(intake.photosAlbumEnabled({}), false);
+});
+
+test('SC-878: a Zoom failure still fails the pass with the album off', async () => {
+  const r = await intake.runScheduledPass({
+    zoom: async () => { throw new Error('iCloud folder missing'); },
+    photos: async () => { throw new Error('must not run'); },
+    photosEnabled: false,
+  });
+  assert.strictEqual(r.code, 1);
+});
+
+test('SC-878: the scheduled script reads the opt-in rather than always running Photos', () => {
+  const script = fs.readFileSync(path.join(__dirname, '..', 'media_intake.mjs'), 'utf8');
+  assert.match(script, /photosEnabled: intake\.photosAlbumEnabled\(process\.env\)/);
+  assert.doesNotMatch(script, /^\s*const report = await intake\.runPhotos\(/m, 'the script calls runPhotos directly again');
+});
