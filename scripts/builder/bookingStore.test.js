@@ -15,7 +15,11 @@ const path = require('path');
  */
 
 const SQL_FILE = path.join(__dirname, '..', '..', 'docs', 'SQL', 'booking_setup.sql');
-const SQL_TEXT = fs.readFileSync(SQL_FILE, 'utf8');
+// booking_notifications.sql (SC-912) runs after it and adds the email and
+// manage-link columns the store now writes.
+const SQL_TEXT = [SQL_FILE, path.join(__dirname, '..', '..', 'docs', 'SQL', 'booking_notifications.sql')]
+  .map((file) => fs.readFileSync(file, 'utf8'))
+  .join('\n');
 const { parseSchemaText, createFakeDb } = require('./sqlSchemaFake.js');
 
 const supabasePath = require.resolve('../../lib/supabase.js');
@@ -69,7 +73,9 @@ test('both tables carry BOTH tenant columns and RLS', () => {
 });
 
 test('the SQL file says what breaks without it, and is safe to run twice', () => {
-  assert.match(SQL_TEXT, /^-- FEATURE: \S.+$/m);
+  // Each file carries its own FEATURE line; the second also says what it runs after.
+  assert.equal((SQL_TEXT.match(/^-- FEATURE: \S.+$/gm) || []).length, 2);
+  assert.match(SQL_TEXT, /^-- RUN AFTER docs\/SQL\/booking_setup\.sql$/m);
   const statements = SQL_TEXT
     .replace(/--.*$/gm, '')
     .replace(/\$\$[\s\S]*?\$\$/g, '$$$$')
@@ -80,7 +86,7 @@ test('the SQL file says what breaks without it, and is safe to run twice', () =>
   for (const statement of statements) {
     assert.match(
       statement,
-      /^(create table if not exists|create (unique )?index if not exists|create or replace function|drop trigger if exists|create trigger|alter table \S+ enable row level security)/i,
+      /^(create table if not exists|create (unique )?index if not exists|create or replace function|drop trigger if exists|create trigger|alter table \S+ enable row level security|alter table \S+ add column if not exists)/i,
       `not safe to run twice: ${statement.slice(0, 80)}`
     );
   }

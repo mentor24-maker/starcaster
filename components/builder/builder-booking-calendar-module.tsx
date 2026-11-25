@@ -206,6 +206,8 @@ export function BookingCalendarModule({ settings, projectId = "", liveSite = fal
           projectId: project,
           calendarId: data.calendar.id,
           startsAt: slot.startsAt,
+          // So the visitor's confirmation email shows THEIR time (SC-912).
+          timeZone: zone,
           ...form,
           _trap: trap,
         }),

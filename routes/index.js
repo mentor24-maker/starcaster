@@ -69,6 +69,7 @@ const platformScreenshots = require('./platformScreenshots');
 const crm         = require('./crm');
 const booking     = require('./booking');
 const bookingPublic = require('./bookingPublic');
+const bookingManage = require('./bookingManage');
 const blog        = require('./blog');
 const events      = require('./events');
 const studio      = require('./studio');
@@ -164,6 +165,9 @@ const ROUTE_MODULES = [
   booking,
   // The visitor's booking door (SC-911). Ahead of publicSite, which owns the
   // rest of /api/public and would answer this path 404.
+  // bookingManage (SC-912) first: it owns /api/public/booking/manage, which
+  // bookingPublic would otherwise answer 404.
+  bookingManage,
   bookingPublic,
   blog,
   events,
