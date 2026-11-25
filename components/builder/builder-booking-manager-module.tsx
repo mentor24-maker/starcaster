@@ -32,6 +32,7 @@ import {
   addBlockedDate,
   addDayWindow,
   bookingContactHref,
+  bookingEmailNote,
   dayWindowProblem,
   emptyBookingsMessage,
   formatBookingTime,
@@ -338,6 +339,9 @@ export function BookingManagerModule({ settings, projectId }: Props) {
                 {b.visitorPhone ? <span className="booking-manager-booking-email">{b.visitorPhone}</span> : null}
               </div>
               {b.visitorNote ? <div className="booking-manager-booking-note">{b.visitorNote}</div> : null}
+              {bookingEmailNote(b) ? (
+                <div className="booking-manager-booking-email-failed" role="note">{bookingEmailNote(b)}</div>
+              ) : null}
               <div className="booking-manager-booking-actions">
                 {href ? (
                   <a className="booking-manager-link" href={href}>Open CRM Contact</a>
@@ -526,7 +530,7 @@ export function BookingManagerModule({ settings, projectId }: Props) {
               onChange={(value) => setMessaging({ ...messaging, [f.key]: value })}
               noteBefore={
                 f.group === "email" && MESSAGING_FIELDS[i - 1]?.group !== "email"
-                  ? "Email wording is saved now. Confirmation and reminder emails start sending in a later update."
+                  ? "The confirmation email goes to the visitor when they book, with an add-to-calendar file and a link to cancel or move the meeting. Leave these blank to use plain default wording. Reminder emails start sending in a later update."
                   : ""
               }
             />
