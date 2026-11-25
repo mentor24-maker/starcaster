@@ -95,3 +95,20 @@ the visitor, and that some warning marks could never be cleared:
   check entirely when the server has no Google app set up, and ask for bookings
   and Google busy times at the same time; and every request for a Meet link is
   unique, so Google never quietly ignores a second one.
+
+### Review round 4 (2026-11-25, Dane chose option A)
+
+- If you click Disconnect and then connect the SAME Google account again,
+  cancelling an older meeting now removes its event from your Google Calendar.
+  Before, Starcaster had forgotten which event it was, skipped the removal, and
+  the time stayed blocked for every visitor. It now asks Google for the event
+  by the name Starcaster gave it when it made it; if there is no such event,
+  that counts as done.
+- Those same older meetings can be moved again by a few minutes without their
+  own Google event standing in the way.
+- Retry no longer emails a visitor a "your video call link" message for a
+  meeting that has already happened.
+- After Disconnect, the Booking Manager's count now names only the bookings
+  that actually had a Google event.
+- The reminder emails (slice 6) landed on `main` meanwhile; their tests now
+  know about this slice's new booking fields.
