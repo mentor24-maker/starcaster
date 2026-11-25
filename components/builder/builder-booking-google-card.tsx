@@ -19,6 +19,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  disconnectBookingsNote,
   googleStatusLine,
   normalizeGoogleStatus,
   readGoogleConnectReturn,
@@ -127,10 +128,13 @@ export function BookingGoogleCard({ api, onChanged }: Props) {
     setError("");
     setNote("");
     try {
-      const done = await api<{ revokedAtProvider: boolean; notRevoked?: string[] }>("/google", { method: "DELETE" });
-      setNote(done.revokedAtProvider
-        ? "Google Calendar is disconnected, and Google has withdrawn Starcaster's access."
-        : `Google Calendar is disconnected here. ${(done.notRevoked || []).filter(Boolean)[0] || ""}`.trim());
+      const done = await api<{ revokedAtProvider: boolean; notRevoked?: string[]; released?: number; releaseError?: string }>("/google", { method: "DELETE" });
+      setNote([
+        done.revokedAtProvider
+          ? "Google Calendar is disconnected, and Google has withdrawn Starcaster's access."
+          : `Google Calendar is disconnected here. ${(done.notRevoked || []).filter(Boolean)[0] || ""}`.trim(),
+        disconnectBookingsNote(done),
+      ].filter(Boolean).join(" "));
       onChanged?.();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Google Calendar could not be disconnected.");

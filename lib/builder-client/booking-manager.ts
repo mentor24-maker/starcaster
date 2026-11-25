@@ -149,6 +149,21 @@ export function googleStatusLine(status: GoogleCalendarStatus): string {
  * no Google Calendar outcome. `hash` is what is left for the address once the
  * outcome is read, so a reload does not show it twice.
  */
+/**
+ * What Disconnect did to the project's bookings (SC-913 round 3): they let go
+ * of their Google events, which stay on the old Google Calendar. '' when no
+ * booking had one.
+ */
+export function disconnectBookingsNote(done: { released?: number; releaseError?: string }): string {
+  const problem = String(done.releaseError || "").trim();
+  if (problem) return `Some bookings could not be updated: ${problem}.`;
+  const n = Number(done.released) || 0;
+  if (n <= 0) return "";
+  return n === 1
+    ? "1 booking no longer points at its Google event; that event stays on the old Google Calendar."
+    : `${n} bookings no longer point at their Google events; those events stay on the old Google Calendar.`;
+}
+
 export function readGoogleConnectReturn(rawHash: string): { ok: boolean; message: string; hash: string } | null {
   const bare = String(rawHash || "").replace(/^#/, "");
   const parts = bare.split("&").filter(Boolean);

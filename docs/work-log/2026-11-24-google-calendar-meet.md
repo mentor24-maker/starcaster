@@ -69,3 +69,29 @@ CANCEL, the operator was never told and could not fix it:
 - A long booking window asks Google for busy times all at once rather than
   one month after another, so a slow Google cannot hold up a visitor's page
   for 15-20 seconds.
+
+### Review round 3
+
+The reviewer found that two recovery paths only helped the operator, never
+the visitor, and that some warning marks could never be cleared:
+
+- When a booking was made while Google was down, the visitor's confirmation
+  went out with no video link. Pressing Retry made the link, but only the
+  operator ever saw it. Now, whenever Retry makes a new Meet link (or replaces
+  one whose Google event was deleted), the visitor gets a short email with the
+  link and a calendar file, and the site owner gets a copy. A Retry that
+  changes nothing sends nothing.
+- If the database had a hiccup while checking for a Google connection, a
+  booking was marked "No Meet link yet" even on sites that never connected
+  Google, and Retry could never clear it. Now Retry clears that mark when
+  nothing is connected.
+- Disconnecting Google Calendar now lets every booking let go of its Google
+  event (the events stay on the old Google calendar, and the Meet links the
+  visitors already have are kept). Before, a later cancel or move was marked
+  as a failure that Retry could never fix. The Booking Manager says how many
+  bookings this touched.
+- Smaller: the Google connection is now looked up by name, so a project with
+  many Facebook Pages cannot hide it; visitor calendar pages skip the Google
+  check entirely when the server has no Google app set up, and ask for bookings
+  and Google busy times at the same time; and every request for a Meet link is
+  unique, so Google never quietly ignores a second one.

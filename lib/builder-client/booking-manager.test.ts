@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   bookingEmailNote,
+  disconnectBookingsNote,
   bookingMeetState,
   googleStatusLine,
   normalizeGoogleStatus,
@@ -186,5 +187,17 @@ describe("Google Calendar on the Booking Manager (SC-913)", () => {
       .toMatch(/cannot be connected on this server yet/);
     expect(googleStatusLine(normalizeGoogleStatus({ configured: true, connected: false })))
       .toMatch(/^Not connected\./);
+  });
+});
+
+describe("disconnectBookingsNote", () => {
+  it("names how many bookings let go of their Google events, and that the events stay", () => {
+    expect(disconnectBookingsNote({ released: 0 })).toBe("");
+    expect(disconnectBookingsNote({})).toBe("");
+    expect(disconnectBookingsNote({ released: 1 })).toMatch(/^1 booking no longer points at its Google event; .*stays on the old Google Calendar/);
+    expect(disconnectBookingsNote({ released: 3 })).toMatch(/^3 bookings no longer point at their Google events/);
+  });
+  it("says when the bookings could not be updated, rather than a count", () => {
+    expect(disconnectBookingsNote({ released: 0, releaseError: "database busy" })).toBe("Some bookings could not be updated: database busy.");
   });
 });

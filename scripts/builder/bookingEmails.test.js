@@ -450,3 +450,21 @@ test('the dispatcher sends /api/public/booking/manage to the manage door, not th
   const pub = src.indexOf('  bookingPublic,');
   assert.ok(manage > 0 && pub > 0 && manage < pub, 'bookingManage is registered ahead of bookingPublic');
 });
+
+test('a Meet link sent later says the time is unchanged, carries the link, and outranks the last calendar entry', () => {
+  const { buildBookingEmails, icsSequence } = require('../../lib/bookingEmails.js');
+  const booking = {
+    id: 'b9', startsAt: '2026-12-01T17:00:00.000Z', endsAt: '2026-12-01T17:30:00.000Z',
+    visitorName: 'Pat', visitorEmail: 'pat@example.com', visitorTimeZone: 'America/Denver',
+    meetLink: 'https://meet.google.com/aaa-bbbb-ccc',
+    createdAt: '2026-11-24T10:00:00.000Z', rescheduledAt: '2026-11-24T11:00:00.000Z', googleSyncedAt: '2026-11-24T12:00:00.000Z',
+  };
+  const { visitor, operator } = buildBookingEmails({ kind: 'meetlink', booking, calendar: { timeZone: 'America/Denver' }, siteName: 'Delray Tennis', manageUrl: 'https://x.example/m' });
+  assert.match(visitor.subject, /video call link/i);
+  assert.match(visitor.text, /time has not changed/);
+  assert.match(visitor.text, /Video call: https:\/\/meet\.google\.com\/aaa-bbbb-ccc/);
+  assert.match(visitor.text, /To cancel or pick a new time: https:\/\/x\.example\/m/);
+  assert.equal(visitor.attachments.length, 1);
+  assert.match(operator.subject, /^Meet link sent: Pat/);
+  assert.ok(icsSequence(booking, 'meetlink') > icsSequence(booking), 'the later Google step raises SEQUENCE so the entry updates');
+});

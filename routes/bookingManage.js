@@ -105,10 +105,12 @@ async function handleDetails(req, res) {
   let slots = [];
   if (booking.status === 'booked' && !hasHappened(booking, now)) {
     const to = now + shared.windowDays(calendar) * DAY;
-    const booked = await shared.bookedAround(calendar, now, to, scope);
+    const [booked, busy] = await Promise.all([
+      shared.bookedAround(calendar, now, to, scope),
+      busyExceptOwn(scope, booking, now, to),
+    ]);
     // "Could not read the bookings" must never read as "everything is free".
     if (!booked.ok) return sendErr(res, booked.status || 500, `Could not read the bookings: ${booked.error}`);
-    const busy = await busyExceptOwn(scope, booking, now, to);
     try {
       // Their own meeting does not block them: they may move it by a quarter hour.
       const others = booked.data.filter((b) => b.id !== booking.id);
@@ -185,11 +187,13 @@ async function handleReschedule(req, res) {
     return sendErr(res, 400, 'That is already your meeting\'s time. Please pick a different one.', { code: 'SAME_TIME' });
   }
   const end = start + calendar.meetingMinutes * MINUTE;
-  const booked = await shared.bookedAround(calendar, start, end, scope);
+  const gapMs = (Number(calendar.gapMinutes) || 0) * MINUTE;
+  const [booked, busy] = await Promise.all([
+    shared.bookedAround(calendar, start, end, scope),
+    busyExceptOwn(scope, booking, start - gapMs, end + gapMs),
+  ]);
   if (!booked.ok) return sendErr(res, booked.status || 500, `Could not read the bookings: ${booked.error}`);
   const others = booked.data.filter((b) => b.id !== booking.id);
-  const gapMs = (Number(calendar.gapMinutes) || 0) * MINUTE;
-  const busy = await busyExceptOwn(scope, booking, start - gapMs, end + gapMs);
   let offered;
   let free;
   try {

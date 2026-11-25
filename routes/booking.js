@@ -36,6 +36,7 @@ const { checkEndpointLimit } = require('../lib/rateLimiter');
 const store = require('../lib/bookingStore');
 const { freeSlots, MAX_RANGE_DAYS } = require('../lib/bookingAvailability');
 const googleSync = require('../lib/bookingGoogleSync');
+const { sendBookingEmails, requestSiteOrigin } = require('../lib/bookingEmails');
 
 const DAY = 86400000;
 
@@ -92,14 +93,16 @@ async function sendAvailability(req, res, calendarId, params, scope) {
     return sendResult(res, calendar, { notFound: 'That booking calendar does not exist in this project' });
   }
   // A meeting that starts the day before the range can still run into it.
-  const booked = await store.listBookings(500, calendar.data.id, {
-    from: new Date(from - DAY).toISOString(),
-    to: new Date(to).toISOString(),
-    status: 'booked',
-  }, scope);
+  const [booked, google] = await Promise.all([
+    store.listBookings(500, calendar.data.id, {
+      from: new Date(from - DAY).toISOString(),
+      to: new Date(to).toISOString(),
+      status: 'booked',
+    }, scope),
+    googleSync.busyTimes(scope, from, to),
+  ]);
   // "Could not read the bookings" must never read as "everything is free".
   if (!booked.ok) return sendErr(res, booked.status || 500, `Could not read the bookings: ${booked.error}`);
-  const google = await googleSync.busyTimes(scope, from, to);
   try {
     const slots = freeSlots({ calendar: calendar.data, bookings: booked.data, busy: google.busy, from, to, now });
     return sendOk(res, 200, {
@@ -140,8 +143,38 @@ async function handleGoogle(req, res, pathname, method, scope) {
   return sendErr(res, 405, 'Use GET or DELETE', { code: 'METHOD_NOT_ALLOWED' });
 }
 
-/** Retry the Google step for one booked meeting: its event and Meet link. */
-async function handleRetry(res, bookingId, scope) {
+/**
+ * Retry made or replaced the Meet link, so the visitor (and the owner) are
+ * emailed it (review, SC-913 round 3). Without this, a booking made while
+ * Google was down got its link on Retry and only the operator ever knew it;
+ * one whose event was deleted on Google left the visitor holding a dead link.
+ *
+ * "Different from the link the booking held before Retry" stands in for
+ * "different from the link the visitor was last sent": every email the booking
+ * gets carries the stored link, so the two only part when a Google step
+ * cleared or replaced it, which is exactly when the visitor needs a new email.
+ * Answers how the emails went, or null when none were due.
+ */
+async function emailNewMeetLink(req, before, synced, calendar, scope) {
+  const link = String(synced.meetLink || '').trim();
+  if (synced.status !== 'synced' || !link || link === String(before.meetLink || '').trim()) return null;
+  const booking = synced.booking || before;
+  if (booking.status !== 'booked') return null;
+  const token = await store.getManageToken(booking.id, scope).catch(() => null);
+  const emails = await sendBookingEmails({
+    kind: 'meetlink',
+    booking: { ...booking, meetLink: link },
+    calendar,
+    projectId: scope.projectId,
+    origin: requestSiteOrigin(req),
+    manageToken: token && token.ok ? token.data : '',
+    scope,
+  });
+  return emails;
+}
+
+/** Retry the Google step for one booking: its event and Meet link, or its removal. */
+async function handleRetry(req, res, bookingId, scope) {
   const found = await store.getBookingById(bookingId, scope);
   if (!found.ok || !found.data) return sendResult(res, found, { notFound: 'That booking does not exist in this project' });
   // A cancelled booking is retried only to remove its event from Google, when
@@ -165,7 +198,13 @@ async function handleRetry(res, bookingId, scope) {
     const lead = cancelled ? 'Still on Google Calendar' : synced.meetLink ? 'Google Calendar still not updated' : 'Still no Meet link';
     return sendErr(res, 502, `${lead}: ${synced.error}`, { code: 'GOOGLE_SYNC_FAILED' });
   }
-  return sendOk(res, 200, synced.booking);
+  // 'cleared': nothing is connected any more, so the booking's Google mark
+  // was removed rather than left with a Retry that could never succeed.
+  const emails = await emailNewMeetLink(req, found.data, synced, calendar.ok ? calendar.data : null, scope);
+  if (!emails) return sendOk(res, 200, synced.booking);
+  // Read back, so the row carries how the emails went (notify_status).
+  const after = await store.getBookingById(found.data.id, scope);
+  return sendOk(res, 200, after.ok && after.data ? after.data : synced.booking);
 }
 
 /** true when this module answered the request. */
@@ -258,7 +297,7 @@ async function handle(req, res, pathname, method) {
       return true;
     }
     if (checkEndpointLimit(req, res, 'booking.write')) return true;
-    await handleRetry(res, decodeURIComponent(syncMatch[1]), scope);
+    await handleRetry(req, res, decodeURIComponent(syncMatch[1]), scope);
     return true;
   }
 

@@ -127,10 +127,13 @@ async function handleCalendar(req, res) {
   const now = Date.now();
   const days = windowDays(calendar.data);
   const to = now + days * DAY;
-  const booked = await bookedAround(calendar.data, now, to, scope);
+  // Asked side by side: neither answer depends on the other (SC-913 round 3).
+  const [booked, google] = await Promise.all([
+    bookedAround(calendar.data, now, to, scope),
+    googleSync.busyTimes(scope, now, to),
+  ]);
   // "Could not read the bookings" must never read as "everything is free".
   if (!booked.ok) return sendErr(res, booked.status || 500, `Could not read the bookings: ${booked.error}`);
-  const google = await googleSync.busyTimes(scope, now, to);
   try {
     const slots = freeSlots({ calendar: calendar.data, bookings: booked.data, busy: google.busy, from: now, to, now });
     return sendOk(res, 200, {
@@ -215,12 +218,15 @@ async function handleBook(req, res) {
 
   const end = start + calendar.data.meetingMinutes * MINUTE;
   const now = Date.now();
-  const booked = await bookedAround(calendar.data, start, end, scope);
-  if (!booked.ok) return sendErr(res, booked.status || 500, `Could not read the bookings: ${booked.error}`);
-  // Asked again here, not trusted from the page: the operator may have filled
-  // this time on Google since the visitor loaded the calendar.
+  // Google asked again here, not trusted from the page: the operator may have
+  // filled this time on Google since the visitor loaded the calendar. Side by
+  // side with the bookings read (SC-913 round 3).
   const gapMs = (Number(calendar.data.gapMinutes) || 0) * MINUTE;
-  const google = await googleSync.busyTimes(scope, start - gapMs, end + gapMs);
+  const [booked, google] = await Promise.all([
+    bookedAround(calendar.data, start, end, scope),
+    googleSync.busyTimes(scope, start - gapMs, end + gapMs),
+  ]);
+  if (!booked.ok) return sendErr(res, booked.status || 500, `Could not read the bookings: ${booked.error}`);
   let offered;
   let free;
   try {

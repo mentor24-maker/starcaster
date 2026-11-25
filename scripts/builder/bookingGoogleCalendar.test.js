@@ -827,6 +827,9 @@ test('busy times from a connection Google has refused read as "unavailable", nev
   };
   const realWarn = console.warn;
   console.warn = () => {};
+  const savedEnv = { id: process.env.GOOGLE_CALENDAR_CLIENT_ID, secret: process.env.GOOGLE_CALENDAR_CLIENT_SECRET };
+  process.env.GOOGLE_CALENDAR_CLIENT_ID = ENV.GOOGLE_CALENDAR_CLIENT_ID;
+  process.env.GOOGLE_CALENDAR_CLIENT_SECRET = ENV.GOOGLE_CALENDAR_CLIENT_SECRET;
   try {
     const answer = await sync.busyTimes({ projectId: 'p', userId: 'u' }, Date.now(), Date.now() + 86400e3, { store });
     assert.equal(answer.connected, true, 'the preview must warn, not say "no Google"');
@@ -837,6 +840,9 @@ test('busy times from a connection Google has refused read as "unavailable", nev
     assert.deepEqual(none, { connected: false, busy: [] });
   } finally {
     console.warn = realWarn;
+    for (const [key, value] of [['GOOGLE_CALENDAR_CLIENT_ID', savedEnv.id], ['GOOGLE_CALENDAR_CLIENT_SECRET', savedEnv.secret]]) {
+      if (value === undefined) delete process.env[key]; else process.env[key] = value;
+    }
   }
 });
 
@@ -862,4 +868,198 @@ test('a long free/busy range is asked in pieces at the same time, not one after 
   assert.equal(most, 3, 'all three 30-day pieces were asked at once');
   assert.equal(res.data.busy.length, 3);
   assert.equal(res.data.busy[0].startsAt, '2030-01-01T00:00:00.000Z', 'kept in order');
+});
+
+// ── Review round 3 (SC-913) ────────────────────────────────────────────────
+
+test('Book with Google down, then Retry: the visitor and the owner are emailed the new Meet link', async () => {
+  const ctx = setup();
+  try {
+    await connectGoogle(ctx);
+    const cal = await openCalendar(ctx);
+    const [slot] = await slots(ctx, cal.id);
+    ctx.google.down = true;
+    const booking = await book(ctx, cal, slot);
+    assert.equal(ctx.sent.length, 2, 'the booking emails went, with no link');
+    ctx.google.down = false;
+
+    const retried = await call(ctx.adminRoute, 'POST', `/api/booking/bookings/${booking.id}/google-sync`, {}, asOperator);
+    assert.equal(retried.status, 200, JSON.stringify(retried.payload));
+    assert.equal(ctx.sent.length, 4, 'Retry emailed both sides');
+    const [visitor, owner] = ctx.sent.slice(2);
+    assert.equal(visitor.to, VISITOR.email);
+    assert.match(visitor.subject, /video call link/i);
+    assert.match(visitor.text, new RegExp(MEET.replace(/[.]/g, '\\.')));
+    assert.match(visitor.text, /To cancel or pick a new time: .*token=/, 'the visitor keeps their manage link');
+    assert.equal(visitor.attachments.length, 1, 'the calendar file carries the link');
+    assert.match(Buffer.from(visitor.attachments[0].content, 'base64').toString('utf8'), /LOCATION:https:\/\/meet\.google\.com/);
+    assert.deepEqual(owner.to, ['owner@client.example']);
+    assert.match(owner.subject, /^Meet link sent:/);
+    assert.equal(retried.payload.data.notifyStatus, 'sent', 'the row says how the emails went');
+
+    const again = await call(ctx.adminRoute, 'POST', `/api/booking/bookings/${booking.id}/google-sync`, {}, asOperator);
+    assert.equal(again.status, 200);
+    assert.equal(ctx.sent.length, 4, 'a Retry that changes no link sends nothing');
+    assertNoTokenLeaked(ctx, retried.body);
+  } finally {
+    ctx.restore();
+  }
+});
+
+test('Retry on a booking whose event was deleted on Google emails the NEW link, with a fresh Meet request each time', async () => {
+  const ctx = setup();
+  try {
+    await connectGoogle(ctx);
+    const cal = await openCalendar(ctx);
+    const [slot] = await slots(ctx, cal.id);
+    const booking = await book(ctx, cal, slot);
+    const first = rowOf(ctx, booking.id);
+    assert.equal(first.meet_link, MEET);
+    ctx.google.remove(first.google_event_id);
+    const NEW_MEET = 'https://meet.google.com/new-link-xyz';
+    ctx.google.meetLink = NEW_MEET;
+    ctx.google.calls.length = 0;
+    const sentBefore = ctx.sent.length;
+
+    const retried = await call(ctx.adminRoute, 'POST', `/api/booking/bookings/${booking.id}/google-sync`, {}, asOperator);
+    assert.equal(retried.status, 200, JSON.stringify(retried.payload));
+    assert.equal(rowOf(ctx, booking.id).meet_link, NEW_MEET);
+    const visitor = ctx.sent.slice(sentBefore).find((m) => m.to === VISITOR.email);
+    assert.ok(visitor, 'the visitor was emailed');
+    assert.match(visitor.text, /new-link-xyz/);
+    assert.doesNotMatch(visitor.text, /abc-defg-hij/, 'never the dead link');
+
+    // The first create hit the reserved id (409) and a second was made: each
+    // asked for its own Meet link, since Google ignores a repeated request id.
+    const creates = ctx.google.calls.filter((c) => c.method === 'POST' && /\/events$/.test(new URL(c.url).pathname));
+    assert.equal(creates.length, 2);
+    const ids = creates.map((c) => JSON.parse(c.body).conferenceData.createRequest.requestId);
+    assert.notEqual(ids[0], ids[1]);
+  } finally {
+    ctx.restore();
+  }
+});
+
+test('a failed read of the connection marks the booking, and Retry with nothing connected clears the mark', async () => {
+  const ctx = setup();
+  try {
+    const cal = await openCalendar(ctx);
+    const [slot] = await slots(ctx, cal.id);
+    const realQuery = ctx.db.sbQuery;
+    ctx.db.sbQuery = (req) => (req.table === 'project_connections'
+      ? Promise.resolve({ ok: false, status: 503, error: 'service unavailable' })
+      : realQuery.call(ctx.db, req));
+    const booking = await book(ctx, cal, slot);
+    ctx.db.sbQuery = realQuery;
+    let row = rowOf(ctx, booking.id);
+    assert.equal(row.google_sync_status, 'failed', 'could not tell, so it says so');
+
+    const retried = await call(ctx.adminRoute, 'POST', `/api/booking/bookings/${booking.id}/google-sync`, {}, asOperator);
+    assert.equal(retried.status, 200, JSON.stringify(retried.payload));
+    row = rowOf(ctx, booking.id);
+    assert.equal(row.google_sync_status, null, 'the mark is gone');
+    assert.equal(row.google_sync_error, null);
+    assert.equal(retried.payload.data.googleSyncStatus, null);
+    assert.equal(ctx.sent.length, 2, 'no link, so no extra email');
+  } finally {
+    ctx.restore();
+  }
+});
+
+test('Disconnect lets every booking go of its Google event; a later cancel or move is not marked failed', async () => {
+  const ctx = setup();
+  try {
+    await connectGoogle(ctx);
+    const cal = await openCalendar(ctx);
+    const [a, b] = await slots(ctx, cal.id);
+    const first = await book(ctx, cal, a);
+    const second = await book(ctx, cal, b);
+    assert.equal(ctx.google.events.size, 2);
+
+    const gone = await call(ctx.adminRoute, 'DELETE', '/api/booking/google', undefined, asOperator);
+    assert.equal(gone.status, 200, JSON.stringify(gone.payload));
+    assert.equal(gone.payload.data.released, 2);
+    for (const id of [first.id, second.id]) {
+      const row = rowOf(ctx, id);
+      assert.equal(row.google_event_id, null);
+      assert.equal(row.google_sync_status, null);
+      assert.equal(row.meet_link, MEET, 'the visitor still has the link; it is kept');
+    }
+
+    const cancelled = await call(ctx.adminRoute, 'POST', `/api/booking/bookings/${first.id}/cancel`, {}, asOperator);
+    assert.equal(cancelled.status, 200);
+    assert.equal(rowOf(ctx, first.id).google_sync_status, null, 'no Retry that could never succeed');
+    assert.equal(ctx.google.events.size, 2, 'the events stay on the old calendar');
+
+    // Reconnect (could be another account): a Retry makes a fresh event there.
+    await connectGoogle(ctx);
+    const retried = await call(ctx.adminRoute, 'POST', `/api/booking/bookings/${second.id}/google-sync`, {}, asOperator);
+    assert.equal(retried.status, 200, JSON.stringify(retried.payload));
+    assert.equal(rowOf(ctx, second.id).google_sync_status, 'synced');
+  } finally {
+    ctx.restore();
+  }
+});
+
+test('a booking still pointing at an event after its calendar went away clears on cancel rather than failing', async () => {
+  const ctx = setup();
+  try {
+    await connectGoogle(ctx);
+    const cal = await openCalendar(ctx);
+    const [slot] = await slots(ctx, cal.id);
+    const booking = await book(ctx, cal, slot);
+    // The connection vanishes without Disconnect's release (e.g. removed elsewhere).
+    ctx.db.data.set('project_connections', []);
+    const cancelled = await call(ctx.adminRoute, 'POST', `/api/booking/bookings/${booking.id}/cancel`, {}, asOperator);
+    assert.equal(cancelled.status, 200);
+    const row = rowOf(ctx, booking.id);
+    assert.equal(row.google_sync_status, null);
+    assert.equal(row.google_event_id, null);
+  } finally {
+    ctx.restore();
+  }
+});
+
+test('the Google connection is found by provider in the query, however many other connections are newer', async () => {
+  const sync = require('../../lib/bookingGoogleSync');
+  const asked = [];
+  const store = {
+    listConnections: async (limit, scope, options) => {
+      asked.push(options);
+      return { ok: true, data: [{ provider: 'google_calendar', accountId: 'g1', status: 'connected', accountLabel: 'x@y' }] };
+    },
+  };
+  const found = await sync.findConnectionRow({ projectId: 'p', userId: 'u' }, store);
+  assert.equal(found.connected, true);
+  assert.deepEqual(asked, [{ provider: 'google_calendar' }]);
+
+  const ctx = setup();
+  try {
+    await connectGoogle(ctx);
+    const rows = ctx.db.data.get('project_connections');
+    for (let i = 0; i < 60; i += 1) {
+      rows.push({ ...rows[0], id: `fb_${i}`, provider: 'facebook', account_id: `page_${i}`, updated_at: new Date(Date.now() + 60e3 + i).toISOString() });
+    }
+    const status = await call(ctx.adminRoute, 'GET', '/api/booking/google', undefined, asOperator);
+    assert.equal(status.payload.data.connected, true, '60 newer Facebook rows do not hide it');
+  } finally {
+    ctx.restore();
+  }
+});
+
+test('with no Google app configured, a visitor calendar load never reads the connections', async () => {
+  const ctx = setup();
+  try {
+    delete process.env.GOOGLE_CALENDAR_CLIENT_ID;
+    const cal = await openCalendar(ctx);
+    const realQuery = ctx.db.sbQuery;
+    let reads = 0;
+    ctx.db.sbQuery = (req) => { if (req.table === 'project_connections') reads += 1; return realQuery.call(ctx.db, req); };
+    const list = await slots(ctx, cal.id);
+    ctx.db.sbQuery = realQuery;
+    assert.ok(list.length > 0);
+    assert.equal(reads, 0);
+  } finally {
+    ctx.restore();
+  }
 });
