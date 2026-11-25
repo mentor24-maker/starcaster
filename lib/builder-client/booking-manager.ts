@@ -142,14 +142,6 @@ export function googleStatusLine(status: GoogleCalendarStatus): string {
 }
 
 /**
- * The Google sign-in's outcome, when it came back in THIS tab (pop-ups
- * blocked): the callback sends the browser back here with
- * `connect_provider=google_calendar` and `connect_notice` or `connect_error`
- * on the hash (lib/connections/redirectCallback.js). Null when the hash holds
- * no Google Calendar outcome. `hash` is what is left for the address once the
- * outcome is read, so a reload does not show it twice.
- */
-/**
  * What Disconnect did to the project's bookings (SC-913 round 3): they let go
  * of their Google events, which stay on the old Google Calendar. '' when no
  * booking had one.
@@ -164,6 +156,14 @@ export function disconnectBookingsNote(done: { released?: number; releaseError?:
     : `${n} bookings no longer point at their Google events; those events stay on the old Google Calendar.`;
 }
 
+/**
+ * The Google sign-in's outcome, when it came back in THIS tab (pop-ups
+ * blocked): the callback sends the browser back here with
+ * `connect_provider=google_calendar` and `connect_notice` or `connect_error`
+ * on the hash (lib/connections/redirectCallback.js). Null when the hash holds
+ * no Google Calendar outcome. `hash` is what is left for the address once the
+ * outcome is read, so a reload does not show it twice.
+ */
 export function readGoogleConnectReturn(rawHash: string): { ok: boolean; message: string; hash: string } | null {
   const bare = String(rawHash || "").replace(/^#/, "");
   const parts = bare.split("&").filter(Boolean);

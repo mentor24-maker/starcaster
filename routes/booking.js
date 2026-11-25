@@ -160,6 +160,10 @@ async function emailNewMeetLink(req, before, synced, calendar, scope) {
   if (synced.status !== 'synced' || !link || link === String(before.meetLink || '').trim()) return null;
   const booking = synced.booking || before;
   if (booking.status !== 'booked') return null;
+  // A meeting already over has no call to join: no "your video call link"
+  // email for it (review, SC-913 round 4).
+  const endsMs = Date.parse(booking.endsAt);
+  if (Number.isFinite(endsMs) && endsMs <= Date.now()) return null;
   const token = await store.getManageToken(booking.id, scope).catch(() => null);
   const emails = await sendBookingEmails({
     kind: 'meetlink',

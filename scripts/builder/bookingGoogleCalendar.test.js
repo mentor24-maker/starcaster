@@ -550,9 +550,11 @@ test('moving a meeting: its own time is cut out of a clipped or joined Google bl
   );
   const elsewhere = { startsAt: '2030-01-07T19:00:00.000Z', endsAt: '2030-01-07T20:00:00.000Z' };
   assert.deepEqual(sync.busyWithoutBooking([elsewhere], own), [elsewhere]);
-  // A booking with no Google event owns nothing there: the block is someone else's.
+  // A booking with no stored id (Disconnect let it go) may still have its event
+  // on the calendar: its own time is cut out all the same (review, SC-913 round 4).
   const exact = { startsAt: own.startsAt, endsAt: own.endsAt };
-  assert.deepEqual(sync.busyWithoutBooking([exact], { ...own, googleEventId: '' }), [exact]);
+  assert.deepEqual(sync.busyWithoutBooking([exact], { ...own, googleEventId: '' }), []);
+  assert.deepEqual(sync.busyWithoutBooking([exact, elsewhere], { ...own, googleEventId: null }), [elsewhere]);
 });
 
 test('a Google that hangs is given up on within the bound, and the booking still stands with its emails', async () => {
@@ -1059,6 +1061,130 @@ test('with no Google app configured, a visitor calendar load never reads the con
     ctx.db.sbQuery = realQuery;
     assert.ok(list.length > 0);
     assert.equal(reads, 0);
+  } finally {
+    ctx.restore();
+  }
+});
+
+// ── Round 4: Disconnect, then reconnect the SAME Google account ─────────────
+
+async function disconnectAndReconnect(ctx) {
+  const gone = await call(ctx.adminRoute, 'DELETE', '/api/booking/google', undefined, asOperator);
+  assert.equal(gone.status, 200, JSON.stringify(gone.payload));
+  await connectGoogle(ctx);
+  return gone.payload.data;
+}
+
+test('Disconnect, reconnect the same account, cancel an older meeting: its Google event is removed', async () => {
+  const ctx = setup();
+  try {
+    await connectGoogle(ctx);
+    const cal = await openCalendar(ctx);
+    const [a, b] = await slots(ctx, cal.id);
+    const first = await book(ctx, cal, a);
+    const second = await book(ctx, cal, b);
+    const firstEvent = rowOf(ctx, first.id).google_event_id;
+    assert.ok(ctx.google.events.has(firstEvent));
+    await disconnectAndReconnect(ctx);
+    assert.equal(rowOf(ctx, first.id).google_event_id, null, 'Disconnect let go of the id');
+
+    // Operator cancel.
+    const cancelled = await call(ctx.adminRoute, 'POST', `/api/booking/bookings/${first.id}/cancel`, {}, asOperator);
+    assert.equal(cancelled.status, 200, JSON.stringify(cancelled.payload));
+    assert.equal(ctx.google.events.has(firstEvent), false, 'the event, and its busy time, is gone from Google');
+    assert.equal(rowOf(ctx, first.id).google_sync_status, 'synced');
+
+    // Visitor cancel, through their own link.
+    const secondEvent = [...ctx.google.events.keys()][0];
+    const token = /[?&]token=([A-Za-z0-9_-]+)/.exec(ctx.sent.find((m) => m.to === VISITOR.email && m.text.includes(b.startsAt.slice(0, 4)) && m !== ctx.sent[0]).text)[1];
+    const byVisitor = await call(ctx.manageRoute, 'POST', '/api/public/booking/manage/cancel', { token });
+    assert.equal(byVisitor.status, 200, JSON.stringify(byVisitor.payload));
+    assert.equal(ctx.google.events.has(secondEvent), false);
+    assert.equal(rowOf(ctx, second.id).google_sync_status, 'synced');
+  } finally {
+    ctx.restore();
+  }
+});
+
+test('a cancel whose Starcaster-chosen event never existed on Google is done, not failed', async () => {
+  const ctx = setup();
+  try {
+    const cal = await openCalendar(ctx);
+    const [slot] = await slots(ctx, cal.id);
+    const booking = await book(ctx, cal, slot); // no Google connected: no event
+    await connectGoogle(ctx);
+    const cancelled = await call(ctx.adminRoute, 'POST', `/api/booking/bookings/${booking.id}/cancel`, {}, asOperator);
+    assert.equal(cancelled.status, 200, JSON.stringify(cancelled.payload));
+    assert.equal(rowOf(ctx, booking.id).google_sync_status, 'synced', 'no Retry offered for nothing');
+  } finally {
+    ctx.restore();
+  }
+});
+
+test('after Disconnect and reconnect, a meeting\'s own Google event does not stop a quarter-hour move', async () => {
+  const ctx = setup();
+  try {
+    await connectGoogle(ctx);
+    const cal = await openCalendar(ctx);
+    const free = await slots(ctx, cal.id);
+    const booking = await book(ctx, cal, free[0]);
+    const eventId = rowOf(ctx, booking.id).google_event_id;
+    const token = /[?&]token=([A-Za-z0-9_-]+)/.exec(ctx.sent[0].text)[1];
+    await disconnectAndReconnect(ctx);
+
+    // The operator moves the opening time a quarter hour later, so the times on
+    // offer now overlap this meeting's own; only its own event is busy on Google.
+    const calRow = ctx.db.data.get('booking_calendars').find((r) => r.id === cal.id);
+    calRow.weekly_hours = Object.fromEntries(Object.keys(OPEN_ALL_DAY).map((d) => [d, [{ start: '00:15', end: '24:00' }]]));
+    ctx.google.busy = [{ startsAt: free[0].startsAt, endsAt: free[0].endsAt }];
+    const to = new Date(Date.parse(free[0].startsAt) + 15 * 60e3).toISOString();
+    const moved = await call(ctx.manageRoute, 'POST', '/api/public/booking/manage/reschedule', { token, startsAt: to });
+    assert.equal(moved.status, 200, JSON.stringify(moved.payload));
+    assert.equal(ctx.google.events.size, 1, 'the same event moved, not a second one');
+    assert.equal(ctx.google.events.get(eventId).start.dateTime, to);
+    assert.equal(rowOf(ctx, booking.id).google_event_id, eventId, 'the booking points at its event again');
+  } finally {
+    ctx.restore();
+  }
+});
+
+test('Disconnect counts only bookings that had a Google event', async () => {
+  const ctx = setup();
+  try {
+    await connectGoogle(ctx);
+    const cal = await openCalendar(ctx);
+    const [a, b] = await slots(ctx, cal.id);
+    await book(ctx, cal, a);
+    ctx.google.down = true;
+    const failedOne = await book(ctx, cal, b);
+    ctx.google.down = false;
+    assert.equal(rowOf(ctx, failedOne.id).google_sync_status, 'failed');
+    assert.equal(rowOf(ctx, failedOne.id).google_event_id, null);
+    const done = await disconnectAndReconnect(ctx);
+    assert.equal(done.released, 1, 'one event stays on the old calendar, not two');
+    assert.equal(rowOf(ctx, failedOne.id).google_sync_status, null, 'its mark is still cleared');
+  } finally {
+    ctx.restore();
+  }
+});
+
+test('Retry on a meeting that is already over sends no "video call link" email', async () => {
+  const ctx = setup();
+  try {
+    await connectGoogle(ctx);
+    const cal = await openCalendar(ctx);
+    const [slot] = await slots(ctx, cal.id);
+    ctx.google.down = true;
+    const booking = await book(ctx, cal, slot);
+    ctx.google.down = false;
+    const row = rowOf(ctx, booking.id);
+    row.starts_at = new Date(Date.now() - 2 * 3600e3).toISOString();
+    row.ends_at = new Date(Date.now() - 3600e3).toISOString();
+    const before = ctx.sent.length;
+    const retried = await call(ctx.adminRoute, 'POST', `/api/booking/bookings/${booking.id}/google-sync`, {}, asOperator);
+    assert.equal(retried.status, 200, JSON.stringify(retried.payload));
+    assert.equal(rowOf(ctx, booking.id).google_sync_status, 'synced');
+    assert.equal(ctx.sent.length, before, 'nobody is emailed a link to a meeting that has happened');
   } finally {
     ctx.restore();
   }
