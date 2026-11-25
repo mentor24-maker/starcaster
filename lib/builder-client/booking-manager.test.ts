@@ -132,9 +132,28 @@ describe("Google Calendar on the Booking Manager (SC-913)", () => {
       .toEqual({ kind: "missing", note: "No Meet link yet: Google could not be reached" });
   });
 
-  it("says nothing for a project with no Google Calendar, or a cancelled meeting", () => {
+  it("says nothing for a project with no Google Calendar, or a cancelled meeting Google already let go", () => {
     expect(bookingMeetState({ status: "booked", meetLink: "", googleSyncStatus: null })).toBeNull();
-    expect(bookingMeetState({ status: "cancelled", meetLink: "https://meet.google.com/x", googleSyncStatus: "failed" })).toBeNull();
+    expect(bookingMeetState({ status: "cancelled", meetLink: "https://meet.google.com/x", googleSyncStatus: "synced" })).toBeNull();
+    expect(bookingMeetState({ status: "cancelled", meetLink: "", googleSyncStatus: null })).toBeNull();
+  });
+
+  it("a failed MOVE outranks the stored link: the note shows, with the link, so Retry is offered", () => {
+    expect(bookingMeetState({
+      status: "booked", meetLink: "https://meet.google.com/abc-defg-hij", googleSyncStatus: "failed",
+      googleSyncError: "the Google Calendar event could not be moved: Backend Error",
+    })).toEqual({
+      kind: "missing",
+      href: "https://meet.google.com/abc-defg-hij",
+      note: "Google Calendar not updated: the Google Calendar event could not be moved: Backend Error",
+    });
+  });
+
+  it("a cancelled meeting whose Google event could not be removed says so", () => {
+    expect(bookingMeetState({
+      status: "cancelled", meetLink: "https://meet.google.com/x", googleSyncStatus: "failed",
+      googleSyncError: "the Google Calendar event could not be removed: Backend Error",
+    })).toEqual({ kind: "missing", note: "Still on Google Calendar: the Google Calendar event could not be removed: Backend Error" });
   });
 
   it("never turns a non-https value into a link", () => {

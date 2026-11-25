@@ -81,13 +81,29 @@ export type Booking = {
  */
 export function bookingMeetState(
   booking: Pick<Booking, "status" | "meetLink" | "googleSyncStatus" | "googleSyncError">,
-): { kind: "link"; href: string } | { kind: "missing"; note: string } | null {
+): { kind: "link"; href: string } | { kind: "missing"; note: string; href?: string } | null {
+  const failed = booking.googleSyncStatus === "failed";
+  const why = String(booking.googleSyncError || "").trim();
+  if (booking.status === "cancelled") {
+    // A cancel whose Google event could not be removed: that event still keeps
+    // the time busy for every visitor, so the row says so and offers Retry
+    // (review, SC-913 round 2).
+    if (!failed) return null;
+    return { kind: "missing", note: why ? `Still on Google Calendar: ${why}` : "Still on Google Calendar" };
+  }
   if (booking.status !== "booked") return null;
   const link = String(booking.meetLink || "").trim();
-  if (link && /^https:\/\//.test(link)) return { kind: "link", href: link };
-  if (booking.googleSyncStatus !== "failed") return null;
-  const why = String(booking.googleSyncError || "").trim();
-  return { kind: "missing", note: why ? `No Meet link yet: ${why}` : "No Meet link yet" };
+  const href = link && /^https:\/\//.test(link) ? link : "";
+  if (failed) {
+    // A failed step outranks a link already stored: a MOVE that did not reach
+    // Google leaves the old event, link and all, at the old time (round 2).
+    if (href) {
+      return { kind: "missing", href, note: why ? `Google Calendar not updated: ${why}` : "Google Calendar not updated" };
+    }
+    return { kind: "missing", note: why ? `No Meet link yet: ${why}` : "No Meet link yet" };
+  }
+  if (href) return { kind: "link", href };
+  return null;
 }
 
 /** The Booking Manager's Google Calendar card, as GET /api/admin/booking/google answers. */

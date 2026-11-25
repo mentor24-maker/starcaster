@@ -144,7 +144,11 @@ async function handleGoogle(req, res, pathname, method, scope) {
 async function handleRetry(res, bookingId, scope) {
   const found = await store.getBookingById(bookingId, scope);
   if (!found.ok || !found.data) return sendResult(res, found, { notFound: 'That booking does not exist in this project' });
-  if (found.data.status !== 'booked') {
+  // A cancelled booking is retried only to remove its event from Google, when
+  // that removal failed: otherwise its time stays busy for every visitor and
+  // nothing could ever clear it (review, SC-913 round 2).
+  const cancelled = found.data.status !== 'booked';
+  if (cancelled && found.data.googleSyncStatus !== 'failed') {
     return sendErr(res, 409, 'That booking is cancelled, so it gets no Meet link', { code: 'CONFLICT' });
   }
   const calendar = await store.getCalendarById(found.data.calendarId, scope);
@@ -157,7 +161,10 @@ async function handleRetry(res, bookingId, scope) {
   if (synced.status === 'skipped') {
     return sendErr(res, 409, 'Google Calendar is not connected, so there is nothing to retry. Connect it first.', { code: 'NOT_CONNECTED' });
   }
-  if (synced.status === 'failed') return sendErr(res, 502, `Still no Meet link: ${synced.error}`, { code: 'GOOGLE_SYNC_FAILED' });
+  if (synced.status === 'failed') {
+    const lead = cancelled ? 'Still on Google Calendar' : synced.meetLink ? 'Google Calendar still not updated' : 'Still no Meet link';
+    return sendErr(res, 502, `${lead}: ${synced.error}`, { code: 'GOOGLE_SYNC_FAILED' });
+  }
   return sendOk(res, 200, synced.booking);
 }
 

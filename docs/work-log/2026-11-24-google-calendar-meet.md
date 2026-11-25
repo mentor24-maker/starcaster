@@ -46,3 +46,26 @@ with a test for each that was broken on purpose and watched fail:
 - If the owner deleted the meeting on Google and the visitor then moved it,
   the email went out with the dead Meet link. Now a fresh event and link are
   made, and a dead link is never emailed.
+
+### Second review round (2026-11-24)
+
+The reviewer found that when Google failed in the middle of a MOVE or a
+CANCEL, the operator was never told and could not fix it:
+
+- A move Google refused left the old event (and old Meet link) on Google at
+  the old time, and the Booking Manager showed a normal "Join Google Meet"
+  with no warning. Now the row says "Google Calendar not updated" with a
+  Retry button, and Retry actually moves the event to the new time.
+- A cancel whose Google event could not be removed left that event on Google
+  forever, keeping the time busy for every visitor, with no way to clear it.
+  Now the cancelled row says "Still on Google Calendar" with a Retry button,
+  and Retry removes it.
+- If Google made an event but answered too slowly, Retry used to make a
+  second event with a second Meet link. Starcaster now picks the event's id
+  itself, so a repeat lands on the same event.
+- A connection Google has refused now makes the booking preview warn that
+  Google busy times are not being hidden, instead of acting as if no Google
+  Calendar was ever connected.
+- A long booking window asks Google for busy times all at once rather than
+  one month after another, so a slow Google cannot hold up a visitor's page
+  for 15-20 seconds.

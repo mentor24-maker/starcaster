@@ -376,8 +376,11 @@ export function BookingManagerModule({ settings, projectId }: Props) {
                 }
                 return (
                   <div className="booking-manager-booking-meet is-missing" role="note">
+                    {meet.href ? (
+                      <a className="booking-manager-link" href={meet.href} target="_blank" rel="noopener noreferrer">Join Google Meet</a>
+                    ) : null}
                     <span>{retryErrors[b.id] || meet.note}</span>
-                    {which === "upcoming" ? (
+                    {which === "upcoming" || cancelled ? (
                       <button type="button" className="booking-manager-btn booking-manager-btn-small" disabled={retryingId === b.id} onClick={() => void retryGoogle(b.id)}>
                         {retryingId === b.id ? "Retrying…" : "Retry"}
                       </button>

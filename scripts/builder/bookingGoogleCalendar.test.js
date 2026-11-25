@@ -57,9 +57,13 @@ const ENV = {
 /** A pretend Google: one events list, a busy list, a switch to be unreachable. */
 function fakeGoogle() {
   const g = {
-    down: false, hang: false, tokenRefuses: false, failCreate: false,
-    busy: [], events: new Map(), calls: [], nextId: 1, meetPending: false, meetLink: MEET,
+    down: false, hang: false, tokenRefuses: false, failCreate: false, failPatch: false, failDelete: false,
+    // Makes the event, then never answers: the time limit fires with the event made.
+    createThenHang: false,
+    busy: [], events: new Map(), deletedIds: new Set(), calls: [], nextId: 1, meetPending: false, meetLink: MEET,
   };
+  /** Delete an event on Google's side. Like Google, its id stays reserved. */
+  g.remove = (id) => { g.events.delete(id); g.deletedIds.add(id); };
   g.fetch = async (url, options = {}) => {
     const method = options.method || 'GET';
     g.calls.push({ url: String(url), method, body: options.body ? String(options.body) : '', auth: options.headers?.Authorization || '' });
@@ -91,19 +95,30 @@ function fakeGoogle() {
       if (method === 'POST') {
         if (g.failCreate) return reply(500, { error: { code: 500, message: 'Backend Error' } });
         const body = JSON.parse(options.body);
+        // Like Google: a caller-chosen id is used, and an id taken (or once
+        // taken by an event since deleted) is refused with 409.
+        if (body.id && (g.events.has(body.id) || g.deletedIds.has(body.id))) {
+          return reply(409, { error: { code: 409, message: 'The requested identifier already exists.' } });
+        }
         const ev = withMeet({ id: `evt_${g.nextId++}`, ...body }, body);
         g.events.set(ev.id, ev);
+        if (g.createThenHang) return new Promise(() => {});
         return reply(200, ev);
       }
       if (!g.events.has(id)) return reply(404, { error: { code: 404, message: 'Not Found' } });
       if (method === 'GET') return reply(200, g.events.get(id));
       if (method === 'PATCH') {
+        if (g.failPatch) return reply(500, { error: { code: 500, message: 'Backend Error' } });
         const body = JSON.parse(options.body);
         const ev = withMeet({ ...g.events.get(id), ...body }, body);
         g.events.set(id, ev);
         return reply(200, ev);
       }
-      if (method === 'DELETE') { g.events.delete(id); return { ok: true, status: 204, statusText: '', json: async () => null }; }
+      if (method === 'DELETE') {
+        if (g.failDelete) return reply(500, { error: { code: 500, message: 'Backend Error' } });
+        g.remove(id);
+        return { ok: true, status: 204, statusText: '', json: async () => null };
+      }
     }
     return reply(404, { error: { message: `fake Google has no ${method} ${u.pathname}` } });
   };
@@ -318,7 +333,8 @@ test('a booking becomes a Google event with a Meet link, stored on the booking a
     const row = rowOf(ctx, booking.id);
     assert.equal(row.google_sync_status, 'synced');
     assert.equal(row.meet_link, MEET);
-    assert.equal(row.google_event_id, 'evt_1');
+    assert.equal(row.google_event_id, ctx.sync.googleEventIdFor(booking), 'the id Starcaster chose, so a repeat lands on the same event');
+    assert.match(row.google_event_id, /^[0-9a-v]{5,1024}$/, 'inside Google\'s rule for an event id');
 
     assert.equal(ctx.sent.length, 2, 'visitor and owner');
     for (const message of ctx.sent) {
@@ -380,7 +396,7 @@ test('an event made without its Meet link keeps the event, and Retry adds the li
     const booking = await book(ctx, cal, slot);
     const row = rowOf(ctx, booking.id);
     assert.equal(row.google_sync_status, 'failed');
-    assert.equal(row.google_event_id, 'evt_1', 'the event is remembered, so a retry does not make a second one');
+    assert.equal(row.google_event_id, ctx.sync.googleEventIdFor(booking), 'the event is remembered, so a retry does not make a second one');
     ctx.google.meetPending = false;
     const retried = await call(ctx.adminRoute, 'POST', `/api/booking/bookings/${booking.id}/google-sync`, {}, asOperator);
     assert.equal(retried.status, 200, JSON.stringify(retried.payload));
@@ -407,7 +423,7 @@ test('moving the meeting moves the Google event; cancelling removes it', async (
 
     const moved = await call(ctx.manageRoute, 'POST', '/api/public/booking/manage/reschedule', { token, startsAt: free[4].startsAt });
     assert.equal(moved.status, 200, JSON.stringify(moved.payload));
-    assert.equal(ctx.google.events.get('evt_1').start.dateTime, free[4].startsAt, 'the event moved with it');
+    assert.equal(ctx.google.events.get(rowOf(ctx, booking.id).google_event_id).start.dateTime, free[4].startsAt, 'the event moved with it');
     assert.equal(ctx.google.events.size, 1, 'moved, not duplicated');
     assert.match(ctx.sent[ctx.sent.length - 1].text, /Video call: https:\/\/meet\.google\.com/);
 
@@ -618,14 +634,16 @@ test('moving a meeting whose event was deleted on Google makes a new one, and th
     const free = await slots(ctx, cal.id);
     const booking = await book(ctx, cal, free[0]);
     const token = /[?&]token=([A-Za-z0-9_-]+)/.exec(ctx.sent[0].text)[1];
-    ctx.google.events.delete('evt_1');
+    const first = rowOf(ctx, booking.id).google_event_id;
+    ctx.google.remove(first);
     const NEW = 'https://meet.google.com/new-link-xyz';
     ctx.google.meetLink = NEW;
     const moved = await call(ctx.manageRoute, 'POST', '/api/public/booking/manage/reschedule', { token, startsAt: free[4].startsAt });
     assert.equal(moved.status, 200, JSON.stringify(moved.payload));
     assert.equal(ctx.google.events.size, 1);
     const row = rowOf(ctx, booking.id);
-    assert.equal(row.google_event_id, 'evt_2');
+    assert.ok(row.google_event_id && row.google_event_id !== first, 'a new event, under a new id');
+    assert.match(row.google_event_id, /^[0-9a-v]{5,1024}$/);
     assert.equal(row.meet_link, NEW);
     assert.equal(row.google_sync_status, 'synced');
     const last = ctx.sent.slice(-2);
@@ -646,7 +664,7 @@ test('deleted on Google and a new event cannot be made: the move stands and the 
     const free = await slots(ctx, cal.id);
     const booking = await book(ctx, cal, free[0]);
     const token = /[?&]token=([A-Za-z0-9_-]+)/.exec(ctx.sent[0].text)[1];
-    ctx.google.events.delete('evt_1');
+    ctx.google.remove(rowOf(ctx, booking.id).google_event_id);
     ctx.google.failCreate = true;
     const moved = await call(ctx.manageRoute, 'POST', '/api/public/booking/manage/reschedule', { token, startsAt: free[4].startsAt });
     assert.equal(moved.status, 200, JSON.stringify(moved.payload));
@@ -702,4 +720,146 @@ test('a renewal that fails on a token past its expiry is reported as that, never
   const ok = await sync.usableConnection({ projectId: 'p', userId: 'u' }, { store: fresh, refreshBeforeUse: refused });
   assert.equal(ok.ok, true);
   assert.equal(ok.connection.accessToken, 'tok');
+});
+
+// ── Review round 2: a failed move or cancel is visible and Retry repairs it ──
+
+test('a MOVE Google refused leaves the booking marked failed, and Retry moves the event to the new time', async () => {
+  const ctx = setup();
+  try {
+    await connectGoogle(ctx);
+    const cal = await openCalendar(ctx);
+    const free = await slots(ctx, cal.id);
+    const booking = await book(ctx, cal, free[0]);
+    const token = /[?&]token=([A-Za-z0-9_-]+)/.exec(ctx.sent[0].text)[1];
+    const eventId = rowOf(ctx, booking.id).google_event_id;
+
+    ctx.google.failPatch = true;
+    const moved = await call(ctx.manageRoute, 'POST', '/api/public/booking/manage/reschedule', { token, startsAt: free[4].startsAt });
+    assert.equal(moved.status, 200, 'the move itself stands');
+    let row = rowOf(ctx, booking.id);
+    assert.equal(row.starts_at instanceof Date ? row.starts_at.toISOString() : new Date(row.starts_at).toISOString(), free[4].startsAt);
+    assert.equal(row.google_sync_status, 'failed');
+    assert.match(row.google_sync_error, /could not be moved/);
+    assert.equal(ctx.google.events.get(eventId).start.dateTime, free[0].startsAt, 'Google still has it at the old time');
+
+    ctx.google.failPatch = false;
+    const retried = await call(ctx.adminRoute, 'POST', `/api/booking/bookings/${booking.id}/google-sync`, {}, asOperator);
+    assert.equal(retried.status, 200, JSON.stringify(retried.payload));
+    assert.equal(ctx.google.events.size, 1, 'moved, not duplicated');
+    assert.equal(ctx.google.events.get(eventId).start.dateTime, free[4].startsAt, 'Retry moved the event');
+    assert.equal(ctx.google.events.get(eventId).end.dateTime, free[4].endsAt);
+    row = rowOf(ctx, booking.id);
+    assert.equal(row.google_sync_status, 'synced');
+    assert.equal(row.meet_link, MEET, 'the same event, so the same link');
+  } finally {
+    ctx.restore();
+  }
+});
+
+test('a CANCEL whose Google event could not be removed is marked, and Retry removes it', async () => {
+  const ctx = setup();
+  try {
+    await connectGoogle(ctx);
+    const cal = await openCalendar(ctx);
+    const [slot] = await slots(ctx, cal.id);
+    const booking = await book(ctx, cal, slot);
+
+    ctx.google.failDelete = true;
+    const res = await call(ctx.adminRoute, 'POST', `/api/booking/bookings/${booking.id}/cancel`, {}, asOperator);
+    assert.equal(res.status, 200, JSON.stringify(res.payload));
+    let row = rowOf(ctx, booking.id);
+    assert.equal(row.status, 'cancelled');
+    assert.equal(row.google_sync_status, 'failed');
+    assert.match(row.google_sync_error, /could not be removed/);
+    assert.equal(ctx.google.events.size, 1, 'the event is still on Google');
+
+    const stillFailing = await call(ctx.adminRoute, 'POST', `/api/booking/bookings/${booking.id}/google-sync`, {}, asOperator);
+    assert.equal(stillFailing.status, 502);
+    assert.match(stillFailing.payload.error.message, /^Still on Google Calendar/);
+
+    ctx.google.failDelete = false;
+    const retried = await call(ctx.adminRoute, 'POST', `/api/booking/bookings/${booking.id}/google-sync`, {}, asOperator);
+    assert.equal(retried.status, 200, JSON.stringify(retried.payload));
+    assert.equal(ctx.google.events.size, 0, 'Retry removed the event');
+    row = rowOf(ctx, booking.id);
+    assert.equal(row.google_sync_status, 'synced');
+
+    const again = await call(ctx.adminRoute, 'POST', `/api/booking/bookings/${booking.id}/google-sync`, {}, asOperator);
+    assert.equal(again.status, 409, 'nothing left to retry on a cancelled booking Google already let go');
+  } finally {
+    ctx.restore();
+  }
+});
+
+test('an event Google made whose answer was lost to the time limit is found by Retry, never made twice', async () => {
+  const before = process.env.GOOGLE_CALENDAR_TIMEOUT_MS;
+  process.env.GOOGLE_CALENDAR_TIMEOUT_MS = '80';
+  const ctx = setup();
+  try {
+    await connectGoogle(ctx);
+    const cal = await openCalendar(ctx);
+    const [slot] = await slots(ctx, cal.id);
+    ctx.google.createThenHang = true;
+    const booking = await book(ctx, cal, slot);
+    let row = rowOf(ctx, booking.id);
+    assert.equal(row.google_sync_status, 'failed');
+    assert.equal(ctx.google.events.size, 1, 'Google made it; we never heard');
+
+    ctx.google.createThenHang = false;
+    const retried = await call(ctx.adminRoute, 'POST', `/api/booking/bookings/${booking.id}/google-sync`, {}, asOperator);
+    assert.equal(retried.status, 200, JSON.stringify(retried.payload));
+    assert.equal(ctx.google.events.size, 1, 'still one event, one Meet link');
+    row = rowOf(ctx, booking.id);
+    assert.equal(row.google_event_id, ctx.sync.googleEventIdFor(booking));
+    assert.equal(row.meet_link, MEET);
+    assert.equal(row.google_sync_status, 'synced');
+  } finally {
+    ctx.restore();
+    if (before === undefined) delete process.env.GOOGLE_CALENDAR_TIMEOUT_MS; else process.env.GOOGLE_CALENDAR_TIMEOUT_MS = before;
+  }
+});
+
+test('busy times from a connection Google has refused read as "unavailable", never as "not connected"', async () => {
+  const sync = require('../../lib/bookingGoogleSync');
+  const store = {
+    listConnections: async () => ({ ok: true, data: [{ provider: 'google_calendar', accountId: 'g1', status: 'expired', lastError: 'invalid_grant' }] }),
+  };
+  const realWarn = console.warn;
+  console.warn = () => {};
+  try {
+    const answer = await sync.busyTimes({ projectId: 'p', userId: 'u' }, Date.now(), Date.now() + 86400e3, { store });
+    assert.equal(answer.connected, true, 'the preview must warn, not say "no Google"');
+    assert.match(answer.unavailable, /connect it again.*invalid_grant/);
+    const none = await sync.busyTimes({ projectId: 'p', userId: 'u' }, Date.now(), Date.now() + 86400e3, {
+      store: { listConnections: async () => ({ ok: true, data: [] }) },
+    });
+    assert.deepEqual(none, { connected: false, busy: [] });
+  } finally {
+    console.warn = realWarn;
+  }
+});
+
+test('a long free/busy range is asked in pieces at the same time, not one after another', async () => {
+  const google = require('../../lib/googleCalendar');
+  let inFlight = 0;
+  let most = 0;
+  const fetchImpl = async (url, options) => {
+    inFlight += 1;
+    most = Math.max(most, inFlight);
+    await new Promise((r) => setTimeout(r, 40));
+    inFlight -= 1;
+    const asked = JSON.parse(options.body);
+    const start = Date.parse(asked.timeMin);
+    return {
+      ok: true, status: 200, statusText: '',
+      json: async () => ({ calendars: { primary: { busy: [{ start: new Date(start).toISOString(), end: new Date(start + 3600e3).toISOString() }] } } }),
+    };
+  };
+  const from = Date.parse('2030-01-01T00:00:00Z');
+  const res = await google.freeBusy('tok', from, from + 90 * 86400e3, { fetchImpl });
+  assert.equal(res.ok, true);
+  assert.equal(most, 3, 'all three 30-day pieces were asked at once');
+  assert.equal(res.data.busy.length, 3);
+  assert.equal(res.data.busy[0].startsAt, '2030-01-01T00:00:00.000Z', 'kept in order');
 });
