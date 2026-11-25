@@ -211,20 +211,31 @@ spends an evening on them again:
 - **Turning on "Download Originals to this Mac".** Not acceptable: the
   library is about 4,900 videos and 13,000 photos.
 
-## Videos in the Photos "Studio" album arrive by themselves (Media intake · 3 of 5)
+## Videos in the Photos "Studio" album (Media intake · 3 of 5) — retired 2026-11-25
 
-Put a video into an album called **Studio** in Apple Photos — on the iPhone
-(**Photos › Albums**, then a video's share button › **Add to Album** ›
-**Studio**) or on the Mac — and the same 15-minute job on the MacBook sends it
-to the Inbox. iCloud Photos carries it from the phone to the Mac's library.
+**This route is switched off.** Use "Sending a video from the iPhone" above.
 
-**For iPhone videos, use the phone route above instead.** This album route
-only works for a video whose original is already on the MacBook. The
-MacBook's Photos keeps most originals in iCloud only ("Optimize Mac
-Storage"), and macOS will not let a scheduled job download them, so those
-videos fail every pass with PERMISSION DENIED — on 2026-11-18, 9 of the 13
-videos in the album. The job is still installed; whether to switch it off is
-Dane's call and is recorded on SC-878.
+It used to work like this: put a video into an album called **Studio** in
+Apple Photos, iCloud Photos carried it to the MacBook, and the same 15-minute
+job sent it to the Inbox. **Why it was retired** (SC-878): the MacBook's
+Photos keeps most originals in iCloud only ("Optimize Mac Storage"), and macOS
+will not let a scheduled job download one — there is no prompt, so there is no
+permission to turn on. On 2026-11-18, 9 of the 13 videos in the album failed
+with PERMISSION DENIED, and they failed on **every** pass. That made every pass
+end in failure: a bus post every six hours, and no heartbeat for the job even
+when the Zoom half had sent fine, so a healthy Zoom intake looked broken.
+Dane chose to switch it off on 2026-11-25.
+
+**What "off" means.** The scheduled job now runs the Zoom half only, and its
+log says `Photos album "Studio": OFF (retired 2026-11-25, SC-878)` on every
+pass so the absence is visible. Nothing was deleted: the album code, its
+ledger and osxphotos are all still there. To run the album pass anyway — once,
+by hand, for a video whose original *is* on the MacBook — run
+`MEDIA_INTAKE_PHOTOS_ALBUM=1 npm run media:intake` on the MacBook. Setting that
+variable in the launchd job would switch the scheduled album pass back on,
+failures and all.
+
+How the album pass behaves when it is switched on, for the record:
 
 - **Only that album.** Nothing outside **Studio** is ever sent, so family
   videos stay out. The album is checked twice: by the tool that reads Photos
@@ -244,7 +255,7 @@ Dane's call and is recorded on SC-878.
   pass.
 
 **It needs a permission only Dane can give.** macOS keeps the Photos library
-behind a privacy switch. Until it is on, every pass logs
+behind a privacy switch. Until it is on, an album pass logs
 
 ```
 CANNOT READ PHOTOS — macOS refused access to …/Photos Library.photoslibrary (EPERM)

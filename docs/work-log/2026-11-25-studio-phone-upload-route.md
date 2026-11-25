@@ -14,5 +14,12 @@ Zoom recording of the same session.
 
 The guide also lists the routes that were tried and failed, so nobody spends
 another evening on them, and fixes the Drive folder's name (it is
-"Studio-probe", not "Studio"). The MacBook's album job is left running;
-whether to switch it off is Dane's decision.
+"Studio-probe", not "Studio").
+
+Dane then chose to switch off the MacBook's album step, and that is in this
+change too. The album videos failed on every 15-minute pass, which made the
+whole job report failure, posted to the bus, and stopped it recording that
+it was alive — even when the Zoom half had sent its recordings fine. The job
+now sends Zoom recordings only, says in its log that the album step is off,
+and goes back to reporting healthy when Zoom works. The album code is kept,
+behind a switch that is off unless someone turns it on by hand.

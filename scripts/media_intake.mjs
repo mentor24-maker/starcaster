@@ -1,10 +1,14 @@
 #!/usr/bin/env node
 /**
- * Media intake — send new Zoom recordings (ticket 86bcfgyxp) and the videos in
- * the Apple Photos album "Studio" (ticket 86bcfgyy6) to the Studio Inbox.
+ * Media intake — send new Zoom recordings (ticket 86bcfgyxp) to the Studio
+ * Inbox. The Apple Photos album "Studio" half (ticket 86bcfgyy6) is OFF since
+ * 2026-11-25 (SC-878): the MacBook cannot download iCloud-only originals from
+ * a scheduled job, so it failed every pass. iPhone takes go from the phone
+ * through the Google Drive app instead (docs/STUDIO.md).
  *
  *   npm run media:intake                               the scheduled pass (launchd runs this every 15 min):
- *                                                      Zoom first, then the Photos album
+ *                                                      Zoom only
+ *   MEDIA_INTAKE_PHOTOS_ALBUM=1 npm run media:intake   the same, plus the Photos album (opt-in)
  *   npm run media:intake -- --backfill zoom            DRY RUN: every older recording, sizes and totals
  *   npm run media:intake -- --backfill zoom --apply    send history, oldest first, at most 5 GB per run
  *   npm run media:intake -- --dry-run                  send nothing: ask Drive whether the sign-in works and
@@ -35,6 +39,7 @@
  *   MEDIA_INTAKE_REMOTE       the rclone remote          (default: gdrive: — mentorofaio's Drive)
  *   STUDIO_DRIVE_INBOX_FOLDER_ID                         (default: the Inbox id in docs/STUDIO.md)
  *   RCLONE_BIN                                           (default: rclone on PATH)
+ *   MEDIA_INTAKE_PHOTOS_ALBUM    1 = also run the Photos album pass (default: off, SC-878)
  *   MEDIA_INTAKE_PHOTOS_LIBRARY  the Photos library      (default: ~/Pictures/Photos Library.photoslibrary)
  *   OSXPHOTOS_BIN                                        (default: osxphotos on PATH, else ~/.local/bin/osxphotos — where pipx puts it)
  */
@@ -219,34 +224,22 @@ try {
     console.log(intake.renderBackfill(plan));
     if (plan.failed.length) code = 1;
   } else {
-    // Two sources, one after the other (they share the ledger). A failure in
-    // one does not stop the other; either one makes the pass exit 1.
-    const reports = [];
-    try {
-      const report = await intake.runPass({ root, ledgerFile, uploader });
-      reports.push(report);
-      say(intake.renderPass(report).split('\n').join(`\n[${stamp()}] `));
-      if (report.failed.length) code = 1;
-    } catch (err) {
-      console.error(`[${stamp()}] media-intake Zoom FAILED: ${err && err.message}`);
-      code = 1;
-    }
-    try {
-      const report = await intake.runPhotos({
+    // Zoom always; the Photos album only when switched on (off since
+    // 2026-11-25, SC-878 — lib/mediaIntake.js, photosAlbumEnabled).
+    const pass = await intake.runScheduledPass({
+      zoom: () => intake.runPass({ root, ledgerFile, uploader }),
+      photos: () => intake.runPhotos({
         photos: intake.osxphotosAdapter({ run: runProcess, library: photosLibrary, bin: osxphotosBin }),
         ledgerFile,
         uploader,
         stagingDir: path.join(stateDir, 'photos-export'),
-      });
-      reports.push(report);
-      say(intake.renderPhotos(report).split('\n').join(`\n[${stamp()}] `));
-      if (report.failed.length) code = 1;
-    } catch (err) {
-      // PhotosUnreadable already reads "CANNOT READ PHOTOS — <why>" and carries the fix.
-      console.error(`[${stamp()}] ${err && err.fix ? '' : 'media-intake Photos FAILED: '}${err && err.message}`);
-      if (err && err.fix) console.error(`[${stamp()}]   FIX: ${err.fix}`);
-      code = 1;
-    }
+      }),
+      photosEnabled: intake.photosAlbumEnabled(process.env),
+      say: (text) => say(text.split('\n').join(`\n[${stamp()}] `)),
+      warn: (line) => console.error(`[${stamp()}] ${line}`),
+    });
+    const reports = pass.reports;
+    code = pass.code;
     // Tell Dane on his ticket if Google refused the sign-in; clear it once it works.
     await tellDaneAboutSignin(signinTicket.signinVerdict(reports));
   }
