@@ -8,8 +8,10 @@
  *                 dates, the time zone
  *   Meeting       title, length, gap between meetings, minimum notice, how
  *                 many days ahead
- *   Messaging     what visitors read, plus the email wording slices 4 and 6
- *                 (SC-912, SC-914) will send; stored now
+ *   Messaging     what visitors read, plus the confirmation and reminder
+ *                 email wording (SC-912, SC-914)
+ *   Reminders     when reminder emails go out, and any that failed
+ *                 (SC-914, builder-booking-reminders-section.tsx)
  *   Bookings      upcoming and past, a Cancel button, and each row linked to
  *                 its CRM contact by id (landmine 19)
  *
@@ -23,6 +25,7 @@
 
 import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import { starcasterScopedHeaders } from "@/lib/adapters/starcaster-app";
+import { BookingRemindersSection } from "./builder-booking-reminders-section";
 import { readApiErrorMessage } from "@/lib/public-admin-session";
 import {
   BOOKING_DAY_KEYS,
@@ -530,7 +533,7 @@ export function BookingManagerModule({ settings, projectId }: Props) {
               onChange={(value) => setMessaging({ ...messaging, [f.key]: value })}
               noteBefore={
                 f.group === "email" && MESSAGING_FIELDS[i - 1]?.group !== "email"
-                  ? "The confirmation email goes to the visitor when they book, with an add-to-calendar file and a link to cancel or move the meeting. Leave these blank to use plain default wording. Reminder emails start sending in a later update."
+                  ? "The confirmation email goes to the visitor when they book, with an add-to-calendar file and a link to cancel or move the meeting. Leave these blank to use plain default wording. Reminder emails use the two reminder fields; when they go out is set under Reminders below."
                   : ""
               }
             />
@@ -543,6 +546,8 @@ export function BookingManagerModule({ settings, projectId }: Props) {
           {status("messaging")}
         </div>
       </section>
+
+      <BookingRemindersSection calendarId={saved.id} timeZone={saved.timeZone} projectId={projectId} />
 
       <section className="booking-manager-section" aria-labelledby={`${uid}-bookings`}>
         <h4 id={`${uid}-bookings`} className="booking-manager-section-title">Bookings</h4>
