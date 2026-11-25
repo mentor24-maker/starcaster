@@ -18,7 +18,10 @@ const path = require('path');
  * that refuses a second contact with the same email the way the real one does.
  */
 
-const SQL_TEXT = fs.readFileSync(path.join(__dirname, '..', '..', 'docs', 'SQL', 'booking_setup.sql'), 'utf8');
+// booking_notifications.sql (SC-912) runs after it: the email and manage-link columns.
+const SQL_TEXT = ['booking_setup.sql', 'booking_notifications.sql']
+  .map((file) => fs.readFileSync(path.join(__dirname, '..', '..', 'docs', 'SQL', file), 'utf8'))
+  .join('\n');
 const { parseSchemaText, createFakeDb } = require('./sqlSchemaFake.js');
 
 const resolve = (p) => require.resolve(`../../${p}`);

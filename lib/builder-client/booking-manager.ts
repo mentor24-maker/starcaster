@@ -63,7 +63,21 @@ export type Booking = {
   crmContactId: string | null;
   status: string;
   cancelledAt?: string | null;
+  /** How the latest booking emails went (SC-912): "sent", "failed", or null when none were tried. */
+  notifyStatus?: string | null;
+  notifyError?: string;
 };
+
+/**
+ * What a booking row says about its emails (SC-912). Only a FAILED send is
+ * shown: it is the one the operator must act on (the visitor may not know
+ * their time). null when there is nothing to say.
+ */
+export function bookingEmailNote(booking: Pick<Booking, "notifyStatus" | "notifyError">): string | null {
+  if (booking.notifyStatus !== "failed") return null;
+  const why = String(booking.notifyError || "").trim();
+  return why ? `Email not sent: ${why}` : "Email not sent";
+}
 
 /** The window a day gets when it is switched on. */
 export const DEFAULT_DAY_WINDOW: BookingWindow = { start: "09:00", end: "17:00" };

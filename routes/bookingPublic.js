@@ -44,6 +44,7 @@ const store = require('../lib/bookingStore');
 const { freeSlots, isSlotFree, MAX_RANGE_DAYS } = require('../lib/bookingAvailability');
 const { listConfigs } = require('../lib/crmConfigStore');
 const { createContact, findContactByEmail } = require('../lib/crmContactsStore');
+const { sendBookingEmails, requestSiteOrigin } = require('../lib/bookingEmails');
 
 const DAY = 86400000;
 const MINUTE = 60000;
@@ -191,6 +192,8 @@ async function handleBook(req, res) {
   const email = text(body.email, 320).toLowerCase();
   const phone = text(body.phone, 60);
   const note = text(body.note, 4000);
+  // The visitor's own zone, from their browser, so their emails show their time.
+  const visitorTimeZone = text(body.timeZone, 100);
   if (!name) return sendErr(res, 400, 'Please enter your name.', { code: 'INVALID' });
   if (!EMAIL_RE.test(email)) return sendErr(res, 400, 'Please enter a valid email address.', { code: 'INVALID' });
   const start = Date.parse(String(body.startsAt || ''));
@@ -224,21 +227,36 @@ async function handleBook(req, res) {
     visitorEmail: email,
     visitorPhone: phone,
     visitorNote: note,
+    visitorTimeZone,
   }, scope);
   if (!made.ok) {
     if (made.status === 409) return sendErr(res, 409, TAKEN_MESSAGE, { code: 'TAKEN' });
     return sendErr(res, made.status || 500, made.error || 'The booking could not be saved');
   }
 
+  let booking = made.data;
   const contact = await fileInCrm({ name, email, phone }, scope);
   if (contact.id) {
     const attached = await store.attachBookingContact(made.data.id, contact.id, scope);
-    if (!attached.ok) {
-      console.warn(`[booking] booking ${made.data.id} saved, but could not be linked to CRM contact ${contact.id}: ${attached.error}`);
-    }
+    if (attached.ok) booking = { ...attached.data, manageToken: made.data.manageToken };
+    else console.warn(`[booking] booking ${made.data.id} saved, but could not be linked to CRM contact ${contact.id}: ${attached.error}`);
   } else {
     console.warn(`[booking] booking ${made.data.id} saved with no CRM contact: ${contact.why}`);
   }
+
+  // Both emails (SC-912), AWAITED: Vercel freezes the function once the answer
+  // is sent, which would kill a send still in flight. A failed send never
+  // costs the visitor their meeting; it is recorded on the booking instead and
+  // shows on the Booking Manager.
+  await sendBookingEmails({
+    kind: 'booked',
+    booking,
+    calendar: calendar.data,
+    projectId: scope.projectId,
+    origin: requestSiteOrigin(req),
+    manageToken: made.data.manageToken,
+    scope,
+  });
 
   return sendOk(res, 200, {
     booking: { id: made.data.id, startsAt: made.data.startsAt, endsAt: made.data.endsAt },
@@ -266,6 +284,11 @@ async function handle(req, res, pathname, method) {
 module.exports = {
   handle,
   TAKEN_MESSAGE,
+  // Shared with routes/bookingManage.js, the visitor's cancel/reschedule link.
+  resolveScope,
+  visitorCalendar,
+  windowDays,
+  bookedAround,
   manifest: {
     id: 'booking-public',
     label: 'Booking calendar, visitor side (unauthenticated)',

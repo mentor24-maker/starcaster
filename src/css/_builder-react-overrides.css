@@ -13473,6 +13473,15 @@ a.builder-react-root .builder-event-calendar-item-title:hover,
   overflow-wrap: anywhere;
 }
 
+/* A booking whose emails did not go (SC-912): the visitor may not know their
+   time, so it stands out like the screen's other errors. */
+.booking-manager-booking-email-failed {
+  flex-basis: 100%;
+  color: var(--ink-warning, #b3261e);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
 .booking-manager-booking-actions {
   display: flex;
   flex-wrap: wrap;

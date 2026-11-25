@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  bookingEmailNote,
   addBlockedDate,
   addDayWindow,
   bookingContactHref,
@@ -103,5 +104,15 @@ describe("reading what the server sent", () => {
     expect(wholeNumberOrProblem("45", "Meeting length", 5, 480)).toEqual({ value: 45 });
     expect(wholeNumberOrProblem("4", "Meeting length", 5, 480)).toEqual({ problem: "Meeting length must be from 5 to 480." });
     expect(wholeNumberOrProblem("4.5", "Meeting length", 5, 480)).toEqual({ problem: "Meeting length must be a whole number." });
+  });
+});
+
+describe("bookingEmailNote (SC-912)", () => {
+  it("names a failed send and its reason, and says nothing otherwise", () => {
+    expect(bookingEmailNote({ notifyStatus: "failed", notifyError: "the visitor was not emailed: bounced" }))
+      .toBe("Email not sent: the visitor was not emailed: bounced");
+    expect(bookingEmailNote({ notifyStatus: "failed", notifyError: "" })).toBe("Email not sent");
+    expect(bookingEmailNote({ notifyStatus: "sent", notifyError: "" })).toBeNull();
+    expect(bookingEmailNote({ notifyStatus: null })).toBeNull();
   });
 });
