@@ -71,6 +71,7 @@ const crm         = require('./crm');
 const booking     = require('./booking');
 const bookingPublic = require('./bookingPublic');
 const bookingManage = require('./bookingManage');
+const bookingReminders = require('./bookingReminders');
 const blog        = require('./blog');
 const events      = require('./events');
 const studio      = require('./studio');
@@ -163,6 +164,9 @@ const ROUTE_MODULES = [
   tasks,
   polls,
   crm,
+  // Booking reminders (SC-914) ahead of booking, which would answer
+  // /api/booking/calendars/:id/reminders with a 405.
+  bookingReminders,
   booking,
   // The visitor's booking door (SC-911). Ahead of publicSite, which owns the
   // rest of /api/public and would answer this path 404.
@@ -215,6 +219,7 @@ const CRON_PATHS = new Set([
   '/api/outreach/youtube/conversations/read-due',
   '/api/ai-quota/check',
   '/api/observe/usage-logs/prune',
+  '/api/booking/reminders/run-due',
 ]);
 
 function isAuthorizedCronRequest(req, pathname) {

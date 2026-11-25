@@ -13507,6 +13507,17 @@ a.builder-react-root .builder-event-calendar-item-title:hover,
   gap: 8px;
 }
 
+/* Reminders that failed every attempt (SC-914): one sentence each, styled
+   like a booking's failed email above. */
+.booking-manager-reminder-problems {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
 .booking-manager-booking-actions {
   display: flex;
   flex-wrap: wrap;
