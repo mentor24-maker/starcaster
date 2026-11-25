@@ -1345,6 +1345,17 @@ export const modulePaletteItems: ModulePaletteItem[] = [
     settings: {}
   },
   {
+    id: "admin-booking-manager",
+    type: "admin-booking-manager",
+    group: "admin",
+    label: "Booking Manager",
+    icon: "📅",
+    description: "The admin screen for the booking calendar: weekly opening hours (several time ranges a day), days off and blocked dates, the time zone, meeting length, the gap between meetings, minimum notice, how far ahead visitors may book, the wording visitors see, and every booking with a link to the visitor's CRM contact and a Cancel button that frees the time.",
+    name: "",
+    text: "",
+    settings: {}
+  },
+  {
     id: "admin-support-form",
     type: "admin-support-form",
     group: "admin",

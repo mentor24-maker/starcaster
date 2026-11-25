@@ -36,6 +36,7 @@ Mapped from Marinoff production, 2026-08-16:
 | `admin-blog-manager` | yes | Admin Header | `blog-post-create`, `blog-post-manager`, `blog-category-manager` |
 | `admin-event-manager` | yes | Admin Header | `event-manager` |
 | `admin-contact-manager` | yes | Admin Header | `crm-contacts-table` |
+| `admin-booking-manager` | yes | Admin Header | `admin-booking-manager` (needs the CRM; SC-910) |
 | `admin-settings` | yes | Admin Header | `admin-site-settings` |
 | `admin-support` | yes | Admin Header | `admin-support-form` |
 

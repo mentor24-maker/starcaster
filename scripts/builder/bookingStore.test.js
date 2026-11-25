@@ -123,7 +123,11 @@ test('saving settings then reading them back returns the saved values', async ()
       gapMinutes: 15,
       minNoticeMinutes: 1440,
       daysAhead: 30,
-      messaging: { heading: 'Book a call', intro: 'Pick a time that suits you.', confirmation: 'See you then!' },
+      messaging: {
+        heading: 'Book a call', intro: 'Pick a time that suits you.', confirmation: 'See you then!',
+        confirmationEmailSubject: 'Your call is booked', confirmationEmailBody: 'See you on {date}.',
+        reminderEmailSubject: 'Tomorrow: your call', reminderEmailBody: 'A reminder that we meet soon.',
+      },
     };
     const saved = await ctx.store.saveCalendarSettings(made.data.id, settings, SCOPE_A);
     assert.equal(saved.ok, true, JSON.stringify(saved));
@@ -164,6 +168,7 @@ test('bad settings are refused naming the field, and nothing is written', async 
       [{ weeklyHours: { funday: [] } }, /unknown day/],
       [{ blockedDates: ['Christmas'] }, /blockedDates/],
       [{ messaging: { footer: 'x' } }, /unknown field "footer"/],
+      [{ messaging: { reminderEmailSubject: 'x'.repeat(201) } }, /reminderEmailSubject must be 200 characters/],
       [{ time_zone: 'UTC' }, /Unknown field: time_zone/],
       [{ name: '   ' }, /name cannot be empty/],
       [{}, /nothing to save/],

@@ -104,6 +104,7 @@ import {
 } from "./builder/builder-crm-form-module-settings";
 import { BugReportModule, type SiteWideBugReport } from "./builder/builder-bug-report-module";
 import { SpiralityTasksModule } from "./builder/builder-spirality-tasks-module";
+import { BookingManagerModule } from "./builder/builder-booking-manager-module";
 import { parseBreadcrumbItems } from "./builder/builder-breadcrumb-module-settings";
 import {
   ADMIN_LOGIN_PATH,
@@ -1437,7 +1438,19 @@ function CrmContactsTablePreview({
           throw new Error(readApiErrorMessage(d2, `Failed to load contacts (${contactsRes.status})`));
         }
         const list = d2?.contacts ?? d2?.data ?? [];
-        setContacts(Array.isArray(list) ? list : []);
+        const loaded: CrmContact[] = Array.isArray(list) ? list : [];
+        setContacts(loaded);
+        // ?contact=<id> opens that contact (SC-910): the Booking Manager links
+        // each booking to its contact BY ID, never by a copied name or email
+        // (landmine 19).
+        const linkedId = typeof window !== "undefined"
+          ? (new URLSearchParams(window.location.search).get("contact") ?? "").trim()
+          : "";
+        if (linkedId) {
+          const linked = loaded.find((c) => c.id === linkedId);
+          if (linked) setViewContact(linked);
+          else setLoadError(`The contact this link points to (id ${linkedId}) is not in this project's CRM. It may have been deleted.`);
+        }
       })
       .catch((e: Error) => setLoadError(e.message || "Failed to load contacts."))
       .finally(() => setLoading(false));
@@ -3692,6 +3705,10 @@ function BuilderModulePreviewBody({
 
   if (module.type === "admin-related-articles") {
     return <AdminRelatedArticlesPreview settings={module.settings} projectId={projectId} />;
+  }
+
+  if (module.type === "admin-booking-manager") {
+    return <BookingManagerModule settings={module.settings} projectId={projectId} />;
   }
 
   if (module.type === "admin-support-form") {
