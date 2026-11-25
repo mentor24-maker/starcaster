@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   bookingEmailNote,
+  bookingMeetState,
+  googleStatusLine,
+  normalizeGoogleStatus,
   addBlockedDate,
   addDayWindow,
   bookingContactHref,
@@ -114,5 +117,40 @@ describe("bookingEmailNote (SC-912)", () => {
     expect(bookingEmailNote({ notifyStatus: "failed", notifyError: "" })).toBe("Email not sent");
     expect(bookingEmailNote({ notifyStatus: "sent", notifyError: "" })).toBeNull();
     expect(bookingEmailNote({ notifyStatus: null })).toBeNull();
+  });
+});
+
+describe("Google Calendar on the Booking Manager (SC-913)", () => {
+  it("shows a booked meeting's Meet link", () => {
+    expect(bookingMeetState({ status: "booked", meetLink: "https://meet.google.com/abc-defg-hij", googleSyncStatus: "synced" }))
+      .toEqual({ kind: "link", href: "https://meet.google.com/abc-defg-hij" });
+  });
+
+  it("says why a booked meeting has no Meet link yet", () => {
+    expect(bookingMeetState({ status: "booked", meetLink: "", googleSyncStatus: "failed", googleSyncError: "Google could not be reached" }))
+      .toEqual({ kind: "missing", note: "No Meet link yet: Google could not be reached" });
+  });
+
+  it("says nothing for a project with no Google Calendar, or a cancelled meeting", () => {
+    expect(bookingMeetState({ status: "booked", meetLink: "", googleSyncStatus: null })).toBeNull();
+    expect(bookingMeetState({ status: "cancelled", meetLink: "https://meet.google.com/x", googleSyncStatus: "failed" })).toBeNull();
+  });
+
+  it("never turns a non-https value into a link", () => {
+    expect(bookingMeetState({ status: "booked", meetLink: "javascript:alert(1)", googleSyncStatus: "synced" })).toBeNull();
+  });
+
+  it("names the connected account, and the reason when it needs attention", () => {
+    const base = normalizeGoogleStatus({ configured: true, connected: true, accountLabel: "owner@gmail.example" });
+    expect(googleStatusLine(base)).toBe("Connected as owner@gmail.example.");
+    expect(googleStatusLine({ ...base, needsAttention: true, lastError: "Could not renew it." }))
+      .toBe("Connected as owner@gmail.example. Could not renew it.");
+  });
+
+  it("says plainly when the server cannot connect Google at all", () => {
+    expect(googleStatusLine(normalizeGoogleStatus({ configured: false, connected: false })))
+      .toMatch(/cannot be connected on this server yet/);
+    expect(googleStatusLine(normalizeGoogleStatus({ configured: true, connected: false })))
+      .toMatch(/^Not connected\./);
   });
 });

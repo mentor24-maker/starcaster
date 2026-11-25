@@ -29,6 +29,7 @@ const { getUserFromSessionToken, getAuthSession } = require('../lib/authStore');
 const { getAdminSession } = require('../lib/projectAdminStore');
 const { resolveCurrentProject } = require('../lib/projectsStore');
 const connectionsRegistry = require('../lib/connections/registry');
+const { isGenericCallbackPath: isGenericConnectionCallback } = require('../lib/connections/redirectCallback');
 const { requireProjectContext } = require('../lib/requireProjectContext');
 const {
   acceptsProjectAdminSession,
@@ -361,6 +362,10 @@ async function handleRequest(req, res) {
   const isOAuthCallback = method === 'GET' && (
     pathname === '/api/promote/social/facebook/oauth/callback'
     || pathname === connectionsRegistry.getEntry('x')?.adapter?.callbackPath
+    // /api/connections/<provider>/callback for any registered adapter that
+    // finishes there (Google Calendar, SC-913): the same signed-state rule,
+    // in lib/connections/redirectCallback.js.
+    || isGenericConnectionCallback(pathname)
   );
   const isImportDriveFolderHealth =
     pathname === assets.IMPORT_DRIVE_FOLDER_PATH && method === 'GET';

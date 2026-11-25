@@ -19,7 +19,7 @@ const path = require('path');
  */
 
 // booking_notifications.sql (SC-912) runs after it: the email and manage-link columns.
-const SQL_TEXT = ['booking_setup.sql', 'booking_notifications.sql']
+const SQL_TEXT = ['booking_setup.sql', 'booking_notifications.sql', 'booking_google_calendar.sql', 'project_connections_setup.sql']
   .map((file) => fs.readFileSync(path.join(__dirname, '..', '..', 'docs', 'SQL', file), 'utf8'))
   .join('\n');
 const { parseSchemaText, createFakeDb } = require('./sqlSchemaFake.js');
@@ -31,7 +31,11 @@ const SWAPPED = {
   crmConfig: resolve('lib/crmConfigStore.js'),
   crmContacts: resolve('lib/crmContactsStore.js'),
 };
-const RELOADED = ['lib/projectScope.js', 'lib/bookingStore.js', 'routes/bookingPublic.js'].map(resolve);
+const RELOADED = [
+  'lib/projectScope.js', 'lib/bookingStore.js', 'routes/bookingPublic.js',
+  // SC-913: the Google Calendar lookup reads project_connections through the swapped client.
+  'lib/projectConnectionsStore.js', 'lib/connections/verifySweep.js', 'lib/bookingGoogleSync.js',
+].map(resolve);
 
 const PROJECT = 'proj_a';
 const OTHER_PROJECT = 'proj_b';
@@ -72,7 +76,7 @@ function setup(crmOptions) {
   };
   swap(SWAPPED.supabase, {
     isConfigured: () => true,
-    tableConfig: () => ({ bookingCalendars: 'booking_calendars', bookings: 'bookings' }),
+    tableConfig: () => ({ bookingCalendars: 'booking_calendars', bookings: 'bookings', projectConnections: 'project_connections' }),
     sbQuery: (req) => db.sbQuery(req),
   });
   // Every request in this file arrives on the client's own domain for PROJECT.

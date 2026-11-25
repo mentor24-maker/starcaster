@@ -66,7 +66,64 @@ export type Booking = {
   /** How the latest booking emails went (SC-912): "sent", "failed", or null when none were tried. */
   notifyStatus?: string | null;
   notifyError?: string;
+  /** The Google Meet link, when the connected Google Calendar made one (SC-913). */
+  meetLink?: string;
+  /** How the booking's Google step went: "synced", "failed", or null when Google was never involved. */
+  googleSyncStatus?: string | null;
+  googleSyncError?: string;
 };
+
+/**
+ * What a booking row says about its Google Meet link (SC-913). A booked
+ * meeting whose Google step FAILED gets a note and a Retry button; one with a
+ * link gets the link. Cancelled meetings and projects with no Google Calendar
+ * say nothing.
+ */
+export function bookingMeetState(
+  booking: Pick<Booking, "status" | "meetLink" | "googleSyncStatus" | "googleSyncError">,
+): { kind: "link"; href: string } | { kind: "missing"; note: string } | null {
+  if (booking.status !== "booked") return null;
+  const link = String(booking.meetLink || "").trim();
+  if (link && /^https:\/\//.test(link)) return { kind: "link", href: link };
+  if (booking.googleSyncStatus !== "failed") return null;
+  const why = String(booking.googleSyncError || "").trim();
+  return { kind: "missing", note: why ? `No Meet link yet: ${why}` : "No Meet link yet" };
+}
+
+/** The Booking Manager's Google Calendar card, as GET /api/admin/booking/google answers. */
+export type GoogleCalendarStatus = {
+  configured: boolean;
+  connected: boolean;
+  accountLabel: string;
+  needsAttention: boolean;
+  lastError: string;
+};
+
+export function normalizeGoogleStatus(value: unknown): GoogleCalendarStatus {
+  const v = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+  return {
+    configured: v.configured === true,
+    connected: v.connected === true,
+    accountLabel: typeof v.accountLabel === "string" ? v.accountLabel : "",
+    needsAttention: v.needsAttention === true,
+    lastError: typeof v.lastError === "string" ? v.lastError : "",
+  };
+}
+
+/** The one line the Google Calendar card shows under its heading. */
+export function googleStatusLine(status: GoogleCalendarStatus): string {
+  if (status.connected) {
+    const who = status.accountLabel ? `Connected as ${status.accountLabel}.` : "Connected.";
+    return status.needsAttention && status.lastError ? `${who} ${status.lastError}` : who;
+  }
+  if (status.needsAttention) {
+    return status.lastError || "Google no longer accepts this connection. Connect it again.";
+  }
+  if (!status.configured) {
+    return "Google Calendar cannot be connected on this server yet: its Google app is not set up.";
+  }
+  return "Not connected. Connect it to give every booking a Google Meet link and hide the times you are busy.";
+}
 
 /**
  * What a booking row says about its emails (SC-912). Only a FAILED send is

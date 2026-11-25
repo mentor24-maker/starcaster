@@ -13482,6 +13482,31 @@ a.builder-react-root .builder-event-calendar-item-title:hover,
   overflow-wrap: anywhere;
 }
 
+/* A booking's Google Meet link, or "No Meet link yet" with Retry (SC-913).
+   The missing case stands out like a failed email: the visitor has no call
+   to join until it is fixed. */
+.booking-manager-booking-meet {
+  flex-basis: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  overflow-wrap: anywhere;
+}
+
+.booking-manager-booking-meet.is-missing {
+  color: var(--ink-warning, #b3261e);
+  font-weight: 600;
+}
+
+/* The Google Calendar card's buttons sit in one wrapping row. */
+.booking-manager-google-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
 .booking-manager-booking-actions {
   display: flex;
   flex-wrap: wrap;

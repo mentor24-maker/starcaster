@@ -12,6 +12,9 @@
  *                 (SC-912, SC-914) will send; stored now
  *   Bookings      upcoming and past, a Cancel button, and each row linked to
  *                 its CRM contact by id (landmine 19)
+ *   Google        connect the project's Google Calendar (SC-913,
+ *                 builder-booking-google-card.tsx); each booking then shows
+ *                 its Meet link, or "No Meet link yet" with a Retry button
  *
  * It reads and writes ONLY through slice 1's API (routes/booking.js). Every
  * save answers with what the database now holds, and the screen shows THAT,
@@ -24,6 +27,7 @@
 import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import { starcasterScopedHeaders } from "@/lib/adapters/starcaster-app";
 import { readApiErrorMessage } from "@/lib/public-admin-session";
+import { BookingGoogleCard } from "./builder-booking-google-card";
 import {
   BOOKING_DAY_KEYS,
   BOOKING_DAY_LABELS,
@@ -33,6 +37,7 @@ import {
   addDayWindow,
   bookingContactHref,
   bookingEmailNote,
+  bookingMeetState,
   dayWindowProblem,
   emptyBookingsMessage,
   formatBookingTime,
@@ -121,6 +126,9 @@ export function BookingManagerModule({ settings, projectId }: Props) {
   const [confirmCancelId, setConfirmCancelId] = useState("");
   const [cancellingId, setCancellingId] = useState("");
   const [bookingsNote, setBookingsNote] = useState("");
+  const [retryingId, setRetryingId] = useState("");
+  const [retryErrors, setRetryErrors] = useState<Record<string, string>>({});
+  const googleApi = useCallback(<T,>(path: string, init?: RequestInit) => bookingApi<T>(path, projectId, init), [projectId]);
 
   const zones = useMemo(() => knownTimeZones(), []);
 
@@ -278,6 +286,20 @@ export function BookingManagerModule({ settings, projectId }: Props) {
     }
   }
 
+  /** Retry a booking's Google step: its event and Meet link (SC-913). */
+  async function retryGoogle(id: string) {
+    setRetryingId(id);
+    setRetryErrors((prev) => ({ ...prev, [id]: "" }));
+    try {
+      await bookingApi<Booking>(`/bookings/${encodeURIComponent(id)}/google-sync`, projectId, { method: "POST", body: "{}" });
+    } catch (error) {
+      setRetryErrors((prev) => ({ ...prev, [id]: error instanceof Error ? error.message : "Google did not answer." }));
+    } finally {
+      setRetryingId("");
+      await loadBookings(calendarId);
+    }
+  }
+
   const status = (key: SectionKey) => {
     const s = sections[key];
     if (s.error) return <p className="booking-manager-error" role="alert">{s.error}</p>;
@@ -342,6 +364,27 @@ export function BookingManagerModule({ settings, projectId }: Props) {
               {bookingEmailNote(b) ? (
                 <div className="booking-manager-booking-email-failed" role="note">{bookingEmailNote(b)}</div>
               ) : null}
+              {(() => {
+                const meet = bookingMeetState(b);
+                if (!meet) return null;
+                if (meet.kind === "link") {
+                  return (
+                    <div className="booking-manager-booking-meet">
+                      <a className="booking-manager-link" href={meet.href} target="_blank" rel="noopener noreferrer">Join Google Meet</a>
+                    </div>
+                  );
+                }
+                return (
+                  <div className="booking-manager-booking-meet is-missing" role="note">
+                    <span>{retryErrors[b.id] || meet.note}</span>
+                    {which === "upcoming" ? (
+                      <button type="button" className="booking-manager-btn booking-manager-btn-small" disabled={retryingId === b.id} onClick={() => void retryGoogle(b.id)}>
+                        {retryingId === b.id ? "Retrying…" : "Retry"}
+                      </button>
+                    ) : null}
+                  </div>
+                );
+              })()}
               <div className="booking-manager-booking-actions">
                 {href ? (
                   <a className="booking-manager-link" href={href}>Open CRM Contact</a>
@@ -382,6 +425,8 @@ export function BookingManagerModule({ settings, projectId }: Props) {
           </select>
         </div>
       ) : null}
+
+      <BookingGoogleCard api={googleApi} onChanged={() => void loadBookings(calendarId)} />
 
       <section className="booking-manager-section" aria-labelledby={`${uid}-availability`}>
         <h4 id={`${uid}-availability`} className="booking-manager-section-title">Availability</h4>

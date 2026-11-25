@@ -17,7 +17,7 @@ const path = require('path');
  * be told to refuse, which is how "a forced email failure" is forced).
  */
 
-const SQL_TEXT = ['booking_setup.sql', 'booking_notifications.sql']
+const SQL_TEXT = ['booking_setup.sql', 'booking_notifications.sql', 'booking_google_calendar.sql', 'project_connections_setup.sql']
   .map((file) => fs.readFileSync(path.join(__dirname, '..', '..', 'docs', 'SQL', file), 'utf8'))
   .join('\n');
 const { parseSchemaText, createFakeDb } = require('./sqlSchemaFake.js');
@@ -35,6 +35,8 @@ const SWAPPED = {
 const RELOADED = [
   'lib/rateLimiter.js', 'lib/projectScope.js', 'lib/bookingStore.js', 'lib/bookingEmails.js',
   'routes/bookingPublic.js', 'routes/bookingManage.js',
+  // SC-913: the Google Calendar lookup reads project_connections through the swapped client.
+  'lib/projectConnectionsStore.js', 'lib/connections/verifySweep.js', 'lib/bookingGoogleSync.js',
 ].map(resolve);
 
 const PROJECT = 'proj_a';
@@ -55,7 +57,7 @@ function setup({ alertEmails = ['owner@client.example'], mailFails = () => null 
   };
   swap(SWAPPED.supabase, {
     isConfigured: () => true,
-    tableConfig: () => ({ bookingCalendars: 'booking_calendars', bookings: 'bookings' }),
+    tableConfig: () => ({ bookingCalendars: 'booking_calendars', bookings: 'bookings', projectConnections: 'project_connections' }),
     sbQuery: (req) => db.sbQuery(req),
   });
   swap(SWAPPED.hostBinding, {

@@ -31,6 +31,12 @@
  * visitors pressing Book at the same moment both pass the first check, and
  * exactly one insert wins. The loser is told "That time was just taken".
  *
+ * GOOGLE CALENDAR (SC-913). When the project has connected one, its busy
+ * times are hidden from visitors and checked again at booking, and each new
+ * booking becomes an event there with a Google Meet link, which both emails
+ * carry. Google being unreachable never costs the visitor their meeting
+ * (lib/bookingGoogleSync.js says why and how it is marked).
+ *
  * ORDER: book first, then the CRM. Creating the contact before the booking
  * would add a visitor who LOST the race to the CRM for a meeting they never
  * got. A CRM that cannot be written never costs the visitor their meeting:
@@ -45,6 +51,7 @@ const { freeSlots, isSlotFree, MAX_RANGE_DAYS } = require('../lib/bookingAvailab
 const { listConfigs } = require('../lib/crmConfigStore');
 const { createContact, findContactByEmail } = require('../lib/crmContactsStore');
 const { sendBookingEmails, requestSiteOrigin } = require('../lib/bookingEmails');
+const googleSync = require('../lib/bookingGoogleSync');
 
 const DAY = 86400000;
 const MINUTE = 60000;
@@ -123,8 +130,9 @@ async function handleCalendar(req, res) {
   const booked = await bookedAround(calendar.data, now, to, scope);
   // "Could not read the bookings" must never read as "everything is free".
   if (!booked.ok) return sendErr(res, booked.status || 500, `Could not read the bookings: ${booked.error}`);
+  const google = await googleSync.busyTimes(scope, now, to);
   try {
-    const slots = freeSlots({ calendar: calendar.data, bookings: booked.data, from: now, to, now });
+    const slots = freeSlots({ calendar: calendar.data, bookings: booked.data, busy: google.busy, from: now, to, now });
     return sendOk(res, 200, {
       calendar: visitorCalendar(calendar.data),
       from: new Date(now).toISOString(),
@@ -209,11 +217,15 @@ async function handleBook(req, res) {
   const now = Date.now();
   const booked = await bookedAround(calendar.data, start, end, scope);
   if (!booked.ok) return sendErr(res, booked.status || 500, `Could not read the bookings: ${booked.error}`);
+  // Asked again here, not trusted from the page: the operator may have filled
+  // this time on Google since the visitor loaded the calendar.
+  const gapMs = (Number(calendar.data.gapMinutes) || 0) * MINUTE;
+  const google = await googleSync.busyTimes(scope, start - gapMs, end + gapMs);
   let offered;
   let free;
   try {
     offered = isSlotFree({ calendar: calendar.data, bookings: [], now }, start, end);
-    free = offered && isSlotFree({ calendar: calendar.data, bookings: booked.data, now }, start, end);
+    free = offered && isSlotFree({ calendar: calendar.data, bookings: booked.data, busy: google.busy, now }, start, end);
   } catch (error) {
     return sendErr(res, 500, `The booking calendar's settings could not be read: ${error.message}`);
   }
@@ -243,6 +255,11 @@ async function handleBook(req, res) {
   } else {
     console.warn(`[booking] booking ${made.data.id} saved with no CRM contact: ${contact.why}`);
   }
+
+  // The Google Calendar event and its Meet link (SC-913), BEFORE the emails so
+  // both carry the link. Awaited for the same reason as the emails below.
+  const synced = await googleSync.syncBooking({ kind: 'booked', booking, calendar: calendar.data, scope });
+  if (synced.booking && synced.booking !== booking) booking = { ...synced.booking, manageToken: made.data.manageToken };
 
   // Both emails (SC-912), AWAITED: Vercel freezes the function once the answer
   // is sent, which would kill a send still in flight. A failed send never

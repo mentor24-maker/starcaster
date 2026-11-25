@@ -12,6 +12,12 @@
  *   GET   /api/booking/calendars/:id/availability     its free times (?from=&to=), the same
  *                                                     answer the visitor module will get
  *   POST  /api/booking/bookings/:id/cancel            cancel a booking, freeing its time
+ *                                                     (and removing its Google event)
+ *   POST  /api/booking/bookings/:id/google-sync       Retry: give a booking its Google
+ *                                                     event and Meet link (SC-913)
+ *   GET   /api/booking/google                         is Google Calendar connected, as whom
+ *   POST  /api/booking/google/connect                 where to send the browser to connect
+ *   DELETE /api/booking/google                        disconnect: revoke at Google, forget it
  *
  * WHY NOT /api/admin/booking. On the server, every /api/admin path skips the
  * step that resolves the request's project (routes/index.js, `isAdminRoute`),
@@ -29,6 +35,7 @@ const { sendOk, sendErr, parseJsonBody, getUrlObj } = require('./http');
 const { checkEndpointLimit } = require('../lib/rateLimiter');
 const store = require('../lib/bookingStore');
 const { freeSlots, MAX_RANGE_DAYS } = require('../lib/bookingAvailability');
+const googleSync = require('../lib/bookingGoogleSync');
 
 const DAY = 86400000;
 
@@ -92,11 +99,16 @@ async function sendAvailability(req, res, calendarId, params, scope) {
   }, scope);
   // "Could not read the bookings" must never read as "everything is free".
   if (!booked.ok) return sendErr(res, booked.status || 500, `Could not read the bookings: ${booked.error}`);
+  const google = await googleSync.busyTimes(scope, from, to);
   try {
-    const slots = freeSlots({ calendar: calendar.data, bookings: booked.data, from, to, now });
+    const slots = freeSlots({ calendar: calendar.data, bookings: booked.data, busy: google.busy, from, to, now });
     return sendOk(res, 200, {
       calendarId: calendar.data.id,
       timeZone: calendar.data.timeZone,
+      // 'used': Google busy times are hidden; 'unavailable': Google could not
+      // be asked, so they are not; 'none': no Google Calendar connected.
+      googleBusy: !google.connected ? 'none' : google.unavailable ? 'unavailable' : 'used',
+      ...(google.unavailable ? { googleBusyError: google.unavailable } : {}),
       from: new Date(from).toISOString(),
       to: new Date(to).toISOString(),
       slots,
@@ -104,6 +116,44 @@ async function sendAvailability(req, res, calendarId, params, scope) {
   } catch (error) {
     return sendErr(res, 400, error.message, { code: 'INVALID' });
   }
+}
+
+/** The Booking Manager's Google Calendar card (SC-913). Never sends a token. */
+async function handleGoogle(req, res, pathname, method, scope) {
+  if (pathname === '/api/booking/google/connect') {
+    if (method !== 'POST') return sendErr(res, 405, 'Connect with POST', { code: 'METHOD_NOT_ALLOWED' });
+    if (checkEndpointLimit(req, res, 'booking.write')) return undefined;
+    const started = googleSync.startConnect(scope);
+    if (!started.ok) return sendErr(res, started.status || 400, started.error, { code: started.code || 'CONNECT_START_FAILED' });
+    return sendOk(res, 200, started.data);
+  }
+  if (method === 'GET') return sendResult(res, await googleSync.googleStatus(scope));
+  if (method === 'DELETE') {
+    if (checkEndpointLimit(req, res, 'booking.write')) return undefined;
+    return sendResult(res, await googleSync.disconnect(scope));
+  }
+  return sendErr(res, 405, 'Use GET or DELETE', { code: 'METHOD_NOT_ALLOWED' });
+}
+
+/** Retry the Google step for one booked meeting: its event and Meet link. */
+async function handleRetry(res, bookingId, scope) {
+  const found = await store.getBookingById(bookingId, scope);
+  if (!found.ok || !found.data) return sendResult(res, found, { notFound: 'That booking does not exist in this project' });
+  if (found.data.status !== 'booked') {
+    return sendErr(res, 409, 'That booking is cancelled, so it gets no Meet link', { code: 'CONFLICT' });
+  }
+  const calendar = await store.getCalendarById(found.data.calendarId, scope);
+  const synced = await googleSync.syncBooking({
+    kind: 'retry',
+    booking: found.data,
+    calendar: calendar.ok ? calendar.data : null,
+    scope,
+  });
+  if (synced.status === 'skipped') {
+    return sendErr(res, 409, 'Google Calendar is not connected, so there is nothing to retry. Connect it first.', { code: 'NOT_CONNECTED' });
+  }
+  if (synced.status === 'failed') return sendErr(res, 502, `Still no Meet link: ${synced.error}`, { code: 'GOOGLE_SYNC_FAILED' });
+  return sendOk(res, 200, synced.booking);
 }
 
 /** true when this module answered the request. */
@@ -166,6 +216,11 @@ async function handle(req, res, pathname, method) {
     return true;
   }
 
+  if (pathname === '/api/booking/google' || pathname === '/api/booking/google/connect') {
+    await handleGoogle(req, res, pathname, method, scope);
+    return true;
+  }
+
   const cancelMatch = pathname.match(/^\/api\/booking\/bookings\/([^/]+)\/cancel$/);
   if (cancelMatch) {
     if (method !== 'POST') {
@@ -173,7 +228,25 @@ async function handle(req, res, pathname, method) {
       return true;
     }
     if (checkEndpointLimit(req, res, 'booking.write')) return true;
-    sendResult(res, await store.cancelBooking(decodeURIComponent(cancelMatch[1]), scope));
+    const cancelled = await store.cancelBooking(decodeURIComponent(cancelMatch[1]), scope);
+    if (!cancelled.ok) {
+      sendResult(res, cancelled);
+      return true;
+    }
+    // Remove its Google event too (SC-913); a failure is marked on the booking.
+    const synced = await googleSync.syncBooking({ kind: 'cancelled', booking: cancelled.data, calendar: null, scope });
+    sendOk(res, 200, synced.booking || cancelled.data);
+    return true;
+  }
+
+  const syncMatch = pathname.match(/^\/api\/booking\/bookings\/([^/]+)\/google-sync$/);
+  if (syncMatch) {
+    if (method !== 'POST') {
+      sendErr(res, 405, 'Retry with POST', { code: 'METHOD_NOT_ALLOWED' });
+      return true;
+    }
+    if (checkEndpointLimit(req, res, 'booking.write')) return true;
+    await handleRetry(res, decodeURIComponent(syncMatch[1]), scope);
     return true;
   }
 
