@@ -52,8 +52,12 @@ const VERIFY_WAIT_MS = 15 * 1000;
 
 const MAX_SCREENSHOT_BYTES = 10 * 1024 * 1024;
 
-/** A Note's own address: substack.com/@handle/note/c-123 (or the older /note/c-123). */
-const NOTE_PATH_RE = /^\/(?:@[A-Za-z0-9_.-]+\/)?note\/c-(\d+)\/?$/;
+/**
+ * A Note's own address: substack.com/@handle/note/c-123, the older /note/c-123,
+ * or /profile/397402153-dane-christensen/note/c-123 — the shape Substack gave
+ * back for a real reply on 2026-11-18, which was read as "not a Note" (SC-920).
+ */
+const NOTE_PATH_RE = /^\/(?:@[A-Za-z0-9_.-]+\/|profile\/\d+(?:-[A-Za-z0-9_.-]+)?\/)?note\/c-(\d+)\/?$/;
 
 /** The words each kind is called by in a sentence. */
 const KIND_WORDS = Object.freeze({ note: 'Note', reply: 'reply', restack: 'restack', like: 'like' });
@@ -338,12 +342,25 @@ function createSubstackAdapter(options = {}) {
         };
       }
 
+      // OpenClaw has already said it posted. Every answer below short of
+      // proof is `cannot-tell`, never `refuted`: a link that does not check
+      // out proves the link is wrong, not that nothing went out, and
+      // `refuted` means `failed`, whose Try again posts the same words in
+      // public twice. Reddit learned this in SC-892; Substack in SC-920.
+      const words = KIND_WORDS[item.kind] || 'Note';
+      const lookFor = item.kind === 'reply'
+        ? `Open the Note on Substack${text(item.targetUrl) ? ` (${text(item.targetUrl)})` : ''} and look for the reply under the chosen account.`
+        : 'Open the chosen account\'s Notes on Substack and look for it.';
+      const unproven = (why) => ({
+        verdict: 'cannot-tell',
+        reason: `OpenClaw says it posted the ${words}, but ${why} It will not be tried again. ${lookFor}`,
+      });
       const link = parseNoteLink(url);
-      if (!link.ok) return { verdict: 'refuted', reason: `The link OpenClaw returned is not a link to a Note: ${link.why}.` };
+      if (!link.ok) return unproven(`the link it returned is not a link to a Note (${link.why}), so the Mini cannot check it.`);
       if (item.kind === 'reply') {
         const target = parseNoteLink(item.targetUrl);
         if (target.ok && target.noteId === link.noteId) {
-          return { verdict: 'refuted', reason: 'The link OpenClaw returned is the Note being replied to, not the reply, so it proves nothing.' };
+          return unproven('the link it returned is the Note being replied to, not the reply, so it proves nothing.');
         }
       }
       let read = null;
@@ -354,13 +371,10 @@ function createSubstackAdapter(options = {}) {
       }
       if (!read.ok) return { verdict: 'cannot-tell', reason: `OpenClaw says it posted, but ${read.error}, so the link could not be checked.` };
       if (!read.found) {
-        return { verdict: 'refuted', reason: 'OpenClaw returned a link, but Substack has no Note at it, so it is not counted as posted.' };
+        return unproven('Substack has no Note at the link it returned, so it is not counted as posted.');
       }
       if (!normalizeWords(read.text).includes(normalizeWords(item.text))) {
-        return {
-          verdict: 'refuted',
-          reason: `The Note at that link does not say what was approved. Substack shows: "${normalizeWords(read.text).slice(0, 300)}"`,
-        };
+        return unproven(`the Note at the link it returned does not say what was approved. Substack shows: "${normalizeWords(read.text).slice(0, 300)}".`);
       }
       return { verdict: 'proven', reason: '' };
     },
