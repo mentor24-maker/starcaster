@@ -135,7 +135,11 @@ function renderEmailModule(module: BuilderTemplateModule): string {
     // reason. The Booking Manager is an admin screen of every booking's
     // visitor name and email behind a project-admin login, with controls an
     // email cannot run.
-    module.type === "admin-booking-manager"
+    module.type === "admin-booking-manager" ||
+    // Standard 11, decided 2026-11-24 (SC-911): skipped. The booking calendar
+    // fetches live free times and books through a form; an email can do
+    // neither, and a still picture of times would be out of date on arrival.
+    module.type === "booking-calendar"
   ) {
     return "";
   }

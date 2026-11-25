@@ -110,12 +110,12 @@ export type BuilderSchemaField = BuilderSchemaFieldBase &
       }
     | {
         /**
-         * Pick from project data (pages / posts / CRM forms) and store the
+         * Pick from project data (pages / posts / CRM forms / booking calendars) and store the
          * derived value — master rules C1/C2 (fix F6). See
          * builder-project-data-picker.tsx.
          */
         control: "picker";
-        source: "pages" | "posts" | "crm-forms";
+        source: "pages" | "posts" | "crm-forms" | "booking-calendars";
         valueKind: "path" | "slug" | "id";
         /**
          * Pages only: also offer "a section on that page" once a page is

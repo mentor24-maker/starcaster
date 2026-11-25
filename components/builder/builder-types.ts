@@ -128,6 +128,7 @@ export const modulePaletteGroups: Array<{
   { value: "button", label: "Buttons", icon: "B", description: "Calls to action and navigation links." },
   { value: "contact-form", label: "Contact Forms", icon: "CF", description: "Lead capture forms with simple presets." },
   { value: "crm-form", label: "CRM", icon: "CRM", description: "CRM lead-capture forms linked to the project's contact table." },
+  { value: "booking-calendar", label: "Booking", icon: "📅", description: "A calendar visitors use to book a meeting with you; each booking lands in the project CRM." },
   { value: "bug-report", label: "Bug Report", icon: "🐞", description: "A small floating icon visitors click to report a problem on the page." },
   { value: "spirality-tasks", label: "Spirality Tasks", icon: "✓", description: "Your team signs in to Spirality here to see a project's tasks, reply, and submit new ones." },
   { value: "player-portal", label: "Player Portal", icon: "PP", description: "Player login and registration on any page." },
@@ -1285,6 +1286,17 @@ export const modulePaletteItems: ModulePaletteItem[] = [
     label: "Bug Report",
     icon: "🐞",
     description: "Floats a small bug icon in a page corner; clicking opens a popup where a visitor describes the problem and attaches screenshots. Visibility can be limited to signed-in clients or staff.",
+    name: "",
+    text: "",
+    settings: {}
+  },
+  {
+    id: "booking-calendar-default",
+    type: "booking-calendar",
+    group: "booking-calendar",
+    label: "Booking Calendar",
+    icon: "📅",
+    description: "Visitors pick a day, pick a free time shown in their own time zone, fill a short form and book a meeting. Each visitor lands in the project CRM with the booking attached. Hours, meeting length and wording are set on the Booking Manager.",
     name: "",
     text: "",
     settings: {}

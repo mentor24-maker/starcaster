@@ -1039,7 +1039,8 @@ try {
     for (const answer of contract.serve || []) {
       const handler = async (route) => {
         if (answer.json !== undefined) {
-          await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(answer.json) });
+          // `status` lets a contract serve a refusal too (SC-911: a 404 NO_CALENDAR).
+          await route.fulfill({ status: answer.status || 200, contentType: 'application/json', body: JSON.stringify(answer.json) });
         } else {
           const body = await readFile(path.join(path.dirname(fileURLToPath(import.meta.url)), answer.file));
           await route.fulfill({ status: 200, contentType: answer.contentType || 'application/octet-stream', body });

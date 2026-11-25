@@ -70,6 +70,8 @@ const RENDER_FILES = [
   'components/BuilderPublicSitePage.tsx',
   // A module renderer in its own file reaches tenant pages too (86bczt5t4).
   'components/builder/builder-spirality-tasks-module.tsx',
+  // The visitor's booking calendar (SC-911).
+  'components/builder/builder-booking-calendar-module.tsx',
 ];
 
 const ADVICE =

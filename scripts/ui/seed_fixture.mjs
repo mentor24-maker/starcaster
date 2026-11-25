@@ -978,6 +978,14 @@ const buildTuned = (ids) => ({
     name: 'Booking Manager',
     settings: { showTitle: 'true', panelTitle: LONG, contactsPageUrl: '/admin-contact-manager' },
   },
+  // Booking Calendar (SC-911): every field filled, so the panel measures
+  // real content — a heading, Monday weeks and a set accent colour. The
+  // calendar stays the project's first (empty id) because the fixture's
+  // calendar id is only known after seedBookingCalendar runs.
+  'booking-calendar': {
+    name: 'Booking Calendar',
+    settings: { calendarId: '', heading: LONG, weekStartsOn: '1', accentColor: '#0f4f8f' },
+  },
   'admin-login': {
     name: 'Admin Login',
     settings: {
