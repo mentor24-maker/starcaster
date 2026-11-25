@@ -13162,3 +13162,345 @@ a.builder-react-root .builder-event-calendar-item-title:hover,
 .builder-picker-section-select {
   margin-top: 4px;
 }
+
+/* ── Booking Manager (admin-booking-manager, SC-910) ─────────────────────────
+   The tenant admin's booking calendar screen. It renders inside ARBITRARY
+   tenant themes (docs/DOCTRINE.md §5.28), so every control here gets an
+   explicit width rather than inheriting a theme's `input { width: 100% }`,
+   and colours come from the admin tokens with the admin palette as fallback.
+   The forms follow W0's mechanism: the GRID is the column, labels in one
+   track sized to the longest label, controls in the other. Names and emails
+   wrap; nothing is truncated (T-1). */
+
+.booking-manager {
+  font-size: var(--text-sm);
+  color: var(--admin-table-ink, #18324a);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.booking-manager-title {
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: 700;
+}
+
+.booking-manager-section {
+  border: 1px solid var(--admin-table-border, #c9dcea);
+  border-radius: 8px;
+  padding: 14px 16px;
+  background: var(--bg-surface);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.booking-manager-section-title {
+  margin: 0;
+  font-size: var(--text-md);
+  font-weight: 700;
+}
+
+.booking-manager-subtitle {
+  margin: 4px 0 0;
+  font-size: var(--text-sm);
+  font-weight: 700;
+}
+
+.booking-manager-grid {
+  display: grid;
+  grid-template-columns: max-content minmax(0, max-content);
+  column-gap: 14px;
+  row-gap: 8px;
+  align-items: start;
+}
+
+.booking-manager-grid > label {
+  white-space: nowrap;
+  font-weight: 600;
+  padding-top: 6px;
+}
+
+/* A note across both tracks must not SIZE them: without containment its one
+   long line widened the label track to fit itself. */
+.booking-manager-grid-note {
+  grid-column: 1 / -1;
+  margin-top: 6px;
+  contain: inline-size;
+}
+
+.booking-manager-control {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.booking-manager-field {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.booking-manager-field > label {
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.booking-manager input[type="text"],
+.booking-manager input[type="number"],
+.booking-manager input[type="date"],
+.booking-manager input[type="time"],
+.booking-manager select,
+.booking-manager textarea {
+  box-sizing: border-box;
+  padding: 5px 8px;
+  border: 1px solid var(--admin-table-border, #c9dcea);
+  border-radius: 5px;
+  font: inherit;
+  color: inherit;
+  background: var(--bg-surface);
+  min-width: 0;
+}
+
+.booking-manager input[type="text"],
+.booking-manager select { width: 28ch; max-width: 100%; }
+.booking-manager input[type="number"] { width: 9ch; }
+.booking-manager input[type="date"] { width: 17ch; }
+.booking-manager input[type="time"] { width: 16ch; }
+.booking-manager textarea { width: 48ch; max-width: 100%; resize: vertical; }
+
+.booking-manager input[type="checkbox"] {
+  flex: 0 0 auto;
+  width: 14px;
+  min-width: 14px;
+  max-width: 14px;
+  height: 14px;
+  margin: 0;
+  padding: 0;
+}
+
+.booking-manager-days {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  column-gap: 16px;
+  row-gap: 8px;
+}
+
+.booking-manager-day { display: contents; }
+
+.booking-manager-day-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-weight: 600;
+  white-space: nowrap;
+  padding-top: 5px;
+}
+
+.booking-manager-day-windows {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.booking-manager-window {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.booking-manager-blocked {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.booking-manager-blocked-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.booking-manager-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 4px 2px 9px;
+  border: 1px solid var(--admin-table-border, #c9dcea);
+  border-radius: 999px;
+  background: var(--admin-accent-soft, #e7f1fa);
+  white-space: nowrap;
+}
+
+.booking-manager-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.booking-manager-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: fit-content;
+  white-space: nowrap;
+  padding: 6px 12px;
+  border: 1px solid var(--admin-accent, #0f4f8f);
+  border-radius: 5px;
+  background: var(--bg-surface);
+  color: var(--admin-accent, #0f4f8f);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.booking-manager-btn:disabled { opacity: 0.55; cursor: default; }
+.booking-manager-btn-small { padding: 3px 9px; }
+
+.booking-manager-btn-primary {
+  background: var(--admin-accent, #0f4f8f);
+  color: var(--btn-flat-ink);
+}
+
+.booking-manager-btn-danger {
+  border-color: var(--ink-warning, #b3261e);
+  background: var(--ink-warning, #b3261e);
+  color: var(--btn-flat-ink);
+}
+
+.booking-manager-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ink-muted, #5b7489);
+  font-size: var(--text-md);
+  line-height: 1;
+  cursor: pointer;
+}
+
+.booking-manager-icon-btn:hover { background: var(--admin-accent-soft, #e7f1fa); }
+
+.booking-manager-hint,
+.booking-manager-muted {
+  margin: 0;
+  color: var(--ink-muted, #5b7489);
+  font-size: var(--text-xs);
+}
+
+.booking-manager-empty {
+  margin: 0;
+  font-size: var(--text-sm);
+  padding: 10px 12px;
+  border: 1px dashed var(--admin-table-border, #c9dcea);
+  border-radius: 6px;
+  color: var(--ink-muted, #5b7489);
+}
+
+.booking-manager-error,
+.booking-manager-saved {
+  margin: 0;
+  font-size: var(--text-sm);
+  padding: 7px 11px;
+  border-radius: 6px;
+}
+
+.booking-manager-error {
+  background: var(--surface-warning, #fdf0ef);
+  border: 1px solid var(--ink-warning, #b3261e);
+  color: var(--ink-warning, #b3261e);
+}
+
+.booking-manager-error-inline {
+  color: var(--ink-warning, #b3261e);
+  font-size: var(--text-xs);
+}
+
+.booking-manager-saved {
+  background: var(--admin-accent-soft, #e7f1fa);
+  border: 1px solid var(--admin-table-border, #c9dcea);
+  color: var(--admin-accent, #0f4f8f);
+}
+
+.booking-manager-bookings {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--admin-table-border, #c9dcea);
+  border-radius: 6px;
+}
+
+.booking-manager-booking {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 16px;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--admin-table-border, #c9dcea);
+}
+
+.booking-manager-booking:last-child { border-bottom: none; }
+.booking-manager-booking.is-cancelled .booking-manager-booking-when { text-decoration: line-through; }
+
+.booking-manager-booking-when { font-weight: 700; white-space: nowrap; }
+
+.booking-manager-booking-who {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  overflow-wrap: anywhere;
+}
+
+.booking-manager-booking-name { font-weight: 600; }
+.booking-manager-booking-email { color: var(--ink-muted, #5b7489); }
+
+.booking-manager-booking-note {
+  flex-basis: 100%;
+  color: var(--ink-muted, #5b7489);
+  overflow-wrap: anywhere;
+}
+
+.booking-manager-booking-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.booking-manager-confirm {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+}
+
+.booking-manager-link {
+  color: var(--admin-accent, #0f4f8f);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.booking-manager-badge {
+  margin-left: 8px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--surface-warning, #fdf0ef);
+  color: var(--ink-warning, #b3261e);
+  font-size: var(--text-xs);
+  font-weight: 600;
+}

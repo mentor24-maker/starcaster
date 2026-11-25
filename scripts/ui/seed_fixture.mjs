@@ -49,6 +49,7 @@ const substackMinerStore = require(path.join(ROOT, 'lib/substackMinerStore.js'))
 const youtubeCreatorsStore = require(path.join(ROOT, 'lib/youtubeCreatorsStore.js'));
 const redditWatchStore = require(path.join(ROOT, 'lib/redditWatchStore.js'));
 const assetsStore = require(path.join(ROOT, 'lib/assetsStore.js'));
+const bookingStore = require(path.join(ROOT, 'lib/bookingStore.js'));
 const substackContactCapture = require(path.join(ROOT, 'lib/acquire/SubstackContactCapture.js'));
 const youtubeOutreachCommentsStore = require(path.join(ROOT, 'lib/youtubeOutreachCommentsStore.js'));
 
@@ -970,6 +971,12 @@ const buildTuned = (ids) => ({
       articleStatus: 'published',
       showCategories: 'true',
     },
+  },
+  // Booking Manager (SC-910): the title on, a long title, and a custom
+  // contacts page, so every field in its panel shows and has content.
+  'admin-booking-manager': {
+    name: 'Booking Manager',
+    settings: { showTitle: 'true', panelTitle: LONG, contactsPageUrl: '/admin-contact-manager' },
   },
   'admin-login': {
     name: 'Admin Login',
@@ -2370,6 +2377,65 @@ try {
   console.error(`  failed to seed Reddit subreddits: ${err.message}`);
 }
 
+/**
+ * A booking calendar for the Booking Manager (SC-910), so the screen opens on
+ * real content rather than "No booking calendar yet": two ranges on one day,
+ * a day off, a blocked date, and two upcoming bookings — one linked to a CRM
+ * contact id, one with the longest visitor name the fixture has and no
+ * contact. Idempotent: one calendar per project; bookings only when it has
+ * none still to come.
+ */
+async function seedBookingCalendar(scope) {
+  const listed = must(await bookingStore.listCalendars(10, scope), 'list booking calendars');
+  let calendar = listed[0];
+  if (!calendar) {
+    calendar = must(await bookingStore.createCalendar({
+      name: 'Strategy call',
+      weeklyHours: {
+        mon: [{ start: '09:00', end: '12:00' }, { start: '13:00', end: '17:00' }],
+        tue: [{ start: '09:00', end: '17:00' }], wed: [{ start: '09:00', end: '17:00' }],
+        thu: [{ start: '09:00', end: '17:00' }], fri: [],
+      },
+      blockedDates: ['2026-12-25'],
+      messaging: { heading: 'Book a call', intro: 'Pick a time that suits you.', confirmation: 'See you then!' },
+    }, scope), 'create booking calendar');
+  }
+  const now = Date.now();
+  const upcoming = must(await bookingStore.listBookings(50, calendar.id, { from: new Date(now).toISOString(), status: 'booked' }, scope), 'list bookings');
+  let made = 0;
+  if (!upcoming.length) {
+    const at = (days, hourUtc) => {
+      const d = new Date(now + days * 86400000);
+      d.setUTCHours(hourUtc, 0, 0, 0);
+      return d;
+    };
+    const rows = [
+      { start: at(3, 16), name: 'Ada Lovelace', email: 'ada@example.test', crmContactId: 'fixture-contact-ada' },
+      { start: at(5, 17), name: LONG, email: 'a.very.long.address.with.no.space.to.break.at@an-example-domain.test', crmContactId: '' },
+    ];
+    for (const r of rows) {
+      must(await bookingStore.createBooking(calendar.id, {
+        startsAt: r.start.toISOString(),
+        endsAt: new Date(r.start.getTime() + 30 * 60000).toISOString(),
+        visitorName: r.name, visitorEmail: r.email, crmContactId: r.crmContactId,
+        visitorNote: 'Would like to talk about the spring programme.',
+      }, scope), 'create booking');
+      made += 1;
+    }
+  }
+  // Landmine 12: read back through the project scope, not the insert's word.
+  const after = must(await bookingStore.listBookings(50, calendar.id, {}, scope), 'read bookings back');
+  if (after.length < made) throw new Error('bookings were written but do not read back in this project');
+  return { calendarId: calendar.id, made, total: after.length };
+}
+
+let bookingSeeded = null;
+try {
+  bookingSeeded = await seedBookingCalendar({ projectId: project.id, userId });
+} catch (err) {
+  console.error(`  failed to seed the booking calendar: ${err.message}`);
+}
+
 let minerSeeded = null;
 try {
   minerSeeded = await seedSubstackMiner({ projectId: project.id, userId });
@@ -2429,5 +2495,10 @@ console.log(
   subredditsSeeded
     ? `Reddit subreddits seeded — ${subredditsSeeded.total}: one suggested with the longest name, three watched (read, failed, signed out), one rejected.`
     : 'WARNING: Reddit subreddits were NOT seeded; Engage › Outreach › Reddit › Find creators will be empty and check:screens proves nothing there.'
+);
+console.log(
+  bookingSeeded
+    ? `Booking calendar seeded — ${bookingSeeded.made} booking(s) created, ${bookingSeeded.total} on the calendar.`
+    : 'WARNING: the booking calendar was NOT seeded; the Booking Manager will open on "No booking calendar yet".'
 );
 console.log(`export UI_HARNESS_PROJECT_ID=${project.id}`);

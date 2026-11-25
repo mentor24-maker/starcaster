@@ -40,6 +40,8 @@ describe("filterPublicSections — one filter for the preview and the live site"
       // `admin-blog-links` had been missing since it shipped; the split put a
       // second management module beside it, which is when it was noticed.
       "admin-blog-links",
+      // The Booking Manager (SC-910): every booking's visitor name and email.
+      "admin-booking-manager",
       "admin-related-articles",
       "blog-category-manager",
       "blog-post-create",
@@ -48,6 +50,7 @@ describe("filterPublicSections — one filter for the preview and the live site"
     ]);
     expect(isPrivateOnlyModuleType("blog-post-create")).toBe(true);
     expect(isPrivateOnlyModuleType("admin-related-articles")).toBe(true);
+    expect(isPrivateOnlyModuleType("admin-booking-manager")).toBe(true);
     expect(isPrivateOnlyModuleType("text")).toBe(false);
   });
 });

@@ -160,6 +160,7 @@ export const BUILDER_MODULE_TYPES = [
   "admin-support-form",
   "admin-blog-links",
   "admin-related-articles",
+  "admin-booking-manager",
   "bug-report",
   "spirality-tasks"
 ] as const;
@@ -2676,6 +2677,7 @@ export function normalizeModuleType(value: unknown): BuilderTemplateModuleType {
     type === "admin-support-form" ||
     type === "admin-blog-links" ||
     type === "admin-related-articles" ||
+    type === "admin-booking-manager" ||
     type === "bug-report" ||
     type === "spirality-tasks"
   ) {
@@ -4584,6 +4586,15 @@ export function createEmptyModule(
                             // Defaults are the admin scaffold's own slugs.
                             managerPageUrl: "/admin-blog-manager",
                             postViewUrl: "/blog-post-view"
+                          }
+                      : type === "admin-booking-manager"
+                        ? {
+                            panelTitle: "Booking Manager",
+                            showTitle: "true",
+                            // Where a booking's "Contact" link opens. The
+                            // default is the admin scaffold's own slug; the
+                            // contact is named by id in ?contact= (landmine 19).
+                            contactsPageUrl: "/admin-contact-manager"
                           }
                       : type === "admin-related-articles"
                         ? {
