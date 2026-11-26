@@ -103,7 +103,7 @@ const { AI_PROVIDERS } = require('../../lib/aiClient');
  * one, `answer(def, body)` what each provider sends back. Every request sent is
  * kept, so a test can read exactly what went where.
  */
-function fakeDoor({ order = ['openai'], keys = order, answer }) {
+function fakeDoor({ order = ['openai'], keys = order, answer, signals = [] }) {
   const sent = [];
   const usage = [];
   setDoorDeps({
@@ -113,10 +113,12 @@ function fakeDoor({ order = ['openai'], keys = order, answer }) {
     postBus: async () => true,
     now: () => Date.now(),
     fetchImpl: async (url, init) => {
+      signals.push(init.signal);
       const body = JSON.parse(init.body);
       const def = Object.values(AI_PROVIDERS).find((d) => url.startsWith(d.baseUrl || 'https://api.anthropic.com') || (d.kind === 'gemini' && url.includes('generativelanguage')));
       sent.push({ url, provider: def.id, body });
-      const { status = 200, json } = answer(def, body);
+      const { status = 200, json, error } = answer(def, body);
+      if (error) throw error;
       return { ok: status < 400, status, text: async () => JSON.stringify(json) };
     },
   });
@@ -189,6 +191,33 @@ test('the model call: a refusal, a truncation and junk each say so', async (t) =
     fakeDoor({ order: ['openai'], answer: () => reply });
     await assert.rejects(extractSchedule(PNG), (e) => e.code === code, `${JSON.stringify(reply).slice(0, 80)} reads as ${code}`);
   }
+});
+
+test('a refusal other than busy or bad-request keeps the provider\'s own reason (SC-896 review)', async (t) => {
+  t.after(() => setDoorDeps(null));
+  fakeDoor({ order: ['openai'], answer: () => ({ status: 413, json: { error: { message: 'Request entity too large: file exceeds 20MB' } } }) });
+  await assert.rejects(extractSchedule(PNG), (e) => {
+    assert.equal(e.code, 'UPSTREAM_REJECTED');
+    assert.match(e.message, /413/);
+    assert.match(e.message, /file exceeds 20MB/, 'the provider\'s reason reaches Dane');
+    assert.doesNotMatch(e.message, /could not be reached/);
+    return true;
+  });
+});
+
+test('a read that outlasts the wait says it took too long, and the wait ends before Vercel\'s 300s', async (t) => {
+  t.after(() => setDoorDeps(null));
+  const signals = [];
+  const timedOut = Object.assign(new Error('The operation was aborted due to timeout'), { name: 'TimeoutError' });
+  fakeDoor({ order: ['openai'], signals, answer: () => ({ error: timedOut }) });
+  await assert.rejects(extractSchedule(PNG), (e) => {
+    assert.equal(e.code, 'UPSTREAM_TIMEOUT');
+    assert.match(e.message, /took longer than 4 minutes/);
+    assert.match(e.message, /one week per file/);
+    return true;
+  });
+  assert.ok(signals[0], 'the request carried a time limit');
+  assert.ok(harvest.TIMEOUT_MS < 300 * 1000 - 30 * 1000, `the wait (${harvest.TIMEOUT_MS}ms) ends well inside Vercel's 300s`);
 });
 
 test('the upload button shows only when a provider in the order can read a flyer and has a key', async (t) => {
