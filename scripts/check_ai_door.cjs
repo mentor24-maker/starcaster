@@ -90,12 +90,6 @@ const WAITING = new Map([
   ['lib/themeWizardGenerator.js',
     "the Theme Wizard has the AI read web pages itself and answer in an exact JSON shape, which the door"
     + ' cannot do yet, and it asks for claude-fable-5 by name for design taste (door: SC-897, move: SC-898)'],
-  ['lib/eventHarvest.js',
-    'the schedule upload has the AI read a PDF or photo of the flyer; the door can send those now (SC-895)'
-    + ' and the move is SC-896'],
-  ['lib/wyrTweetOcr.js',
-    'the Would You Rather import has the AI read the words off a post image with the Gemini-only helper'
-    + ' queryGemini; the door can send pictures now (SC-895) and the move rides with SC-896'],
 ]);
 
 function walk(dir, root = ROOT, out = []) {

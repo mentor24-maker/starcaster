@@ -62,7 +62,7 @@ async function handle(req, res, pathname, method) {
   // Answered for everyone signed in, so the Event Manager can hide its button
   // without treating a refusal as an error.
   if (pathname === '/api/event-harvest/available' && method === 'GET') {
-    return sendOk(res, 200, { available: staff && isAvailable() }), true;
+    return sendOk(res, 200, { available: staff && await isAvailable() }), true;
   }
 
   if (!staff) {
