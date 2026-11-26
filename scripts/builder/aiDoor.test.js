@@ -519,6 +519,29 @@ test('a PDF with Kimi first: Kimi is skipped with a reason naming it and PDFs, a
   assert.equal(h.posts.length, 0, 'a provider that cannot read a PDF is not news for the bus');
 });
 
+test('a provider that cannot read the PDF is not announced as out of credit when another one really is', async () => {
+  // A clock no earlier test used, so no provider's 6-hour stamp is still running.
+  const h = harness({
+    order: 'kimi,anthropic,openai',
+    now: 50_000_000_000,
+    script: { kimi: () => REPLIES.openaiOk('wrong'), anthropic: REPLIES.anthropicNoCredit, openai: () => REPLIES.openaiOk('read it') },
+  });
+  const r = await generate({ ...ASK, messages: withFiles([PDF]) }, h.deps);
+  assert.equal(r.provider, 'openai');
+  assert.deepEqual(r.skipped.map((s) => [s.provider, s.verdict]), [['kimi', CANNOT_READ], ['anthropic', 'OUT OF CREDIT']]);
+  assert.equal(h.posts.length, 1, 'Anthropic being out of credit is news');
+  assert.match(h.posts[0], /^AI calls are using OpenAI: Anthropic is out of credit\. /);
+  assert.doesNotMatch(h.posts[0], /Kimi/, 'Kimi is not out of credit; it just cannot read PDFs');
+
+  // Kimi's notice clock was not stamped: a real Kimi outage straight after is still announced.
+  const h2 = harness({ order: 'kimi,openai', now: 50_000_000_001, script: { kimi: () => ({ status: 429, body: { error: { type: 'insufficient_quota', message: 'You exceeded your current quota' } } }), openai: () => REPLIES.openaiOk('ok') } });
+  const r2 = await generate(ASK, h2.deps);
+  assert.equal(r2.provider, 'openai');
+  assert.equal(r2.skipped[0].verdict, 'OUT OF CREDIT');
+  assert.equal(h2.posts.length, 1, 'a real Kimi outage inside the same 6 hours is announced');
+  assert.match(h2.posts[0], /Kimi is out of credit/);
+});
+
 test('a picture type a provider does not read, or an address it cannot fetch, is a named skip too', async () => {
   const heic = { mimeType: 'image/heic', base64: 'AAAA' };
   const h = harness({ order: 'anthropic,gemini', script: { gemini: () => REPLIES.geminiOk('a photo') } });
