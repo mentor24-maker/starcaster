@@ -17,7 +17,7 @@ require.cache[observePath] = {
 };
 
 const {
-  generate, envProviderOrder, buildRequest, parseJsonReply, AI_PROVIDERS, NOTICE_EVERY_MS, _resetNoticeMemory,
+  generate, envProviderOrder, orderFromSettings, buildRequest, parseJsonReply, AI_PROVIDERS, NOTICE_EVERY_MS, CANNOT_READ, _resetNoticeMemory,
 } = require('../../lib/aiClient');
 const { generateAlt } = require('../../lib/altTextProviders');
 
@@ -428,4 +428,163 @@ test('alt text throws with the door\'s reason when nothing could answer, so the 
 test('parseJsonReply tolerates code fences and names a failure', () => {
   assert.deepEqual(parseJsonReply('```json\n{"x":2}\n```').value, { x: 2 });
   assert.equal(parseJsonReply('nope').ok, false);
+});
+
+// ── Pictures and PDFs sent with the prompt (SC-895) ────────────────────────
+
+const PNG = { mimeType: 'image/png', base64: 'iVBORw0KGgo=' };
+const PDF = { mimeType: 'application/pdf', base64: 'JVBERi0xLjQ=' };
+const withFiles = (files, content = 'What does this say?') => [{ role: 'user', content, files }];
+
+test('Anthropic: a picture and a PDF go as image and document blocks before the words', () => {
+  const req = buildRequest(AI_PROVIDERS.anthropic, 'claude-sonnet-5-5', 'k', { messages: withFiles([PNG, PDF]), maxTokens: 50 });
+  assert.deepEqual(req.body.messages, [{
+    role: 'user',
+    content: [
+      { type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'iVBORw0KGgo=' } },
+      { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: 'JVBERi0xLjQ=' } },
+      { type: 'text', text: 'What does this say?' },
+    ],
+  }]);
+});
+
+test('Anthropic: a file by web address goes as a url source', () => {
+  const req = buildRequest(AI_PROVIDERS.anthropic, 'claude-sonnet-5-5', 'k', {
+    messages: withFiles([{ url: 'https://example.com/logo.png' }, { url: 'https://example.com/flyer.pdf' }]), maxTokens: 50,
+  });
+  assert.deepEqual(req.body.messages[0].content.slice(0, 2), [
+    { type: 'image', source: { type: 'url', url: 'https://example.com/logo.png' } },
+    { type: 'document', source: { type: 'url', url: 'https://example.com/flyer.pdf' } },
+  ]);
+});
+
+test('OpenAI-style: a picture goes as an image_url part, a PDF as a file part carrying its bytes', () => {
+  const req = buildRequest(AI_PROVIDERS.openai, 'gpt-5.5', 'k', { system: 's', messages: withFiles([PNG, PDF]), maxTokens: 50 });
+  assert.deepEqual(req.body.messages, [
+    { role: 'system', content: 's' },
+    {
+      role: 'user',
+      content: [
+        { type: 'image_url', image_url: { url: 'data:image/png;base64,iVBORw0KGgo=' } },
+        { type: 'file', file: { filename: 'document.pdf', file_data: 'data:application/pdf;base64,JVBERi0xLjQ=' } },
+        { type: 'text', text: 'What does this say?' },
+      ],
+    },
+  ]);
+  const byAddress = buildRequest(AI_PROVIDERS.kimi, 'kimi-k3.1-pro', 'k', { messages: withFiles([{ url: 'https://example.com/a.jpg' }]), maxTokens: 50 });
+  assert.deepEqual(byAddress.body.messages[0].content[0], { type: 'image_url', image_url: { url: 'https://example.com/a.jpg' } });
+});
+
+test('Gemini: a picture and a PDF go as inlineData parts', () => {
+  const req = buildRequest(AI_PROVIDERS.gemini, 'gemini-3.1-pro-preview', 'k', { messages: withFiles([PNG, PDF]), maxTokens: 50 });
+  assert.deepEqual(req.body.contents, [{
+    role: 'user',
+    parts: [
+      { inlineData: { mimeType: 'image/png', data: 'iVBORw0KGgo=' } },
+      { inlineData: { mimeType: 'application/pdf', data: 'JVBERi0xLjQ=' } },
+      { text: 'What does this say?' },
+    ],
+  }]);
+});
+
+test('files with no words send only the files (Anthropic refuses an empty text block)', () => {
+  const req = buildRequest(AI_PROVIDERS.anthropic, 'claude-sonnet-5-5', 'k', { messages: withFiles([PNG], ''), maxTokens: 50 });
+  assert.equal(req.body.messages[0].content.length, 1);
+  assert.equal(req.body.messages[0].content[0].type, 'image');
+});
+
+test('a text-only request is exactly what it was before files existed', () => {
+  const ask = { system: 's', messages: [{ role: 'user', content: 'hi' }, { role: 'assistant', content: 'yo' }], maxTokens: 50, tier: 'fast' };
+  const emptyFiles = { ...ask, messages: ask.messages.map((m) => ({ ...m, files: [] })) };
+  for (const id of Object.keys(AI_PROVIDERS)) {
+    const def = AI_PROVIDERS[id];
+    const plain = buildRequest(def, 'm', 'k', ask);
+    assert.equal(JSON.stringify(buildRequest(def, 'm', 'k', emptyFiles)), JSON.stringify(plain), `${id}: an empty files list changes nothing`);
+  }
+  assert.deepEqual(buildRequest(AI_PROVIDERS.anthropic, 'm', 'k', ask).body.messages, [{ role: 'user', content: 'hi' }, { role: 'assistant', content: 'yo' }]);
+  assert.deepEqual(buildRequest(AI_PROVIDERS.openai, 'm', 'k', ask).body.messages[1], { role: 'user', content: 'hi' });
+  assert.deepEqual(buildRequest(AI_PROVIDERS.gemini, 'm', 'k', ask).body.contents[0], { role: 'user', parts: [{ text: 'hi' }] });
+});
+
+test('a PDF with Kimi first: Kimi is skipped with a reason naming it and PDFs, and the next provider answers', async () => {
+  const h = harness({ order: 'kimi,openai', script: { kimi: () => REPLIES.openaiOk('wrong'), openai: () => REPLIES.openaiOk('read it') } });
+  const r = await generate({ ...ASK, messages: withFiles([PDF]) }, h.deps);
+  assert.equal(r.ok, true);
+  assert.equal(r.provider, 'openai');
+  assert.equal(r.text, 'read it');
+  assert.deepEqual(h.sent.map((s) => s.provider), ['openai'], 'Kimi is never sent the request');
+  assert.equal(r.skipped[0].provider, 'kimi');
+  assert.equal(r.skipped[0].verdict, CANNOT_READ);
+  assert.equal(r.skipped[0].reason, 'Kimi cannot read PDFs');
+  assert.equal(h.posts.length, 0, 'a provider that cannot read a PDF is not news for the bus');
+});
+
+test('a picture type a provider does not read, or an address it cannot fetch, is a named skip too', async () => {
+  const heic = { mimeType: 'image/heic', base64: 'AAAA' };
+  const h = harness({ order: 'anthropic,gemini', script: { gemini: () => REPLIES.geminiOk('a photo') } });
+  const r = await generate({ ...ASK, messages: withFiles([heic]) }, h.deps);
+  assert.equal(r.provider, 'gemini');
+  assert.equal(r.skipped[0].reason, 'Anthropic cannot read image/heic images');
+
+  const h2 = harness({ order: 'gemini,anthropic', script: { anthropic: () => REPLIES.anthropicOk('fetched') } });
+  const r2 = await generate({ ...ASK, messages: withFiles([{ url: 'https://example.com/flyer.pdf' }]) }, h2.deps);
+  assert.equal(r2.provider, 'anthropic');
+  assert.match(r2.skipped[0].reason, /^Google Gemini cannot fetch PDFs from a web address/);
+});
+
+test('when no provider in the order can read the file, ok is false and the error lists each provider and why', async () => {
+  const h = harness({ order: 'kimi,deepseek,groq', keys: { kimi: 'k', deepseek: 'k', groq: 'k' } });
+  const r = await generate({ ...ASK, messages: withFiles([PDF]) }, h.deps);
+  assert.equal(r.ok, false);
+  assert.equal(r.code, 'no_provider');
+  assert.equal(h.sent.length, 0, 'nothing is sent anywhere');
+  assert.match(r.error, /could both read the file sent and answer/);
+  assert.match(r.error, /Kimi: Kimi cannot read PDFs/);
+  assert.match(r.error, /DeepSeek: DeepSeek cannot read PDFs/);
+  assert.match(r.error, /Groq: Groq cannot read PDFs/);
+  assert.deepEqual(r.skipped.map((s) => s.verdict), [CANNOT_READ, CANNOT_READ, CANNOT_READ]);
+});
+
+test('a text-only service cannot read pictures either, including an added one', async () => {
+  const { providers } = orderFromSettings({
+    providers: [{ id: 'my-llm', enabled: true, strong: 'x' }, { id: 'anthropic', enabled: true }],
+    customProviders: [{ id: 'my-llm', label: 'My LLM', baseUrl: 'https://llm.example.com/v1', keyEnv: 'AI_SERVICE_MY_LLM_API_KEY' }],
+  });
+  const h = harness({ script: { anthropic: () => REPLIES.anthropicOk('a logo') } });
+  h.deps.order = () => ({ providers, ignored: [] });
+  h.deps.getKey = () => 'k';
+  const r = await generate({ ...ASK, messages: withFiles([PNG]) }, h.deps);
+  assert.equal(r.provider, 'anthropic');
+  assert.equal(r.skipped[0].reason, 'My LLM cannot read images');
+  assert.equal(providers[1].reads.pdf, true, 'a provider from the Settings order keeps what it can read');
+});
+
+test('a file the door cannot send to anyone is refused before anything is sent', async () => {
+  const cases = [
+    [[{ mimeType: 'text/plain', base64: 'aGk=' }], /"text\/plain"; the door sends images and PDFs only/],
+    [[{ mimeType: 'image/png' }], /has no bytes/],
+    [[{ mimeType: 'image/png', base64: 'aGk=', url: 'https://example.com/a.png' }], /both bytes and an address/],
+    [[{ url: 'ftp://example.com/a.png' }], /must start with http/],
+    [[{ url: 'https://example.com/download' }], /of no stated type/],
+  ];
+  for (const [files, why] of cases) {
+    const h = harness({ script: { anthropic: REPLIES.anthropicOk } });
+    const r = await generate({ ...ASK, messages: withFiles(files) }, h.deps);
+    assert.equal(r.ok, false);
+    assert.equal(r.code, 'bad_request');
+    assert.match(r.error, why);
+    assert.equal(h.sent.length, 0);
+  }
+  const h = harness({ script: { anthropic: REPLIES.anthropicOk } });
+  const r = await generate({ ...ASK, messages: [{ role: 'assistant', content: 'x', files: [PNG] }] }, h.deps);
+  assert.equal(r.code, 'bad_request');
+  assert.match(r.error, /only the asker's messages can carry files/);
+});
+
+test('a picture sent through generate reaches the provider that answers', async () => {
+  const h = harness({ order: 'anthropic,gemini', script: { anthropic: REPLIES.anthropicNoCredit, gemini: () => REPLIES.geminiOk('a tennis ball') } });
+  const r = await generate({ ...ASK, messages: withFiles([PNG]) }, h.deps);
+  assert.equal(r.provider, 'gemini');
+  assert.equal(r.skipped[0].verdict, 'OUT OF CREDIT');
+  assert.deepEqual(h.sent[1].body.contents[0].parts[0], { inlineData: { mimeType: 'image/png', data: 'iVBORw0KGgo=' } });
 });
