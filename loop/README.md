@@ -148,4 +148,4 @@ StarCaster's installer writes the same four labels back pointing at its own
 and touches nothing else. Confirm with `scripts/install_loop_runner.sh
 --status`: each lane's program is StarCaster's runner again.
 
-Switched over on: *not yet* (write the date here, Mountain time, when it is).
+Switched over on: **2026-11-25, 10:06 PM MT**, onto `release-2` (`38c61c4`), by a hand-run session on the Mini (SC-905). The rollback above was run once first (9:52 PM) and worked; one pass of each lane finished on release-2 before it.
