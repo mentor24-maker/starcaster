@@ -16,3 +16,9 @@ words are sent exactly as before.
 Nothing uses this yet, so no screen changed. The next tickets move the flyer
 upload and the Would You Rather import (SC-896) and the Theme Wizard (SC-897,
 SC-898) onto it.
+
+**Fixed after review:** if one company could not read the PDF and another
+was really out of credit in the same call, the bus message called both of
+them "out of credit" — wrong about the first, and it also silenced a genuine
+outage of the first for six hours. Now only a real credit or key problem is
+ever announced, and a test sends exactly that mix to prove it.
