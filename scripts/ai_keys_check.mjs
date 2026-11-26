@@ -124,13 +124,14 @@ async function readProductionOrder() {
         const rows = await res.json();
         settings = providerStore.normaliseRow(Array.isArray(rows) ? rows[0] : null);
         if (!settings.exists) { settings = null; fallbackReason = 'nothing has been saved on Settings › APIs yet'; }
+        else if (!aiKeys.mainOrderSaved(settings)) fallbackReason = 'the main order on Settings › APIs has not been saved yet (only feature groups have been)';
       }
     } catch (err) {
       fallbackReason = `the saved order could not be read from production (${String(err?.message || err).slice(0, 120)})`;
     }
   }
   const env = {};
-  if (!settings) {
+  if (!aiKeys.mainOrderSaved(settings)) {
     const order = readPrd('AI_PROVIDER_ORDER');
     if (order.key) env.AI_PROVIDER_ORDER = order.key;
   }

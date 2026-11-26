@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { ModelChooser, ProviderTable, listStatusText, moveRow, payloadOf, readingFor, sourceText, type ProviderRow } from './ai-provider-panel';
+import { GroupRows, ModelChooser, ProviderTable, lastCallText, listStatusText, mountainTime, moveRow, payloadOf, readingFor, sourceText, syncGroups, type GroupRow, type ProviderRow } from './ai-provider-panel';
 
 /**
  * Settings › APIs › AI provider (AI switch 2, SC-844). What matters is what
@@ -106,5 +106,83 @@ describe('List models (SC-903)', () => {
     const html = renderToStaticMarkup(<ProviderTable rows={[deepseek]} reading={null} onChange={() => {}} lists={{ deepseek: { reason: 'DeepSeek would not list its models: DeepSeek refused the key (401)' } }} onList={() => {}} />);
     expect(html).toContain('DeepSeek refused the key (401)');
     expect(html).not.toContain('ai-provider-model-choice');
+  });
+});
+
+// ── Feature groups (AI provider groups 2, SC-876) ─────────────────────────
+
+function group(overrides: Partial<GroupRow> = {}): GroupRow {
+  return {
+    id: 'outreach', label: 'Outreach', about: 'Reply drafts and the Substack passes',
+    follows: true, providers: [row(), openai], groupError: '',
+    lastCall: null, lastCallError: '', lastCallNone: 'No AI calls yet (none in the last 30 days)',
+    ...overrides,
+  };
+}
+
+describe('payloadOf with groups', () => {
+  it('sends null for a group that follows and its own list for one that does not', () => {
+    const body = payloadOf([row(), openai], [], [
+      group(),
+      group({ id: 'writing', follows: false, providers: [{ ...openai }, { ...row(), enabled: false }] }),
+    ]);
+    const orders = body.groupOrders as Record<string, any>;
+    expect(orders.outreach).toBeNull();
+    expect(orders.writing.map((p: any) => [p.id, p.enabled])).toEqual([['openai', true], ['anthropic', false]]);
+  });
+  it('sends no groupOrders at all when the screen has no groups', () => {
+    expect('groupOrders' in payloadOf([row()], [], [])).toBe(false);
+  });
+});
+
+describe('syncGroups', () => {
+  it('adds a new service to a group with its own order switched off, and drops a removed one', () => {
+    const groq = row({ id: 'custom-groq', label: 'Groq', custom: true });
+    const own = group({ follows: false, providers: [{ ...openai }, { ...groq }, { ...row(), enabled: false }] });
+    const [synced] = syncGroups([own], [row(), openai, kimi]);
+    expect(synced.providers.map((p) => [p.id, p.enabled])).toEqual([['openai', true], ['anthropic', false], ['kimi', false]]);
+  });
+  it('a following group is a copy of the main list', () => {
+    const [synced] = syncGroups([group()], [openai, kimi]);
+    expect(synced.providers.map((p) => p.id)).toEqual(['openai', 'kimi']);
+  });
+});
+
+describe('lastCallText', () => {
+  it('names the provider, model and Mountain time of the last call', () => {
+    const text = lastCallText(group({ lastCall: { provider: 'openai', providerLabel: 'OpenAI', model: 'gpt-5.5', feature: 'reddit-comment-draft', at: '2026-11-25T22:04:00Z' } }));
+    expect(text).toBe('Last AI call answered by OpenAI (gpt-5.5), Nov 25, 3:04 PM MT');
+  });
+  it('says the meter could not be read, never "No AI calls yet", when it could not', () => {
+    const text = lastCallText(group({ lastCallError: 'Could not read which provider answered last: HTTP 500', lastCallNone: '' }));
+    expect(text).toContain('Could not read');
+    expect(text).not.toContain('No AI calls');
+  });
+  it('says "No AI calls yet" when there were none, never a blank', () => {
+    expect(lastCallText(group())).toMatch(/^No AI calls yet/);
+  });
+  it('mountainTime does not invent a time it was not given', () => {
+    expect(mountainTime(null)).toBe('at an unknown time');
+  });
+});
+
+describe('GroupRows', () => {
+  it('shows each group with what it covers, its choice, and its last call; a table only for its own order', () => {
+    const html = renderToStaticMarkup(
+      <GroupRows
+        groups={[group(), group({ id: 'writing', label: 'Writing', about: 'Write with AI', follows: false })]}
+        reading={null}
+        mainRows={[row(), openai]}
+        onChange={() => {}}
+      />,
+    );
+    expect(html).toContain('Outreach');
+    expect(html).toContain('Reply drafts and the Substack passes');
+    expect(html).toContain('Follows the Main Setting');
+    expect(html).toContain('Its Own Order');
+    expect(html).toContain('No AI calls yet');
+    // Only Writing has its own order, so only Writing shows a provider table.
+    expect(html.match(/<table/g)?.length).toBe(1);
+    expect(html).not.toMatch(/sk-[A-Za-z0-9]/);
   });
 });

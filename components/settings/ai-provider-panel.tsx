@@ -40,8 +40,26 @@ export type ProviderRow = {
 
 export type CustomProvider = { id?: string; label: string; baseUrl: string; keyEnv: string };
 
+/** Which provider answered a group's last AI call, from the AI usage meter (SC-876). */
+export type LastCall = { provider: string; providerLabel: string; model: string; feature: string; at: string | null };
+
+/** One feature group's row (AI provider groups 2, SC-876). The groups are fixed in lib/aiFeatureGroups.js. */
+export type GroupRow = {
+  id: string;
+  label: string;
+  about: string;
+  follows: boolean;
+  providers: ProviderRow[];
+  groupError: string;
+  lastCall: LastCall | null;
+  lastCallError: string;
+  lastCallNone: string;
+};
+
 export type ScreenState = {
   status: string;
+  mainSaved?: boolean;
+  groups?: GroupRow[];
   source: 'settings' | 'AI_PROVIDER_ORDER' | 'default';
   fallbackReason: string;
   readError: string;
@@ -98,12 +116,110 @@ export function readingFor(row: ProviderRow, reading: Reading | null): { verdict
   return { verdict: 'key set', detail: 'the AI keys check above does not test this provider yet' };
 }
 
-/** What the screen sends: the rows in order, and the added services. */
-export function payloadOf(rows: ProviderRow[], custom: CustomProvider[]): Record<string, unknown> {
-  return {
-    providers: rows.map((r) => ({ id: r.id, enabled: r.enabled, fast: r.fast.trim(), strong: r.strong.trim() })),
+const entryOf = (r: ProviderRow) => ({ id: r.id, enabled: r.enabled, fast: r.fast.trim(), strong: r.strong.trim() });
+
+/**
+ * What the screen sends: the rows in order, the added services and, when the
+ * screen has groups, each group's own order (null = follows the main setting).
+ * One Save writes all of it in one write, so its "saved" is true of all of it.
+ */
+export function payloadOf(rows: ProviderRow[], custom: CustomProvider[], groups?: GroupRow[]): Record<string, unknown> {
+  const out: Record<string, unknown> = {
+    providers: rows.map(entryOf),
     customProviders: custom.map((c) => ({ id: c.id, label: c.label.trim(), baseUrl: c.baseUrl.trim(), keyEnv: c.keyEnv.trim() })),
   };
+  if (groups && groups.length) {
+    out.groupOrders = Object.fromEntries(groups.map((g) => [g.id, g.follows ? null : g.providers.map(entryOf)]));
+  }
+  return out;
+}
+
+/** "Nov 25, 3:04 PM MT": every time on this screen is Mountain time. */
+export function mountainTime(iso: string | null): string {
+  const at = iso ? new Date(iso) : null;
+  if (!at || Number.isNaN(at.getTime())) return 'at an unknown time';
+  return `${at.toLocaleString('en-US', { timeZone: 'America/Denver', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })} MT`;
+}
+
+/** The line saying which provider answered a group's last AI call, or why it cannot say. */
+export function lastCallText(group: Pick<GroupRow, 'lastCall' | 'lastCallError' | 'lastCallNone'>): string {
+  if (group.lastCallError) return group.lastCallError;
+  if (group.lastCall) {
+    const model = group.lastCall.model ? ` (${group.lastCall.model})` : '';
+    return `Last AI call answered by ${group.lastCall.providerLabel}${model}, ${mountainTime(group.lastCall.at)}`;
+  }
+  return group.lastCallNone || 'No AI calls yet';
+}
+
+/**
+ * Keep every group's list in step with the main list's services: a service
+ * added on the main list joins each group switched off, a removed one leaves.
+ * A group that follows the main setting is simply a copy of the main list.
+ * The server refuses a group list that does not name every service exactly
+ * once, so this is what lets one Save carry both (SC-872 review item 3).
+ */
+export function syncGroups(groups: GroupRow[], rows: ProviderRow[]): GroupRow[] {
+  const ids = new Set(rows.map((r) => r.id));
+  return groups.map((g) => {
+    if (g.follows) return { ...g, providers: rows.map((r) => ({ ...r })) };
+    const kept = g.providers.filter((p) => ids.has(p.id));
+    const listed = new Set(kept.map((p) => p.id));
+    const added = rows.filter((r) => !listed.has(r.id)).map((r) => ({ ...r, enabled: false }));
+    return { ...g, providers: [...kept, ...added] };
+  });
+}
+
+/**
+ * The feature groups under the main order (SC-876). Each follows the main
+ * setting or has its own order, and says which provider answered its last call.
+ */
+export function GroupRows({ groups, reading, onChange, mainRows, lists, onList }: {
+  groups: GroupRow[];
+  reading: Reading | null;
+  onChange: (groups: GroupRow[]) => void;
+  mainRows: ProviderRow[];
+  lists?: Record<string, ModelList>;
+  onList?: (id: string) => void;
+}): React.ReactElement {
+  const set = (i: number, patch: Partial<GroupRow>) => onChange(groups.map((g, j) => (j === i ? { ...g, ...patch } : g)));
+  return (
+    <div className="ai-provider-groups" data-ai-provider-groups>
+      <h4 style={{ margin: '1.25rem 0 0.25rem' }}>Feature groups</h4>
+      <p style={{ fontSize: '0.85rem', color: 'var(--muted)', margin: '0 0 0.5rem' }}>
+        Each group follows the order above unless you give it its own. A group with its own order bills the providers
+        it has switched on, whatever the order above says.
+      </p>
+      {groups.map((g, i) => (
+        <div key={g.id} className="ai-provider-group" data-ai-provider-group={g.id}>
+          <div className="ai-provider-group-head">
+            <div>
+              <strong>{g.label}</strong>
+              <div className="ai-provider-group-about">{g.about}</div>
+            </div>
+            <div className="ai-provider-group-choice" role="radiogroup" aria-label={`Which order ${g.label} uses`}>
+              <label>
+                <input type="radio" name={`ai-group-${g.id}`} checked={g.follows} onChange={() => set(i, { follows: true, providers: mainRows.map((r) => ({ ...r })) })} />
+                {' '}Follows the Main Setting
+              </label>
+              <label>
+                <input type="radio" name={`ai-group-${g.id}`} checked={!g.follows} onChange={() => set(i, { follows: false, providers: g.follows ? mainRows.map((r) => ({ ...r })) : g.providers })} />
+                {' '}Its Own Order
+              </label>
+            </div>
+          </div>
+          <div className="ai-provider-group-last" data-ai-group-last-call={g.id} style={{ color: g.lastCallError ? '#b26a00' : 'inherit' }}>
+            {lastCallText(g)}
+          </div>
+          {g.groupError && (
+            <div style={{ fontSize: '0.8rem', color: '#b26a00' }}>{`${g.label}'s saved order could not be read (${g.groupError}), so it uses the main order.`}</div>
+          )}
+          {!g.follows && (
+            <ProviderTable rows={g.providers} reading={reading} onChange={(next) => set(i, { providers: next })} lists={lists} onList={onList} />
+          )}
+        </div>
+      ))}
+    </div>
+  );
 }
 
 const VERDICT_COLOR: Record<string, string> = {
@@ -238,6 +354,7 @@ export default function AiProviderPanel(): React.ReactElement {
   const [state, setState] = useState<ScreenState | null>(null);
   const [rows, setRows] = useState<ProviderRow[]>([]);
   const [custom, setCustom] = useState<CustomProvider[]>([]);
+  const [groups, setGroups] = useState<GroupRow[]>([]);
   const [reading, setReading] = useState<Reading | null>(
     () => (window as unknown as { __starcasterAiKeysReading?: Reading }).__starcasterAiKeysReading || null,
   );
@@ -269,6 +386,7 @@ export default function AiProviderPanel(): React.ReactElement {
     setState(next);
     setRows(next.providers || []);
     setCustom(next.customProviders || []);
+    setGroups(next.groups || []);
   }, []);
 
   const load = useCallback(async () => {
@@ -286,18 +404,18 @@ export default function AiProviderPanel(): React.ReactElement {
     }
   }, [take]);
 
-  const save = useCallback(async (nextRows: ProviderRow[], nextCustom: CustomProvider[]) => {
+  const save = useCallback(async (nextRows: ProviderRow[], nextCustom: CustomProvider[], nextGroups: GroupRow[]) => {
     const api = getAppApi();
     if (!api) { setError('Admin app not ready.'); return false; }
     setBusy(true);
     setError('');
     setNotice('');
     try {
-      const res = await api(PATH, { method: 'PUT', body: JSON.stringify(payloadOf(nextRows, nextCustom)) });
+      const res = await api(PATH, { method: 'PUT', body: JSON.stringify(payloadOf(nextRows, nextCustom, syncGroups(nextGroups, nextRows))) });
       const data = (res?.data || res) as ScreenState & { saved?: boolean };
       take(data);
       // The server answers only after reading the row back, so this is what is stored.
-      setNotice(data.saved ? 'Saved and read back. AI features follow this order within about a minute.' : '');
+      setNotice(data.saved ? 'Saved and read back, feature groups included. AI features follow it within about a minute.' : '');
       return true;
     } catch (err) {
       setError(`Not saved: ${err instanceof Error ? err.message : 'no answer'}`);
@@ -338,19 +456,21 @@ export default function AiProviderPanel(): React.ReactElement {
       id, label: adding.label.trim(), enabled: false, fast: adding.fast, strong: adding.strong,
       defaultFast: '', defaultStrong: '', keyEnv: adding.keyEnv.trim(), keySet: false, custom: true, baseUrl: adding.baseUrl.trim(),
     }];
-    if (await save(nextRows, nextCustom)) setAdding(EMPTY_SERVICE);
+    if (await save(nextRows, nextCustom, groups)) setAdding(EMPTY_SERVICE);
   };
 
   const removeService = (id: string) => {
+    const nextRows = rows.filter((r) => r.id !== id);
     setCustom(custom.filter((c) => c.id !== id));
-    setRows(rows.filter((r) => r.id !== id));
+    setRows(nextRows);
+    setGroups(syncGroups(groups, nextRows));
   };
 
   return (
     <section ref={hostRef} className="docs-panel ai-provider-panel" style={{ marginBottom: '1rem' }} data-ai-provider-panel>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: '1rem', flexWrap: 'wrap' }}>
         <h3 style={{ margin: 0 }}>AI provider</h3>
-        <button type="button" className="btn btn-save" disabled={busy || !state} onClick={() => { void save(rows, custom); }}>
+        <button type="button" className="btn btn-save" disabled={busy || !state} onClick={() => { void save(rows, custom, groups); }}>
           {busy ? 'Working…' : 'Save'}
         </button>
       </div>
@@ -371,6 +491,17 @@ export default function AiProviderPanel(): React.ReactElement {
       {!state && !error && <p style={{ color: 'var(--muted)' }}>{busy ? 'Reading the AI provider settings…' : 'Not read yet.'}</p>}
 
       {state && <ProviderTable rows={rows} reading={reading} onChange={setRows} lists={lists} onList={(id) => { void listModels(id); }} />}
+
+      {state && groups.length > 0 && (
+        <GroupRows
+          groups={groups}
+          reading={reading}
+          mainRows={rows}
+          onChange={setGroups}
+          lists={lists}
+          onList={(id) => { void listModels(id); }}
+        />
+      )}
 
       {state && custom.length > 0 && (
         <div style={{ marginTop: '0.75rem', fontSize: '0.85rem' }}>
@@ -408,7 +539,7 @@ export default function AiProviderPanel(): React.ReactElement {
 
       {state?.updatedAt && (
         <p style={{ fontSize: '0.8rem', color: 'var(--muted)', marginTop: '0.75rem' }}>
-          Last saved {new Date(state.updatedAt).toLocaleString()}.
+          Last saved {mountainTime(state.updatedAt)}.
         </p>
       )}
     </section>

@@ -4,8 +4,10 @@
  * The AI provider switch on Settings › APIs (AI switch 2, SC-844).
  *
  *   GET /api/settings/ai-providers   the order, switches, models and added services,
- *                                    and which one the door is actually using
- *   PUT /api/settings/ai-providers   save them; answered only after reading them back
+ *                                    which one the door is actually using, and each
+ *                                    feature group's own order and last call (SC-876)
+ *   PUT /api/settings/ai-providers   save them (main order and group orders in one
+ *                                    write); answered only after reading them back
  *   GET /api/settings/ai-providers/models?provider=<id>
  *                                    the models that provider's key can use, to choose from (SC-903)
  *
@@ -47,7 +49,9 @@ function screenRows({ settings, fallback, builtIns, keyIsSet }) {
     return c ? { id: c.id, label: c.label, keyEnv: c.keyEnv, baseUrl: c.baseUrl, models: {}, custom: true } : null;
   };
   let entries;
-  if (settings?.exists) {
+  // `mainSaved`, not `exists`: a row holding only group orders has an empty
+  // main order, which is "never saved", not "everything off" (SC-872 review).
+  if (settings?.mainSaved) {
     entries = settings.providers.map((p) => ({ ...p }));
   } else {
     // Nothing saved: show the order the door is using now, switched on, then
@@ -80,6 +84,64 @@ function screenRows({ settings, fallback, builtIns, keyIsSet }) {
   }).filter(Boolean);
 }
 
+/** A provider id as the name Dane knows it by: "OpenAI", "Groq Cloud". */
+function providerLabel(id, { builtIns, customProviders = [] }) {
+  if (builtIns[id]) return builtIns[id].label;
+  const c = customProviders.find((x) => x.id === id);
+  return c ? c.label : id;
+}
+
+/**
+ * One row per feature group (lib/aiFeatureGroups.js, the only list of them):
+ * whether it follows the main order or has its own, that order as screen rows,
+ * and which provider answered its last AI call. Pure apart from `keyIsSet`.
+ *
+ *   lastCalls — lib/aiGroupLastCalls.js readLastCalls' answer
+ */
+function groupRows({ settings, mainRows, builtIns, keyIsSet, lastCalls }) {
+  const { AI_FEATURE_GROUPS } = require('../lib/aiFeatureGroups');
+  const customProviders = settings?.customProviders || [];
+  return AI_FEATURE_GROUPS.map((g) => {
+    const own = settings?.groupOrders?.[g.id];
+    const groupError = settings?.groupErrors?.[g.id] || '';
+    let providers = null;
+    if (Array.isArray(own) && own.length) {
+      providers = screenRows({
+        settings: { mainSaved: true, providers: own, customProviders },
+        fallback: { providers: [] },
+        builtIns,
+        keyIsSet,
+      });
+    }
+    let lastCall = null;
+    let lastCallError = '';
+    let lastCallNone = '';
+    if (!lastCalls || !lastCalls.ok) {
+      lastCallError = `Could not read which provider answered last: ${(lastCalls && lastCalls.error) || 'no answer'}`;
+    } else {
+      const hit = lastCalls.data.groups[g.id];
+      if (hit) {
+        lastCall = { ...hit, providerLabel: providerLabel(hit.provider, { builtIns, customProviders }) };
+      } else {
+        lastCallNone = lastCalls.data.truncated
+          ? `No AI calls among the latest ${lastCalls.data.rowLimit.toLocaleString('en-US')} recorded (an older one may exist)`
+          : `No AI calls yet (none in the last ${lastCalls.data.windowDays} days)`;
+      }
+    }
+    return {
+      id: g.id,
+      label: g.label,
+      about: g.about,
+      follows: !providers,
+      providers: providers || mainRows.map((r) => ({ ...r })),
+      groupError,
+      lastCall,
+      lastCallError,
+      lastCallNone,
+    };
+  });
+}
+
 async function readForScreen() {
   const ai = require('../lib/aiClient');
   const store = require('../lib/aiProviderSettingsStore');
@@ -87,6 +149,9 @@ async function readForScreen() {
   const settings = read.ok ? read.data : null;
   const fallback = ai.envProviderOrder();
   const using = await ai.getAiProviderOrder({ fresh: true });
+  const lastCalls = await require('../lib/aiGroupLastCalls').readLastCalls();
+  const keyIsSet = (def) => ai.providerKeyFor(def);
+  const providers = screenRows({ settings, fallback, builtIns: ai.AI_PROVIDERS, keyIsSet });
   return {
     status: 'ok',
     // Which order the door is following right now, and why, in words.
@@ -94,13 +159,12 @@ async function readForScreen() {
     fallbackReason: using.fallbackReason || '',
     readError: read.ok ? '' : read.error,
     updatedAt: settings?.updatedAt || null,
+    mainSaved: Boolean(settings?.mainSaved),
     customProviders: settings?.customProviders || [],
-    providers: screenRows({
-      settings,
-      fallback,
-      builtIns: ai.AI_PROVIDERS,
-      keyIsSet: (def) => ai.providerKeyFor(def),
-    }),
+    providers,
+    // Each group's row. A group that follows the main setting carries a copy
+    // of the main rows, so choosing "Its own order" starts from what it uses now.
+    groups: groupRows({ settings, mainRows: providers, builtIns: ai.AI_PROVIDERS, keyIsSet, lastCalls }),
   };
 }
 
@@ -145,6 +209,45 @@ async function handleModels(req, res) {
     : { provider: id, listed: false, models: [], verdict: listed.verdict || '', reason: listed.reason }), true;
 }
 
+/**
+ * The group orders a PUT writes, or `data: undefined` for "leave the column
+ * alone". Sent by the screen: validated strictly against the services in this
+ * same save. Not sent: the stored ones, brought into line with any service
+ * this save adds or removes (SC-872 review item 3). The column is written only
+ * when some group has, or had, its own order, so the main order still saves
+ * where docs/SQL/ai_provider_groups_setup.sql has not been run.
+ */
+async function groupOrdersToWrite(store, body, input) {
+  const stored = await store.readSettings();
+  if (!stored.ok) {
+    return { ok: false, status: 502, error: `Not saved: the feature group settings could not be read first (${stored.error}), so this save could not be checked against them.` };
+  }
+  const had = store.anyGroupOrder(stored.data.groupOrders) || Object.keys(stored.data.groupErrors || {}).length > 0;
+  let next;
+  if (body && body.groupOrders !== undefined) {
+    const checked = store.validateGroupOrders(body.groupOrders, { customProviders: input.customProviders });
+    if (!checked.ok) return checked;
+    next = checked.data;
+  } else {
+    if (!had) return { ok: true, data: undefined };
+    const fixed = store.reconcileGroupOrders(stored.data.groupOrders, input.providers);
+    if (!fixed.ok) return fixed;
+    next = fixed.data;
+  }
+  if (!had && !store.anyGroupOrder(next)) return { ok: true, data: undefined };
+  return { ok: true, data: next };
+}
+
+/** "; Outreach: openai → anthropic" for the activity log, one clause per group with its own order. */
+function groupSummary(groupOrders) {
+  if (!groupOrders) return '';
+  const { groupById } = require('../lib/aiFeatureGroups');
+  return Object.entries(groupOrders)
+    .filter(([, list]) => Array.isArray(list))
+    .map(([id, list]) => `; ${groupById(id)?.label || id}: ${list.filter((p) => p.enabled).map((p) => p.id).join(' → ')}`)
+    .join('');
+}
+
 async function handle(req, res, pathname, method) {
   if (pathname !== PATH && pathname !== `${PATH}/models`) return false;
   if (!isAdmin(req)) {
@@ -165,6 +268,9 @@ async function handle(req, res, pathname, method) {
     const body = await parseJsonBody(req);
     const input = store.validateInput(body);
     if (!input.ok) return sendErr(res, 400, input.error, { code: 'INVALID_AI_PROVIDERS' }), true;
+    const groups = await groupOrdersToWrite(store, body, input.data);
+    if (!groups.ok) return sendErr(res, groups.status || 400, groups.error, { code: groups.status === 400 ? 'INVALID_AI_PROVIDERS' : 'AI_PROVIDERS_NOT_SAVED' }), true;
+    if (groups.data !== undefined) input.data.groupOrders = groups.data;
     const saved = await store.saveSettings(input.data, {
       projectId: req?.projectContext?.project?.id,
       userId: req?.authUser?.id,
@@ -176,7 +282,8 @@ async function handle(req, res, pathname, method) {
     if (!back.ok) {
       return sendErr(res, 502, `The save was sent, but reading it back failed (${back.error}), so it is not confirmed. Reload to see what is stored.`, { code: 'AI_PROVIDERS_UNCONFIRMED' }), true;
     }
-    if (!back.data.exists || !store.sameSettings(input.data, back.data)) {
+    const groupsMatch = input.data.groupOrders === undefined || store.sameGroupOrders(input.data.groupOrders, back.data);
+    if (!back.data.mainSaved || !store.sameSettings(input.data, back.data) || !groupsMatch) {
       return sendErr(res, 502, 'The save was sent, but the stored setting does not match what was sent, so it is not confirmed. Reload to see what is stored.', { code: 'AI_PROVIDERS_MISMATCH' }), true;
     }
     require('../lib/aiClient').forgetProviderOrder();
@@ -184,7 +291,7 @@ async function handle(req, res, pathname, method) {
       require('../lib/activityLog').logActivity({
         action: 'settings.ai_providers_saved',
         entityType: 'settings',
-        summary: `AI provider order saved: ${input.data.providers.filter((p) => p.enabled).map((p) => p.id).join(' → ')}`,
+        summary: `AI provider order saved: ${input.data.providers.filter((p) => p.enabled).map((p) => p.id).join(' → ')}${groupSummary(input.data.groupOrders)}`,
       });
     } catch { /* the log is a record, not a gate */ }
     return sendOk(res, 200, { ...(await readForScreen()), saved: true }), true;
@@ -193,4 +300,4 @@ async function handle(req, res, pathname, method) {
   return sendErr(res, 405, 'Method not allowed'), true;
 }
 
-module.exports = { handle, manifest, screenRows, isAdmin, providerForList };
+module.exports = { handle, manifest, screenRows, groupRows, groupOrdersToWrite, isAdmin, providerForList };
