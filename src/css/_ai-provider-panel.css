@@ -27,3 +27,39 @@
   gap: 0.25rem;
   white-space: nowrap;
 }
+
+/* Feature groups (AI provider groups 2, SC-876): one block per group under the
+   main order. Each says what it covers, which order it uses, and who answered
+   its last AI call. */
+.ai-provider-panel .ai-provider-group {
+  border-top: 1px solid var(--border);
+  padding: 0.75rem 0;
+}
+.ai-provider-panel .ai-provider-group-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.ai-provider-panel .ai-provider-group-about {
+  font-size: var(--text-sm);
+  color: var(--muted);
+  max-width: 40rem;
+}
+.ai-provider-panel .ai-provider-group-choice {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  font-size: var(--text-sm);
+}
+.ai-provider-panel .ai-provider-group-choice label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  white-space: nowrap;
+}
+.ai-provider-panel .ai-provider-group-last {
+  font-size: var(--text-sm);
+  margin: 0.35rem 0;
+}

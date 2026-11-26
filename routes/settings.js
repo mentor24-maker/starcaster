@@ -358,8 +358,15 @@ async function handle(req, res, pathname, method) {
     let fallbackReason = '';
     try {
       const read = await require('../lib/aiProviderSettingsStore').readSettings();
+      // Passed whenever a row exists, even one holding only group orders, so
+      // a key a group's own order uses is checked too (SC-876).
       if (read.ok && read.data?.exists) settings = read.data;
-      else fallbackReason = read.ok ? 'nothing has been saved on Settings › APIs yet' : `the saved order could not be read (${read.error || 'no answer'})`;
+      if (!read.ok) fallbackReason = `the saved order could not be read (${read.error || 'no answer'})`;
+      else if (!aiKeys.mainOrderSaved(read.data)) {
+        fallbackReason = read.data?.exists
+          ? 'the main order on Settings › APIs has not been saved yet (only feature groups have been)'
+          : 'nothing has been saved on Settings › APIs yet';
+      }
     } catch (err) {
       fallbackReason = `the saved order could not be read (${String(err?.message || err)})`;
     }
