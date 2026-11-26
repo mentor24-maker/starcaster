@@ -224,9 +224,20 @@ test('the five groups Dane named exist, and "unknown" is in none', () => {
 
 // ── The door follows each group's order ────────────────────────────────────
 
-const ALL = ['anthropic', 'openai', 'gemini', 'kimi'];
-function list(order) {
-  return order.map((id) => ({ id, enabled: id !== 'kimi', fast: ai.AI_PROVIDERS[id].models.fast, strong: ai.AI_PROVIDERS[id].models.strong }));
+// Every built-in provider, because a saved order must list each one exactly
+// once. Hard-coding four here broke ten tests the day main added five more
+// providers (SC-903), so the list is read from the door itself.
+const ALL = Object.keys(ai.AI_PROVIDERS);
+const entry = (id, enabled) => ({ id, enabled, fast: ai.AI_PROVIDERS[id].models.fast, strong: ai.AI_PROVIDERS[id].models.strong });
+/**
+ * An order that starts with `order` (Kimi listed but off, as before) and then
+ * every other built-in provider, switched off, so the tests route only
+ * through the providers they name. `{ complete: false }` lists `order` alone.
+ */
+function list(order, { complete = true } = {}) {
+  const head = order.map((id) => entry(id, id !== 'kimi'));
+  if (!complete) return head;
+  return [...head, ...ALL.filter((id) => !order.includes(id)).map((id) => entry(id, false))];
 }
 function settingsWith(groupOrders, mainOrder = ['anthropic', 'openai', 'gemini', 'kimi']) {
   const main = store.validateInput({ providers: list(mainOrder), customProviders: [] }).data;
@@ -348,7 +359,7 @@ test('group orders: follows-main is null, an own order has the main order\'s sha
   assert.equal(ok.data.writing, null);
   assert.equal(ok.data.studio, null, 'a group left out follows main');
   assert.match(store.validateGroupOrders({ marketing: null }).error, /"marketing" is not a feature group/);
-  assert.match(store.validateGroupOrders({ outreach: list(['openai', 'anthropic', 'gemini']) }).error, /^Outreach: .*Kimi" is missing/);
+  assert.match(store.validateGroupOrders({ outreach: list(['openai', 'anthropic', 'gemini'], { complete: false }) }).error, /^Outreach: .*Kimi" is missing/);
   const off = list(ALL).map((p) => ({ ...p, enabled: false }));
   assert.match(store.validateGroupOrders({ outreach: off }).error, /^Outreach: Switch at least one provider on/);
 });
@@ -365,7 +376,7 @@ test('saving group orders writes only that field (the main order is left alone),
     assert.equal('providers' in sent.body, false);
     assert.equal(sent.body.project_id, 'p1');
     assert.equal(sent.body.owner_user_id, 'u1');
-    assert.equal(sent.body.group_orders.outreach.length, 4);
+    assert.equal(sent.body.group_orders.outreach.length, ALL.length);
   } finally {
     supabase.sbQuery = original;
   }
