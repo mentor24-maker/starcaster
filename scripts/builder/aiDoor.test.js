@@ -361,7 +361,7 @@ test('callers never name a model: the tier picks it', async () => {
   const h = harness({ order: 'anthropic', script: { anthropic: REPLIES.anthropicOk } });
   await generate({ ...ASK, tier: 'fast' }, h.deps);
   await generate({ ...ASK, tier: 'strong' }, h.deps);
-  assert.deepEqual(h.sent.map((s) => s.body.model), ['claude-haiku-4-5', 'claude-sonnet-5-5']);
+  assert.deepEqual(h.sent.map((s) => s.body.model), ['claude-haiku-5-5', 'claude-sonnet-5-5']);
 });
 
 // ── The bus notice ─────────────────────────────────────────────────────────

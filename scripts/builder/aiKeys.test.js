@@ -52,6 +52,7 @@ test('probeKey: reads the account off the anthropic-organization-id header and m
   const fetchImpl = async (url, init) => {
     assert.equal(url, 'https://api.anthropic.com/v1/messages');
     assert.equal(JSON.parse(init.body).max_tokens, 1);
+    assert.equal(JSON.parse(init.body).model, 'claude-haiku-5-5', 'the Anthropic probe uses the cheapest model, Haiku 5.5');
     return new Response(JSON.stringify({ usage: { input_tokens: 8, output_tokens: 1 } }), {
       status: 200, headers: { 'anthropic-organization-id': ORG },
     });
