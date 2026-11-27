@@ -106,6 +106,36 @@ test('the launcher runs a command with SPIRALITY_PROJECT naming THIS checkout', 
   assert.equal(r.stdout.trim(), REPO);
 });
 
+test('a time limit that stops the launcher stops what it started too (no orphan door)', async () => {
+  const s = scratch();
+  const there = s.fakeSpirality(path.join(s.dir, 'spirality'));
+  fs.mkdirSync(path.join(there, 'scripts'));
+  const pidFile = path.join(s.dir, 'child.pid');
+  const lateFile = path.join(s.dir, 'wrote-late');
+  // A stand-in door that records its pid, then would write a file 3s later.
+  fs.writeFileSync(path.join(there, 'scripts', 'with_doppler.mjs'),
+    `import fs from 'node:fs';\nfs.writeFileSync(${JSON.stringify(pidFile)}, String(process.pid));\nsetTimeout(() => fs.writeFileSync(${JSON.stringify(lateFile)}, 'late'), 3000);\n`);
+  const { spawn } = require('node:child_process');
+  const launcher = spawn(process.execPath, [LAUNCHER, 'with-doppler', 'true'], {
+    env: { PATH: process.env.PATH, HOME: s.home, SPIRALITY_DIR: there },
+    stdio: 'ignore',
+  });
+  const deadline = Date.now() + 5000;
+  while (!fs.existsSync(pidFile) && Date.now() < deadline) await new Promise((r) => setTimeout(r, 25));
+  assert.ok(fs.existsSync(pidFile), 'the stand-in door never started');
+  const childPid = Number(fs.readFileSync(pidFile, 'utf8'));
+  const exited = new Promise((resolve) => launcher.on('exit', (code, signal) => resolve({ code, signal })));
+  launcher.kill('SIGTERM');
+  const { code } = await exited;
+  assert.equal(code, 143, 'the launcher reports the stop as 128 + SIGTERM');
+  const alive = () => { try { process.kill(childPid, 0); return true; } catch { return false; } };
+  const gone = Date.now() + 2000;
+  while (alive() && Date.now() < gone) await new Promise((r) => setTimeout(r, 25));
+  assert.equal(alive(), false, 'the door the launcher started is still running after the launcher was stopped');
+  await new Promise((r) => setTimeout(r, 3300));
+  assert.equal(fs.existsSync(lateFile), false, 'the stopped door still wrote afterwards');
+});
+
 test('nothing outside lib/spirality.cjs reaches for a loop/ copy any more', () => {
   const out = spawnSync('git', ['grep', '-n', '-E', "(\\.\\./)+loop/(lib|scripts)/|'loop', 'scripts'", '--', 'lib', 'scripts', 'package.json', ':!scripts/builder/spirality.test.js'], { cwd: REPO, encoding: 'utf8' });
   assert.equal(out.stdout, '', `still pointing at the deleted loop/ copy:\n${out.stdout}`);

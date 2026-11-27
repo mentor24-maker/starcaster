@@ -16,7 +16,8 @@
  * No Spirality on this machine stops here, exit 1, saying what to do: never a
  * silent "no tickets".
  */
-import { spawnSync } from 'node:child_process';
+import { spawn } from 'node:child_process';
+import { constants } from 'node:os';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
@@ -56,12 +57,24 @@ if (verb === 'with-doppler' && !rest.length) {
   process.exit(2);
 }
 
-const r = spawnSync(command[0], command.slice(1), {
+// Async, and every stop signal is passed on (SC-870 review). A caller's time
+// limit (execFileSync `timeout`) signals THIS process only; with spawnSync the
+// launcher died and the door it started kept running, so a bus post counted as
+// unsent and retried next wake landed twice.
+const child = spawn(command[0], command.slice(1), {
   stdio: 'inherit',
   env: { ...process.env, SPIRALITY_PROJECT: spirality.REPO_ROOT },
 });
-if (r.error) {
-  console.error(`spirality: could not start ${command[1] || command[0]}: ${r.error.message}`);
-  process.exit(1);
+for (const sig of ['SIGTERM', 'SIGINT', 'SIGHUP']) {
+  process.on(sig, () => {
+    try { child.kill(sig); } catch { /* already gone */ }
+  });
 }
-process.exit(r.status ?? 1);
+child.on('error', (err) => {
+  console.error(`spirality: could not start ${command[1] || command[0]}: ${err.message}`);
+  process.exit(1);
+});
+// Stopped by a signal: the shell's convention, 128 + its number.
+child.on('exit', (code, signal) => {
+  process.exit(code ?? 128 + (constants.signals[signal] ?? 0));
+});

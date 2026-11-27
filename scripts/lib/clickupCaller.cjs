@@ -64,9 +64,11 @@ const SCHEDULED_LAUNCHERS = {
   },
   // The lanes (loop-build, loop-review, loop-intake) and their relay run from
   // Spirality's runner since 2026-11-25 (SC-905), so their wrappers are no
-  // longer in scripts/ (SC-870). They still declare themselves: the marker is
-  // `laneEnv` in spirality.project.json, which Spirality's runner exports to
-  // every pass.
+  // longer in scripts/ (SC-870). The three loop passes still declare
+  // themselves: the marker is `laneEnv` in spirality.project.json, which
+  // Spirality's loop_runner.sh exports to every pass. The RELAY does not:
+  // Spirality release-2's run_relay.sh never exports laneEnv, so relay calls
+  // are not marked as scheduled callers (a gap in Spirality, not here).
   'run_pipeline_pulse.sh': {
     job: 'pipeline-pulse',
     why: 'Hourly. Reads a lot of tickets to produce its report.',
