@@ -111,6 +111,8 @@ function fakeDoor({ order = ['openai'], keys = order, answer, signals = [] }) {
     getKey: (def) => (keys.includes(def.id) ? `key-${def.id}` : ''),
     recordUsage: async (row) => { usage.push(row); },
     postBus: async () => true,
+    // No shared notice row in a test: this door limits the notice by its own memory (SC-925).
+    noticeStore: null,
     now: () => Date.now(),
     fetchImpl: async (url, init) => {
       signals.push(init.signal);

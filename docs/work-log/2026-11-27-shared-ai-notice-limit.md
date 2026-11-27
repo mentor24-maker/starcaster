@@ -24,3 +24,11 @@ door now carries its own fake notice table, and a tripwire fails any test that
 reaches the real one. Also fixed: when an AI company starts working again, a
 copy now clears only the notice time it knew about, not a newer one another
 copy wrote for a fresh outage, so that newer notice is not repeated.
+
+**After the second review.** That fix only covered one test file. Two others
+(the event harvester's and the outreach writers') still wrote into the real
+table, and one stamped Anthropic's row with the current time, which on a
+production-connected run would have hidden a genuine "out of credit" notice
+for six hours. The door itself now refuses the real table whenever it is
+running inside a test, so no test file anywhere can reach it, whether or not
+it remembers to bring a fake. The two files also bring one now.

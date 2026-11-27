@@ -18,6 +18,7 @@ require.cache[observePath] = {
 
 const {
   generate, envProviderOrder, orderFromSettings, buildRequest, parseJsonReply, AI_PROVIDERS, NOTICE_EVERY_MS, CANNOT_READ, _resetNoticeMemory,
+  _liveNoticeStore, _underTestRunner,
 } = require('../../lib/aiClient');
 const { generateAlt } = require('../../lib/altTextProviders');
 
@@ -654,12 +655,38 @@ test('the door test harness never reaches the live notice store, even on a fall-
   assert.equal(h.posts.length, 1);
   assert.deepEqual(h.deps.noticeStore.calls, [['claim', 'anthropic'], ['clear', 'anthropic']], 'the harness\'s own fake took both');
   assert.deepEqual(liveStoreReached, []);
-  // And the tripwire itself works: a door given no override reaches the live store, and is caught.
-  const { noticeStore, ...noFake } = h.deps;
+  // And the tripwire itself works: a live store that does not know it is in a test reaches the table, and is caught.
+  const unguarded = _liveNoticeStore({ isTestRun: () => false });
   funded = false;
-  await capturingWarnings(() => generate(ASK, { ...noFake, noticeMemory: new Map() }));
+  await capturingWarnings(() => generate(ASK, { ...h.deps, noticeStore: unguarded, noticeMemory: new Map() }));
   assert.deepEqual(liveStoreReached, ['claimFallThroughNotice(anthropic)']);
   liveStoreReached.length = 0;
+});
+
+test('a door given plain deps under the test runner never reaches the live notice store, and still limits by its own memory', async () => {
+  // The class the round-2 review found: any test file that drives a fall-through
+  // without a fake noticeStore (eventHarvest, the outreach drafters) used to
+  // write into the real table. The live store itself refuses under node --test.
+  assert.equal(_underTestRunner(), true, 'node --test is recognised as a test run');
+  const h = harness({ script: { anthropic: REPLIES.anthropicNoCredit, openai: REPLIES.openaiOk } });
+  const { noticeStore, ...plain } = h.deps;
+  const deps = { ...plain, noticeMemory: new Map() };
+  const warnings = await capturingWarnings(async () => {
+    await generate(ASK, deps);
+    await generate(ASK, deps);
+  });
+  assert.deepEqual(liveStoreReached, [], 'the live store was not reached');
+  assert.equal(h.posts.length, 1, 'one notice in six hours, from this copy\'s own memory');
+  assert.ok(warnings.some((w) => /falling back to this server copy's own memory/.test(w)), 'the fallback is logged as a fallback');
+});
+
+test('the test-run check reads node --test, vitest and a test file run on its own, and nothing else', () => {
+  assert.equal(_underTestRunner({ NODE_TEST_CONTEXT: 'child-v8' }, ['node', 'server.js']), true);
+  assert.equal(_underTestRunner({ VITEST: 'true' }, ['node', 'x.js']), true);
+  assert.equal(_underTestRunner({}, ['node', '/r/scripts/builder/eventHarvest.test.js']), true);
+  assert.equal(_underTestRunner({}, ['node', '/r/server.js']), false, 'a server is not a test run');
+  assert.equal(_underTestRunner({}, ['node', '/r/api/[...slug].js']), false);
+  assert.equal(_underTestRunner({}, []), false);
 });
 
 test('a recovery clears only the stamp this copy knows, never a newer one another copy wrote', async () => {
