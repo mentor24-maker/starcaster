@@ -87,9 +87,7 @@ const ALLOWED = new Map([
 // the list is meant to shrink to nothing, and the check prints it every run so
 // nobody forgets it is there.
 const WAITING = new Map([
-  ['lib/themeWizardGenerator.js',
-    "the Theme Wizard has the AI read web pages itself and answer in an exact JSON shape, which the door"
-    + ' cannot do yet, and it asks for claude-fable-5 by name for design taste (door: SC-897, move: SC-898)'],
+  // Empty since SC-898 moved the Theme Wizard onto the door (2026-11-26).
 ]);
 
 function walk(dir, root = ROOT, out = []) {

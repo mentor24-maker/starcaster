@@ -178,6 +178,14 @@ created_at}`.
 This is the part that needs real thought. Everything else is plumbing.
 
 ### 6.1 Model choice
+
+> **Changed 2026-11-26 (SC-898).** Every wizard call now goes through the AI
+> door (`generate()` in `lib/aiClient.js`) on its strong tier, so the designs
+> come from whichever provider is first on Settings › APIs › AI provider, like
+> every other feature (Dane's option B). Naming Fable meant the wizard stopped
+> whenever Anthropic ran out of credit. The two lines below are the original
+> design, kept for the reasoning.
+
 - **Generating candidates: `claude-fable-5`.** Design taste is the entire product.
 - **Everything else: `claude-opus-5`.** Parsing the capture, normalising the four
   seed types into a `style_brief`, summarising feedback. Cheaper, plenty capable.
