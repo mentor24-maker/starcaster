@@ -194,16 +194,3 @@ test('CLI: a broken policy file answers run 0 and explains on stderr', () => {
 // ---------------------------------------------------------------------------
 // The runner really asks, and really tells the others.
 // ---------------------------------------------------------------------------
-
-test('loop_runner.sh asks the policy before starting a pass and records a stand-down after one', () => {
-  const sh = fs.readFileSync(path.join(REPO, 'scripts/loop_runner.sh'), 'utf8')
-    .split('\n').filter((l) => !/^\s*#/.test(l)).join('\n');
-  const check = sh.indexOf('loop_policy.mjs" check');
-  const start = sh.indexOf('START /$SKILL');
-  assert.ok(check > 0 && check < start, 'the policy is read before the START banner');
-  // The lane key is "<project>/<skill>"; the runner reads the project's short
-  // name from the project config ($SLUG = starcaster) rather than typing it.
-  assert.match(sh, /loop_policy\.mjs" check --lane "\$SLUG\/\$SKILL"/);
-  assert.match(sh, /loop_policy\.mjs" stand-down --lane "\$SLUG\/\$SKILL"/);
-  assert.match(fs.readFileSync(path.join(REPO, 'scripts/install_loop_runner.sh'), 'utf8'), /loop_policy\.mjs" status/);
-});

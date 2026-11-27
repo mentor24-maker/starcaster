@@ -23,8 +23,10 @@ const REPO = path.resolve(__dirname, '..', '..');
 function fakeDoor(answer) {
   const calls = [];
   const run = (_node, argv, opts) => {
-    // Everything after the door's own path is the command it was given.
-    const cmd = argv.slice(argv.findIndex((a) => a.endsWith('clickup.mjs')) + 1);
+    // Everything after the launcher's `clickup` verb (SC-870) is the command
+    // the door was given.
+    assert.match(argv[0], /scripts[\\/]spirality\.mjs$/, 'through the Spirality launcher');
+    const cmd = argv.slice(argv.indexOf('clickup') + 1);
     calls.push({ cmd, input: opts.input, env: opts.env });
     return answer(cmd, opts.input);
   };

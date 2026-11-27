@@ -31,10 +31,11 @@ StarCaster's tickets are the **StarCaster** project on **the tracker**, the tick
 system that runs on the Mac Mini (http://mac-mini.local:4180, ids like
 `SC-12`). Every ticket touch goes through **`npm run clickup -- <command>`**
 (the name stayed from ClickUp days; it talks to whichever tracker
-`spirality.project.json` names). The command is Spirality's ticket door,
-copied into `loop/` and wrapped in Doppler (project `starcaster`), so the token is
-supplied without any agent or human handling it. `loop/` is never edited
-here: a change is made in Spirality and copied in (`loop/README.md`).
+`spirality.project.json` names). The command is Spirality's own ticket door,
+run from the release StarCaster's lanes use (`scripts/spirality.mjs`, SC-870)
+and wrapped in Doppler (project `starcaster`), so the token is supplied without
+any agent or human handling it. There is no copy of it here to keep up to date:
+a change is made in Spirality and reaches StarCaster with the next release.
 
 On the Mini the door reaches the tracker at `127.0.0.1`. Anywhere else, put
 `TRACKER_API_URL=http://mac-mini.local:4180` in front of each command.
@@ -163,7 +164,8 @@ three reasons listed and named options (respec / split / drop).
 ## How to run it
 
 **On the Mini, on a timer.** Four launchd jobs, named from `launchdPrefix` in
-`spirality.project.json`, run from the main checkout at `/Users/daneofearth/WebApps/starcaster`:
+`spirality.project.json`, run Spirality's runner for StarCaster's main checkout
+(since 2026-11-25, SC-905):
 
 | Job | What it runs | How often |
 |---|---|---|
@@ -173,14 +175,12 @@ three reasons listed and named options (respec / split / drop).
 | `com.starcaster.relay` | `npm run clickup -- relay`, no Claude | every 10 minutes |
 
 Each lane pulls a clean `main` before every pass and signs in to the tracker
-as itself (`loop-build`, `loop-review`, `loop-intake`, `relay`). The scripts
-are in `scripts/` (`install_loop_runner.sh`, `loop_runner.sh`, `run_relay.sh`
-and their helpers), copied from Spirality (`loop/README.md`).
+as itself (`loop-build`, `loop-review`, `loop-intake`, `relay`). The runner,
+the installer and the skills are Spirality's; StarCaster no longer has copies
+of them (SC-870). Run the installer from Spirality's folder:
 
 ```bash
-/Users/daneofearth/WebApps/starcaster/scripts/install_loop_runner.sh --status     # loaded? running? last pass?
-/Users/daneofearth/WebApps/starcaster/scripts/install_loop_runner.sh              # install, or reinstall after a change
-/Users/daneofearth/WebApps/starcaster/scripts/install_loop_runner.sh --uninstall  # remove all four
+cd ~/WebApps/spirality && scripts/install_loop_runner.sh --status --project ~/WebApps/starcaster   # loaded? running? which release?
 ```
 
 The question is never "shall I start one", it is "what is it doing": each
@@ -203,7 +203,7 @@ Your day:
 
 ### What the `verify` gate is
 
-`npm run verify` is the definition of done. It runs `npm run typecheck && npm run test:builder-ui && npm run build && npm run test:builder && npm run test:hooks && npm run check:syntax && node scripts/check_conventions.cjs && npm run check:ui && npm run check:models && npm run check:paths`, then the copied loop tests (`npm run test:loop`), the same thing CI's `verify` check runs on
+`npm run verify` is the definition of done. It runs `npm run typecheck && npm run test:builder-ui && npm run build && npm run test:builder && npm run test:hooks && npm run check:syntax && node scripts/check_conventions.cjs && npm run check:ui && npm run check:models && npm run check:paths && npm run check:ai-door`, the same thing CI's `verify` check runs on
 every pull request, and `main` cannot merge without it green. The build loop
 runs it before opening a PR; the review loop runs it again.
 

@@ -2,7 +2,7 @@
 
 /**
  * trackerDoor — the watchdogs' one way to read and write tickets, through the
- * ticket door (`loop/scripts/clickup.mjs`), never ClickUp (SC-794).
+ * ticket door (`Spirality's scripts/clickup.mjs`), never ClickUp (SC-794).
  *
  * WHY THIS EXISTS. StarCaster's tickets moved to the tracker on 2026-11-12
  * (SC-790). Slice 1 (SC-791) sent every alarm to the tracker's bus, but the
@@ -34,7 +34,7 @@
  * WHICH SEAT. The door picks the token from TRACKER_TOKEN_NAME, which a loop
  * runner exports; a watchdog on the relay's wake sets none, so it signs in as
  * the project's hand-run seat. Doppler supplies the value via
- * loop/scripts/with_doppler.mjs; this file never sees it.
+ * Spirality's scripts/with_doppler.mjs; this file never sees it.
  *
  * Synchronous underneath (one subprocess per door command). Callers that
  * `await` these get the value straight back, which is all they need.
@@ -47,8 +47,9 @@ const { execFileSync } = require('child_process');
 const { busPostEnv, shellFailureDetail } = require('./clickup.cjs');
 
 const ROOT = path.join(__dirname, '..', '..');
-const WITH_DOPPLER = path.join(ROOT, 'loop', 'scripts', 'with_doppler.mjs');
-const TICKET_DOOR = path.join(ROOT, 'loop', 'scripts', 'clickup.mjs');
+// Spirality's door, through the same launcher the npm clickup script uses
+// (SC-870): it finds the release StarCaster's lanes run and wraps it in Doppler.
+const LAUNCHER = path.join(ROOT, 'scripts', 'spirality.mjs');
 /** The narrow read-only reader (SC-851): a ticket by name, one ticket's comments. */
 const TRACKER_READ = path.join(ROOT, 'scripts', 'tracker_read.mjs');
 const DOOR_TIMEOUT_MS = Number(process.env.TRACKER_DOOR_TIMEOUT_MS) || 3 * 60 * 1000;
@@ -100,11 +101,11 @@ function thisNodeName() {
  * injectable so the tests reach every branch without a tracker.
  */
 function runDoor(args, {
-  input, what = args[0], timeoutMs = DOOR_TIMEOUT_MS, run = execFileSync, env = process.env, node, script = TICKET_DOOR,
+  input, what = args[0], timeoutMs = DOOR_TIMEOUT_MS, run = execFileSync, env = process.env, node, script,
 } = {}) {
   doorRuns += 1;
   try {
-    return String(run('node', [WITH_DOPPLER, 'node', script, ...args], {
+    return String(run('node', script ? [LAUNCHER, 'with-doppler', 'node', script, ...args] : [LAUNCHER, 'clickup', ...args], {
       cwd: ROOT,
       encoding: 'utf8',
       input,

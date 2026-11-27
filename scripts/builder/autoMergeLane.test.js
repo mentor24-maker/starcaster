@@ -1464,6 +1464,29 @@ test('the merge machinery is governance as SOURCE, not only as tests', () => {
   }
 });
 
+test("the launcher into Spirality's door is governance, like the door it replaced (SC-870)", () => {
+  // SC-870 deleted loop/ (whose door no lane could carry) and routed every
+  // ticket write through scripts/spirality.mjs. Review found Lane B could
+  // auto-merge it. It is the peer of scripts/lib/clickup.cjs and must be
+  // blocked with it, along with the locator, the pin alarm and the pin itself.
+  for (const f of [
+    'scripts/spirality.mjs',
+    'lib/spirality.cjs',
+    'scripts/builder/spirality.test.js',
+    'scripts/spirality_pin.mjs',
+    'lib/spiralityPin.js',
+    'scripts/builder/spiralityPin.test.js',
+    '.spirality-release',
+  ]) {
+    assert.ok(governanceReason(f), `${f} decides which door every machine write runs through`);
+    assert.equal(laneEligibility([f]).eligible, false, `${f} must never auto-merge`);
+  }
+  // A PR carrying it alongside ordinary work is refused whole.
+  assert.equal(laneEligibility(['scripts/builder/loopNote.js', 'scripts/spirality.mjs']).eligible, false);
+  // The Spirality Tasks page (a product feature) is not caught by accident.
+  assert.equal(governanceReason('lib/spiralityTracker.js'), null);
+});
+
 test('the retry policy inside the one ClickUp door is governance too', () => {
   // scripts/lib/clickup.cjs is governance because a change there changes every
   // automated write at once. It delegates when-to-wait-and-retry wholesale to

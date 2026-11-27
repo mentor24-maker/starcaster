@@ -30,14 +30,14 @@
  *
  * The comments come back in the shape the gate's pure logic already reads
  * (`comment_text`, `date` as epoch-millisecond strings), the same mapping the
- * ticket door makes (loop/scripts/tracker/apiTracker.mjs, `commentFromRow`):
+ * ticket door makes (Spirality's scripts/tracker/apiTracker.mjs, `commentFromRow`):
  * top-level comments only, as ClickUp's comment list gave, newest first.
  *
  * The transport is injected (`deps.fetchImpl`, defaulting to the global
  * fetch) so the tests drive every failure shape without a network.
  */
 
-const { pickTeamChat, renderBusPost, mountainTime } = require('../../loop/lib/trackerBus.js');
+const { pickTeamChat, renderBusPost, mountainTime } = require('../../lib/spirality.cjs').requireSpirality('lib/trackerBus.js');
 
 /** The repository secret the workflow passes in. Named once, here. */
 const TOKEN_SECRET = 'TRACKER_REVIEW_GATE_TOKEN';

@@ -1074,8 +1074,6 @@ test('every documented `npm run pipeline` command carries the `--`', () => {
     'CLAUDE.md',
     'docs/LOOP_ENGINEERING.md',
     'docs/WORK-LOG.md',
-    '.claude/skills/loop-build/SKILL.md',
-    '.claude/skills/loop-review/SKILL.md',
     'scripts/pipeline.mjs',
     'scripts/builder/pipelinePause.js',
     'scripts/builder/pipelinePauseStore.js',

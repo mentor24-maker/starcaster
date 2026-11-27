@@ -7,9 +7,9 @@
  * (routes/aiQuota.js) and the Mini's AI brake (lib/miniAiLimit.js) call. It
  * must land as one comment on the bus project's "Team chat" ticket, read
  * back, exactly as the door's `bus-post` writes it — and it keeps its own
- * small copy of three things the door owns, because loop/lib cannot be
+ * small copy of three things the door owns, because Spirality's lib cannot be
  * required safely inside a Vercel function. The last block pins those copies
- * to loop/lib, so a rename there fails here instead of sending the app's
+ * to Spirality's lib, so a rename there fails here instead of sending the app's
  * alarms to a ticket nobody reads.
  */
 
@@ -113,9 +113,9 @@ test('the alarm callers on the website reach the tracker, not ClickUp', () => {
 
 test('the REAL alarm texts start with ALARM:, so the tracker texts Dane; the all-clear does not', () => {
   // SC-796 review: the tracker texts the operator only for bus posts whose
-  // message starts "ALARM:" (loop/lib/trackerBus.js isAlarmPost). Both the AI
+  // message starts "ALARM:" (Spirality's lib/trackerBus.js isAlarmPost). Both the AI
   // spend alarm and the Mini's brake began with an emoji, so neither woke him.
-  const trackerBus = require('../../loop/lib/trackerBus.js');
+  const trackerBus = require('../../lib/spirality.cjs').requireSpirality('lib/trackerBus.js');
   const spend = require('../../lib/aiSpendAlarm');
   const brake = require('../../lib/miniAiLimit');
   const context = {
@@ -137,9 +137,9 @@ test('the REAL alarm texts start with ALARM:, so the tracker texts Dane; the all
 // ── The copies of the door's own vocabulary, pinned to it ─────────────────
 
 test('the Team chat names, the post header and the machine marker match the door\'s', () => {
-  const busFallback = require('../../loop/lib/busFallback.js');
-  const trackerBus = require('../../loop/lib/trackerBus.js');
-  const machineComment = require('../../loop/lib/machineComment.js');
+  const busFallback = require('../../lib/spirality.cjs').requireSpirality('lib/busFallback.js');
+  const trackerBus = require('../../lib/spirality.cjs').requireSpirality('lib/trackerBus.js');
+  const machineComment = require('../../lib/spirality.cjs').requireSpirality('lib/machineComment.js');
 
   assert.deepEqual(forward.TEAM_CHAT_NAMES, [busFallback.FALLBACK_TASK_NAME, ...busFallback.LEGACY_TASK_NAMES]);
   assert.equal(forward.MACHINE_MARKER, machineComment.MACHINE_MARKER);

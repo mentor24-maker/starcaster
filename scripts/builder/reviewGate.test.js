@@ -1118,14 +1118,14 @@ test('the gate and pr-opened agree about every ticket-reference shape', () => {
 
 test('both read the SAME matcher, so they cannot drift apart again', () => {
   const fs = require('node:fs');
-  // The loop's copy since SC-795: it is the one that reads a tracker link.
-  assert.ok(fs.existsSync(require.resolve('../../loop/lib/clickupTicketLink.js')));
+  // Spirality's own, since SC-870 deleted StarCaster's copy in loop/.
+  assert.ok(fs.existsSync(require('../../lib/spirality.cjs').spiralityPath('lib/clickupTicketLink.js')));
   for (const file of ['./reviewGate.js', './loopTrail.js']) {
     const source = fs.readFileSync(require.resolve(file), 'utf8');
     const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
     // BREAK-TEST: paste a local app.clickup.com regex back into either file and
     // this fails. Agreement by two matching copies is not agreement.
-    assert.match(code, /require\('\.\.\/\.\.\/loop\/lib\/clickupTicketLink\.js'\)/, `${file} stopped importing the shared matcher`);
+    assert.match(code, /requireSpirality\('lib\/clickupTicketLink\.js'\)/, `${file} stopped importing the shared matcher`);
     assert.doesNotMatch(code, /app\\\.clickup\\\.com/, `${file} has its own ClickUp link regex again`);
   }
 });

@@ -54,7 +54,7 @@ const { prTrailLanded } = require('./loopTrail.js');
 // `Ticket: http://mac-mini.local:4180/t/SC-12`, which only this copy reads. It
 // still reads an old app.clickup.com link, so a PR opened before the move
 // keeps the answer it had.
-const { CLICKUP_LINK_RE, findTicketId, findTicketIds, ticketLink } = require('../../loop/lib/clickupTicketLink.js');
+const { CLICKUP_LINK_RE, findTicketId, findTicketIds, ticketLink } = require('../../lib/spirality.cjs').requireSpirality('lib/clickupTicketLink.js');
 
 /**
  * A deliberate override, e.g. `[gate-waived: hotfix, site is down]`.

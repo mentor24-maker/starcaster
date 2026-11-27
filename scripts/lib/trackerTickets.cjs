@@ -5,7 +5,7 @@
  *
  * StarCaster's tickets moved from ClickUp to the tracker on 2026-11-12
  * (SC-790). The scheduled checks used to read ClickUp's API directly; the
- * tracker's door (`loop/scripts/clickup.mjs`, the same one `npm run clickup`
+ * tracker's door (`Spirality's scripts/clickup.mjs`, the same one `npm run clickup`
  * runs) has one read-only command for them instead, `tickets --json`, and this
  * file is the one way StarCaster's own scripts call it.
  *
@@ -37,8 +37,9 @@ const { execFileSync } = require('child_process');
 const { busPostEnv, shellFailureDetail } = require('./clickup.cjs');
 
 const ROOT = path.join(__dirname, '..', '..');
-const WITH_DOPPLER = path.join(ROOT, 'loop', 'scripts', 'with_doppler.mjs');
-const TICKET_DOOR = path.join(ROOT, 'loop', 'scripts', 'clickup.mjs');
+// Spirality's door, through the same launcher the npm clickup script uses
+// (SC-870): it finds the release StarCaster's lanes run and wraps it in Doppler.
+const LAUNCHER = path.join(ROOT, 'scripts', 'spirality.mjs');
 const DOOR_TIMEOUT_MS = 2 * 60 * 1000;
 
 function projectConfig() {
@@ -87,7 +88,7 @@ function runDoor(args, {
   input, what, timeoutMs = DOOR_TIMEOUT_MS, run = execFileSync, env = process.env, node = thisNodeName(), config,
 } = {}) {
   try {
-    return String(run('node', [WITH_DOPPLER, 'node', TICKET_DOOR, ...args], {
+    return String(run('node', [LAUNCHER, 'clickup', ...args], {
       cwd: ROOT,
       encoding: 'utf8',
       input,
@@ -127,7 +128,7 @@ function descriptionFromGet(printed) {
   if (cut < 0) return null;
   const body = text.slice(cut + 5).replace(/\n\s*tracker: \d+ request\(s\) this run\s*$/, '').trim();
   // The door prints this placeholder for a ticket with NO description
-  // (loop/scripts/clickup.mjs `get`). It is not text anybody wrote, so it
+  // (Spirality's scripts/clickup.mjs `get`). It is not text anybody wrote, so it
   // reads as empty — otherwise a wiped report read back as TRUNCATED, which
   // names the wrong failure (SC-793 review).
   return body === NO_BODY_PLACEHOLDER ? '' : body;

@@ -272,6 +272,16 @@ const GOVERNANCE_STEMS = [
   'loopTrail', // the trail the referee reads to decide a PR was opened by a loop at all
   'generated_files', // check_conventions' and check_syntax' definition of which files are generated
   'pin_asset_versions', // check_asset_versions' target list AND its hash function — the gate's whole subject
+  // THE DOOR ITSELF, since SC-870 deleted the loop/ copy. Every claim, verdict
+  // and bus post now goes through scripts/spirality.mjs, which replaced
+  // loop/scripts/clickup.mjs and with_doppler.mjs (neither of which any lane
+  // could carry), and lib/spirality.cjs decides WHICH Spirality code runs.
+  // scripts/lib/clickup.cjs, their peer, was already governance; without these
+  // Lane B could auto-merge a change to the door every machine write runs
+  // through (SC-870 review, 2026-11-26).
+  'spirality', // scripts/spirality.mjs (the launcher) and lib/spirality.cjs (the locator)
+  'spirality_pin', // scripts/spirality_pin.mjs: the alarm that says the pinned release and the lanes' release differ
+  'spiralityPin', // lib/spiralityPin.js and its test: the same alarm's logic
 ];
 
 /**
@@ -290,6 +300,7 @@ const GOVERNANCE_TEST_STEMS = GOVERNANCE_STEMS;
  */
 const GOVERNANCE_FILES = [
   'scripts/lib/clickup.cjs',
+  '.spirality-release', // names the Spirality code GitHub's checks download and run (SC-870)
   'server.js',
 ];
 

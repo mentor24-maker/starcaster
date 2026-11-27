@@ -65,3 +65,6 @@ supabase/.temp/
 # Before/after screenshots from `npm run check:shots` — local artifacts, never committed
 .ui-shots/
 .claude/worktrees/
+
+# Spirality, downloaded at the pinned release by GitHub's checks (SC-870)
+/.spirality/

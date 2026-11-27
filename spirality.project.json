@@ -22,7 +22,13 @@
     "docs/DOCTRINE.md",
     ".claude/skills/",
     ".claude/settings.json",
-    ".github/workflows/"
+    ".github/workflows/",
+    "spirality",
+    "spirality_pin",
+    "spiralityPin",
+    ".spirality-release",
+    "trackerDoor",
+    "trackerTickets"
   ],
   "autoMergeLanes": [
     "A",

@@ -1147,8 +1147,8 @@ the hard way:
 Every piece of work on this repository is a ticket in the **StarCaster** project
 of **the tracker**, the ticket system that runs on the Mini
 (`http://mac-mini.local:4180`, ids like `SC-12`). Work for another project
-goes in that project's queue, and a change to the loop itself (the ticket door
-in `loop/`, the skills' shared steps) is Spirality work, filed in Spirality's
+goes in that project's queue, and a change to the loop itself (the ticket door,
+the lane runner, the loop skills) is Spirality work, filed in Spirality's
 project; never mixed.
 
 - Every ticket touch goes through `npm run clickup -- <command>`. The name
@@ -1159,7 +1159,7 @@ project; never mixed.
   never as Dane.
 - A pull request's title is the ticket's name, byte for byte, and its body
   carries the ticket link (`pr-opened` prints the exact line it accepts).
-  `npm run verify` is the definition of done. It runs `npm run typecheck && npm run test:builder-ui && npm run build && npm run test:builder && npm run test:hooks && npm run check:syntax && node scripts/check_conventions.cjs && npm run check:ui && npm run check:models && npm run check:paths && npm run check:ai-door`, then the copied loop tests (`npm run test:loop`) and the copied runner tests (`npm run test:runner`), the same thing CI's `verify` check runs on every
+  `npm run verify` is the definition of done. It runs `npm run typecheck && npm run test:builder-ui && npm run build && npm run test:builder && npm run test:hooks && npm run check:syntax && node scripts/check_conventions.cjs && npm run check:ui && npm run check:models && npm run check:paths && npm run check:ai-door`, the same thing CI's `verify` check runs on every
   pull request.
 - Two statuses are Dane's: `Needs your input` and `Ready to launch`. Only
   `ask` may set them, and no loop takes a ticket back out of them.
@@ -1174,5 +1174,16 @@ project; never mixed.
 4. **A step that fails says so.** Never a success line over a failed write.
 5. **One topic, one folder.** A separate git worktree per thread.
 
-`loop/` is a copy of Spirality's ticket door and is never edited here
-(`loop/README.md`).
+**StarCaster carries no copy of the loop** (SC-870, 2026-11-26). The lanes,
+their runner, the loop skills and the ticket door all run from Spirality's
+own folder, at the release the tracker names for StarCaster (since SC-905,
+2026-11-25). StarCaster's own scripts that need a Spirality file (the review
+gate, the pulse, the bus tools) find it through `lib/spirality.cjs`: the
+release folder StarCaster's lanes ran last on this machine, or `SPIRALITY_DIR`
+(GitHub's checks download Spirality at the release named in
+`.spirality-release`), or `~/WebApps/spirality`, and otherwise stop and say
+so. `npm run clickup` and `npm run doctor` go through `scripts/spirality.mjs`,
+which runs Spirality's door with `SPIRALITY_PROJECT` naming this checkout;
+`npm run spirality:where` prints which folder it found and why. When the lanes
+move to a newer release, `npm run spirality:pin` (on the relay's wake) says so
+on the bus until `.spirality-release` is changed to match.
