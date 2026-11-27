@@ -4,15 +4,15 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 /**
- * Schedule harvest (task 86bbztj0e). The model call is replaced by a fake
- * client, so no test spends money; what is tested is everything around it —
+ * Schedule harvest (task 86bbztj0e). The AI door's network, keys and provider
+ * order are faked (SC-896), so no test spends money; what is tested is everything around it —
  * the refusals before paying, the handling of what comes back, and the
  * lines-to-series merge that decides how many events a flyer becomes.
  */
 
 const harvest = require('../../lib/eventHarvest');
 const {
-  HarvestError, readUpload, normalizeExtraction, mergeSessions, matchExisting, matchVenues, extractSchedule, setClientFactory,
+  HarvestError, readUpload, normalizeExtraction, mergeSessions, matchExisting, matchVenues, extractSchedule, setDoorDeps,
 } = harvest;
 
 const PNG = { mimeType: 'image/png', fileBase64: Buffer.from('fake image').toString('base64') };
@@ -96,42 +96,139 @@ test("the flyer's times default to the zone the club's events already use — ne
   assert.equal(suggestTimeZone([{ timezone: 'UTC' }, { timezone: 'Nowhere/Real' }, {}]), '', 'no usable zone means the reviewer must enter one');
 });
 
-test('the model call: a transcription comes back parsed and its cost is recorded', async (t) => {
-  let request = null;
-  setClientFactory(() => ({
-    beta: { messages: { stream(params) {
-      request = params;
-      return { finalMessage: async () => ({
-        model: 'claude-opus-5', stop_reason: 'end_turn', usage: { input_tokens: 1200, output_tokens: 900 },
-        content: [{ type: 'text', text: JSON.stringify({ weekStart: '2026-08-31', venues: [], sessions: LINES }) }],
-      }) };
-    } } },
-  }));
-  t.after(() => setClientFactory(null));
+const { AI_PROVIDERS } = require('../../lib/aiClient');
+
+/**
+ * A faked AI door: `order` is the provider order, `keys` which providers have
+ * one, `answer(def, body)` what each provider sends back. Every request sent is
+ * kept, so a test can read exactly what went where.
+ */
+function fakeDoor({ order = ['openai'], keys = order, answer, signals = [] }) {
+  const sent = [];
+  const usage = [];
+  setDoorDeps({
+    order: async () => ({ providers: order.map((id) => AI_PROVIDERS[id]), ignored: [], group: null, orderUsed: 'main' }),
+    getKey: (def) => (keys.includes(def.id) ? `key-${def.id}` : ''),
+    recordUsage: async (row) => { usage.push(row); },
+    postBus: async () => true,
+    now: () => Date.now(),
+    fetchImpl: async (url, init) => {
+      signals.push(init.signal);
+      const body = JSON.parse(init.body);
+      const def = Object.values(AI_PROVIDERS).find((d) => url.startsWith(d.baseUrl || 'https://api.anthropic.com') || (d.kind === 'gemini' && url.includes('generativelanguage')));
+      sent.push({ url, provider: def.id, body });
+      const { status = 200, json, error } = answer(def, body);
+      if (error) throw error;
+      return { ok: status < 400, status, text: async () => JSON.stringify(json) };
+    },
+  });
+  return { sent, usage };
+}
+
+const openaiSays = (text, finish = 'stop') => ({ json: { model: 'gpt-5.5', choices: [{ message: { content: text }, finish_reason: finish }], usage: { prompt_tokens: 1200, completion_tokens: 900 } } });
+const TRANSCRIPT = JSON.stringify({ weekStart: '2026-08-31', venues: [], sessions: LINES });
+
+test('the model call goes through the AI door: a transcription comes back parsed and its spend is metered', async (t) => {
+  t.after(() => setDoorDeps(null));
+  const { sent, usage } = fakeDoor({ order: ['openai'], answer: () => openaiSays(TRANSCRIPT) });
   const out = await extractSchedule(PNG, { projectId: 'p' });
   assert.equal(out.sessions.length, LINES.length);
-  assert.equal(request.model, 'claude-opus-5');
-  assert.equal(request.messages[0].content[0].type, 'image');
-  assert.equal(request.output_config.format.type, 'json_schema');
-  assert.deepEqual(request.betas, ['server-side-fallback-2026-07-01']);
+  assert.equal(sent.length, 1);
+  const content = sent[0].body.messages.at(-1).content;
+  assert.equal(content[0].type, 'image_url', 'the flyer picture travels with the request');
+  assert.equal(content[0].image_url.url, `data:image/png;base64,${PNG.fileBase64}`);
+  assert.match(content[1].text, /Transcribe it/);
+  assert.match(content[1].text, /"sessions"/, 'the answer shape is spelled out, since not every provider takes a schema');
+  assert.deepEqual(sent[0].body.response_format, { type: 'json_object' });
+  assert.equal(usage[0].feature, 'event_harvest', 'the spend shows on Observe under the same spender as before');
+  assert.deepEqual(usage[0].scope, { projectId: 'p' });
 
-  const pdf = await extractSchedule({ mimeType: 'application/pdf', fileBase64: 'JVBERi0=' }, null);
-  assert.ok(pdf);
-  assert.equal(request.messages[0].content[0].type, 'document', 'a PDF goes as a document block, not an image');
+  await extractSchedule({ mimeType: 'application/pdf', fileBase64: 'JVBERi0=' }, null);
+  assert.equal(sent[1].body.messages.at(-1).content[0].type, 'file', 'a PDF goes as a file, not a picture');
+  assert.equal(sent[1].body.messages.at(-1).content[0].file.file_data, 'data:application/pdf;base64,JVBERi0=');
+});
+
+test('with Anthropic out of credit, the flyer still reaches OpenAI and is read', async (t) => {
+  t.after(() => setDoorDeps(null));
+  const { sent } = fakeDoor({
+    order: ['anthropic', 'openai'],
+    answer: (def) => (def.id === 'anthropic'
+      ? { status: 400, json: { type: 'error', error: { type: 'invalid_request_error', message: 'Your credit balance is too low to access the Anthropic API.' } } }
+      : openaiSays(TRANSCRIPT)),
+  });
+  const out = await extractSchedule({ mimeType: 'application/pdf', fileBase64: 'JVBERi0=' }, { projectId: 'p' });
+  assert.equal(out.sessions.length, LINES.length);
+  assert.deepEqual(sent.map((r) => r.provider), ['anthropic', 'openai']);
+  assert.equal(sent[1].body.messages.at(-1).content[0].file.file_data, 'data:application/pdf;base64,JVBERi0=', 'OpenAI was sent the flyer itself');
+});
+
+test('when no provider can read the flyer, the upload names each one tried and why', async (t) => {
+  t.after(() => setDoorDeps(null));
+  const { sent } = fakeDoor({ order: ['kimi', 'anthropic', 'openai'], keys: ['kimi'], answer: () => openaiSays(TRANSCRIPT) });
+  await assert.rejects(extractSchedule({ mimeType: 'application/pdf', fileBase64: 'JVBERi0=' }), (e) => {
+    assert.equal(e.code, 'NOT_CONFIGURED');
+    assert.equal(e.status, 503);
+    assert.match(e.message, /Kimi cannot read PDFs/);
+    assert.match(e.message, /Anthropic has no key/);
+    assert.match(e.message, /OpenAI has no key/);
+    assert.doesNotMatch(e.message, /No Anthropic API key is configured/);
+    return true;
+  });
+  assert.equal(sent.length, 0, 'nothing is sent, and nothing is spent');
 });
 
 test('the model call: a refusal, a truncation and junk each say so', async (t) => {
-  t.after(() => setClientFactory(null));
-  const answer = (message) => setClientFactory(() => ({ beta: { messages: { stream: () => ({ finalMessage: async () => message }) } } }));
+  t.after(() => setDoorDeps(null));
+  const cases = [
+    [openaiSays('', 'content_filter'), 'REFUSED'],
+    [openaiSays('{"sessions": [', 'length'), 'TOO_LONG'],
+    [openaiSays('Sorry, I cannot.'), 'BAD_OUTPUT'],
+    [openaiSays('[1, 2]'), 'BAD_OUTPUT'],
+    [{ status: 429, json: { error: { message: 'Rate limit reached for requests' } } }, 'UPSTREAM_BUSY'],
+    [{ status: 500, json: { error: { message: 'server error' } } }, 'UPSTREAM_FAILED'],
+  ];
+  for (const [reply, code] of cases) {
+    fakeDoor({ order: ['openai'], answer: () => reply });
+    await assert.rejects(extractSchedule(PNG), (e) => e.code === code, `${JSON.stringify(reply).slice(0, 80)} reads as ${code}`);
+  }
+});
 
-  answer({ stop_reason: 'refusal', content: [], usage: {} });
-  await assert.rejects(extractSchedule(PNG), (e) => e.code === 'REFUSED');
-  answer({ stop_reason: 'max_tokens', content: [{ type: 'text', text: '{"sessions": [' }], usage: {} });
-  await assert.rejects(extractSchedule(PNG), (e) => e.code === 'TOO_LONG');
-  answer({ stop_reason: 'end_turn', content: [{ type: 'text', text: 'Sorry, I cannot.' }], usage: {} });
-  await assert.rejects(extractSchedule(PNG), (e) => e.code === 'BAD_OUTPUT');
-  setClientFactory(() => ({ beta: { messages: { stream: () => { const e = new Error('rate'); e.status = 429; throw e; } } } }));
-  await assert.rejects(extractSchedule(PNG), (e) => e.code === 'UPSTREAM_BUSY');
+test('a refusal other than busy or bad-request keeps the provider\'s own reason (SC-896 review)', async (t) => {
+  t.after(() => setDoorDeps(null));
+  fakeDoor({ order: ['openai'], answer: () => ({ status: 413, json: { error: { message: 'Request entity too large: file exceeds 20MB' } } }) });
+  await assert.rejects(extractSchedule(PNG), (e) => {
+    assert.equal(e.code, 'UPSTREAM_REJECTED');
+    assert.match(e.message, /413/);
+    assert.match(e.message, /file exceeds 20MB/, 'the provider\'s reason reaches Dane');
+    assert.doesNotMatch(e.message, /could not be reached/);
+    return true;
+  });
+});
+
+test('a read that outlasts the wait says it took too long, and the wait ends before Vercel\'s 300s', async (t) => {
+  t.after(() => setDoorDeps(null));
+  const signals = [];
+  const timedOut = Object.assign(new Error('The operation was aborted due to timeout'), { name: 'TimeoutError' });
+  fakeDoor({ order: ['openai'], signals, answer: () => ({ error: timedOut }) });
+  await assert.rejects(extractSchedule(PNG), (e) => {
+    assert.equal(e.code, 'UPSTREAM_TIMEOUT');
+    assert.match(e.message, /took longer than 4 minutes/);
+    assert.match(e.message, /one week per file/);
+    return true;
+  });
+  assert.ok(signals[0], 'the request carried a time limit');
+  assert.ok(harvest.TIMEOUT_MS < 300 * 1000 - 30 * 1000, `the wait (${harvest.TIMEOUT_MS}ms) ends well inside Vercel's 300s`);
+});
+
+test('the upload button shows only when a provider in the order can read a flyer and has a key', async (t) => {
+  t.after(() => setDoorDeps(null));
+  const { isAvailable } = harvest;
+  fakeDoor({ order: ['kimi', 'openai'], keys: ['openai'], answer: () => openaiSays('{}') });
+  assert.equal(await isAvailable(), true);
+  fakeDoor({ order: ['deepseek', 'openai'], keys: ['deepseek'], answer: () => openaiSays('{}') });
+  assert.equal(await isAvailable(), false, 'a text-only provider with a key cannot read a flyer');
+  fakeDoor({ order: [], answer: () => openaiSays('{}') });
+  assert.equal(await isAvailable(), false);
 });
 
 test('only Alphire staff may read schedules: platform users, and club admins who also hold a platform account', async () => {

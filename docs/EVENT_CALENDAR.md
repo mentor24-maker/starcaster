@@ -202,7 +202,7 @@ when the rule does not run that day, the rule in words, and the next six dates.
 ## Harvest PDF — reading a flyer into programs (task 86bbztj0e, 2026-09-12)
 
 A **Harvest PDF** button on the Event Manager takes a club's printed schedule
-(PDF, PNG, JPEG, WebP, GIF, up to ~7MB), has Claude read it, and shows what it
+(PDF, PNG, JPEG, WebP, GIF, up to ~7MB), has an AI read it, and shows what it
 found in an editable review table. **Nothing is written until Create.**
 
 | Piece | Where |
@@ -212,9 +212,15 @@ found in an editable review table. **Nothing is written until Create.**
 | Review rows → event bodies | `lib/builder-client/event-harvest.ts` (tested) |
 | Screen | `components/builder/builder-event-harvest.tsx` |
 
-**The model transcribes; code merges.** Claude Opus 5 (official SDK, structured
-JSON output, `fallbacks: "default"`) is asked for one line per program per day,
-exactly as printed. `mergeSessions` then makes one weekly series per identical
+**The model transcribes; code merges.** Since SC-896 (2026-11-26) the flyer
+goes through the AI door (`generate()` in `lib/aiClient.js`, feature
+`event_harvest`, `strong` tier, JSON reply) to the first provider on Settings ›
+APIs › AI provider that can read a PDF or picture and has a key and credit, so
+it keeps working when Anthropic is out of credit. Before that it called Claude
+Opus 5 through the Anthropic SDK by name. The model is asked for one line per
+program per day, exactly as printed. When no provider can read the file, the
+error names each one tried and why. The wait is 240s, under Vercel's 300s, so a
+slow read says "took longer than 4 minutes" rather than being cut off silently. `mergeSessions` then makes one weekly series per identical
 program + instructor + start + end + venue — "Intro to WWO · Vincent W · 8:30"
 and "Intro to WWO · Danny Z/Mark W · 9:00" are two programs. On the Delray guide:
 40 lines → 24 programs, every day, time and coach correct against the paper.
@@ -235,7 +241,7 @@ match ("PICKLEBALL" files under "Pickleball"); a new ALL-CAPS venue is tidied
 are created.
 
 **Who may use it — Alphire staff only (Dane, 2026-09-12).** Each upload bills
-Alphire's Anthropic account (~30s, a few cents). The Event Manager only works on
+Alphire's account at whichever provider answers (~30s, a few cents). The Event Manager only works on
 the club's admin page behind a club admin login — a platform session never
 reaches a rendered Event Manager (Builder shows its settings; Builder Preview
 strips admin modules) — so staff is decided per request in `isAlphireStaff`: a
@@ -245,10 +251,11 @@ Known limit: club admin emails are unverified, so a club admin able to add
 admins could add one under a staff address; that buys only rate-limited AI
 spend (`events.harvest`, 12/hour), no data.
 
-**Metering.** Every call goes through `recordAiUsage` (feature
-`event_harvest`). This was the repo's first use of the Anthropic SDK, which never
+**Metering.** The door meters every call under feature `event_harvest` and
+the club's project. This was the repo's first use of the Anthropic SDK, which never
 spells the endpoint URL, so `check:ai-metering` now also flags any file that
-requires `@anthropic-ai/sdk` — broken on purpose to watch it fail.
+requires `@anthropic-ai/sdk` — broken on purpose to watch it fail. The file no
+longer uses the SDK; `check:ai-door` keeps it on the door.
 
 ## The public read exemption — a security decision, made here
 

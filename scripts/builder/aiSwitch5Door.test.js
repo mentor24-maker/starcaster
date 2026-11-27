@@ -345,8 +345,14 @@ test('the passing line never claims every call goes through the door while files
   }
 });
 
-test('the Would You Rather image reader waits on SC-895, it is not silently exempt', () => {
-  assert.match(WAITING.get('lib/wyrTweetOcr.js') || '', /queryGemini.*SC-895/);
+test('the flyer upload and the Would You Rather image reader go through the door, not round it (SC-896)', () => {
+  for (const rel of ['lib/eventHarvest.js', 'lib/wyrTweetOcr.js']) {
+    assert.equal(WAITING.has(rel), false, `${rel} is off the waiting list`);
+    assert.equal(ALLOWED.has(rel), false, `${rel} is not exempt either`);
+    const source = fs.readFileSync(path.join(ROOT, rel), 'utf8');
+    assert.match(source, /aiClient\.generate\(\{/, `${rel} asks the door`);
+    assert.doesNotMatch(source, /@anthropic-ai\/sdk|api\.anthropic\.com|claude-[a-z]|queryGemini\(|gemini-2/, `${rel} names no provider, SDK or model`);
+  }
 });
 
 test('check:ai-door lets the door, the key checks and model listing through', () => {
