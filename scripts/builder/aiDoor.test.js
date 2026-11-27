@@ -408,6 +408,219 @@ test('a notice that was not delivered is tried again on the next fall-through', 
   assert.equal(tries.length, 2);
 });
 
+// ── The shared six-hour limit (SC-925) ─────────────────────────────────────
+
+/**
+ * A fake of the shared row (lib/aiProviderSettingsStore.js claimFallThroughNotice
+ * and friends), holding provider -> last posted time, with the same rule: a
+ * claim wins only while the stamp is empty or six hours old. `refuse` makes
+ * every call fail the way a database that cannot be reached does.
+ */
+function fakeNoticeStore({ refuse = false } = {}) {
+  const rows = new Map();
+  const calls = [];
+  const no = { ok: false, status: 500, error: 'the fall-through notice limit could not be saved: connection refused' };
+  return {
+    rows,
+    calls,
+    claim: async (provider, { now, everyMs }) => {
+      calls.push(['claim', provider]);
+      if (refuse) return no;
+      const last = rows.get(provider);
+      if (last === undefined || last === null || last <= now - everyMs) {
+        const stamp = new Date(now).toISOString();
+        rows.set(provider, now);
+        return { ok: true, status: 200, data: { claimed: true, stamp } };
+      }
+      return { ok: true, status: 200, data: { claimed: false, lastPostedAt: last } };
+    },
+    release: async (provider, stamp) => {
+      calls.push(['release', provider]);
+      if (refuse) return no;
+      if (rows.get(provider) === Date.parse(stamp)) rows.set(provider, null);
+      return { ok: true, status: 200, data: true };
+    },
+    clear: async (provider) => {
+      calls.push(['clear', provider]);
+      if (refuse) return no;
+      rows.set(provider, null);
+      return { ok: true, status: 200, data: true };
+    },
+  };
+}
+
+/** Two copies of the server: one shared store, one bus, a Map each. */
+function twoCopies(store, script = { anthropic: REPLIES.anthropicNoCredit, openai: REPLIES.openaiOk }) {
+  const a = harness({ script });
+  const b = harness({ script });
+  b.deps.postBus = a.deps.postBus; // one bus
+  b.deps.now = a.deps.now; // one clock
+  for (const h of [a, b]) {
+    h.deps.noticeStore = store;
+    h.deps.noticeMemory = new Map();
+  }
+  return { a, b, posts: a.posts, clock: a.clock };
+}
+
+async function capturingWarnings(fn) {
+  const warned = [];
+  const original = console.warn;
+  console.warn = (...args) => { warned.push(args.join(' ')); };
+  try { await fn(); } finally { console.warn = original; }
+  return warned;
+}
+
+test('two copies of the server sharing the notice row post one notice in six hours, and a second after', async () => {
+  const store = fakeNoticeStore();
+  const { a, b, posts, clock } = twoCopies(store);
+  await generate(ASK, a.deps);
+  await generate(ASK, b.deps);
+  await generate(ASK, a.deps);
+  await generate(ASK, b.deps);
+  assert.equal(posts.length, 1, 'one notice for the platform, not one per copy');
+  clock.now += NOTICE_EVERY_MS - 1;
+  await generate(ASK, b.deps);
+  assert.equal(posts.length, 1, 'still inside the six hours');
+  clock.now += 1;
+  await generate(ASK, b.deps);
+  await generate(ASK, a.deps);
+  assert.equal(posts.length, 2, 'six hours later it says so again, once');
+});
+
+test('two copies deciding at the same moment post one notice', async () => {
+  const store = fakeNoticeStore();
+  const { a, b, posts } = twoCopies(store);
+  await Promise.all([generate(ASK, a.deps), generate(ASK, b.deps)]);
+  assert.equal(posts.length, 1);
+});
+
+test('a copy that has seen the stamp does not ask the shared row again inside the six hours', async () => {
+  const store = fakeNoticeStore();
+  const { a, b } = twoCopies(store);
+  await generate(ASK, a.deps);
+  await generate(ASK, b.deps);
+  const before = store.calls.length;
+  for (let i = 0; i < 5; i += 1) { await generate(ASK, a.deps); await generate(ASK, b.deps); }
+  assert.equal(store.calls.length, before, 'no store call per AI call during an outage');
+});
+
+test('a notice that fails to deliver leaves the shared stamp clear, and the next fall-through on another copy posts', async () => {
+  const store = fakeNoticeStore();
+  const { a, b, clock } = twoCopies(store);
+  const tries = [];
+  let deliver = false;
+  const bus = async (text) => { tries.push(text); return deliver ? { ok: true } : { ok: false, why: 'tracker down' }; };
+  a.deps.postBus = bus;
+  b.deps.postBus = bus;
+  await capturingWarnings(() => generate(ASK, a.deps));
+  assert.equal(store.rows.get('anthropic'), null, 'the claim was given back');
+  deliver = true;
+  clock.now += 1000;
+  await generate(ASK, b.deps);
+  assert.equal(tries.length, 2, 'the other copy tried again at once');
+  assert.ok(store.rows.get('anthropic') > 0, 'and the delivered notice is stamped');
+});
+
+test('when the shared row cannot be reached, the door limits by its own memory and says it fell back', async () => {
+  const store = fakeNoticeStore({ refuse: true });
+  const h = harness({ script: { anthropic: REPLIES.anthropicNoCredit, openai: REPLIES.openaiOk } });
+  h.deps.noticeStore = store;
+  h.deps.noticeMemory = new Map();
+  let r;
+  const warned = await capturingWarnings(async () => {
+    r = await generate(ASK, h.deps);
+    await generate(ASK, h.deps);
+  });
+  assert.equal(r.ok, true, 'the AI call itself never fails over the notice');
+  assert.equal(h.posts.length, 1, 'still once per six hours, by this copy\'s own memory');
+  assert.ok(warned.some((w) => /falling back to this server copy's own memory/.test(w) && /connection refused/.test(w)), warned.join('\n'));
+  h.clock.now += NOTICE_EVERY_MS;
+  await capturingWarnings(() => generate(ASK, h.deps));
+  assert.equal(h.posts.length, 2);
+});
+
+test('a shared row that never answers does not hold the AI reply up for long', async () => {
+  const h = harness({ script: { anthropic: REPLIES.anthropicNoCredit, openai: REPLIES.openaiOk } });
+  h.deps.noticeStore = { claim: () => new Promise(() => {}), release: async () => ({ ok: true }), clear: async () => ({ ok: true }) };
+  h.deps.noticeMemory = new Map();
+  const started = Date.now();
+  let r;
+  const warned = await capturingWarnings(async () => { r = await generate(ASK, h.deps); });
+  assert.equal(r.ok, true);
+  assert.ok(Date.now() - started < 4500, 'bounded');
+  assert.equal(h.posts.length, 1, 'fell back to its own memory and posted');
+  assert.ok(warned.some((w) => /no answer within 3 seconds/.test(w)));
+});
+
+test('a successful AI call with no stamp set makes no store write; one after a shared notice clears it once', async () => {
+  const store = fakeNoticeStore();
+  let anthropicFunded = true;
+  const { a, b, posts } = twoCopies(store, { anthropic: () => (anthropicFunded ? REPLIES.anthropicOk() : REPLIES.anthropicNoCredit()), openai: REPLIES.openaiOk });
+  await generate(ASK, a.deps);
+  await generate(ASK, b.deps);
+  assert.deepEqual(store.calls, [], 'Anthropic answering costs the shared row nothing');
+  anthropicFunded = false;
+  await generate(ASK, a.deps);
+  assert.equal(posts.length, 1);
+  anthropicFunded = true;
+  await generate(ASK, a.deps);
+  await generate(ASK, a.deps);
+  assert.deepEqual(store.calls.filter((c) => c[0] === 'clear'), [['clear', 'anthropic']], 'cleared once, by the copy that knew of the stamp');
+  anthropicFunded = false;
+  await generate(ASK, b.deps);
+  assert.equal(posts.length, 2, 'running dry again is news straight away, on any copy');
+});
+
+test('the shared store claims with a guarded write and gives back only its own stamp', async () => {
+  const supabase = require('../../lib/supabase');
+  const store = require('../../lib/aiProviderSettingsStore');
+  const saved = { sbQuery: supabase.sbQuery, isConfigured: supabase.isConfigured };
+  const sent = [];
+  let replies = [];
+  supabase.isConfigured = () => true;
+  supabase.sbQuery = async (req) => { sent.push(req); return replies.shift(); };
+  try {
+    const now = Date.parse('2026-11-27T12:00:00.000Z');
+    // First ever: the insert wins.
+    replies = [{ ok: true, status: 201, data: [{ provider: 'anthropic' }] }];
+    let r = await store.claimFallThroughNotice('anthropic', { now, everyMs: NOTICE_EVERY_MS });
+    assert.deepEqual(r.data, { claimed: true, stamp: '2026-11-27T12:00:00.000Z' });
+    assert.equal(sent[0].table, 'ai_fall_through_notices');
+    assert.match(sent[0].headers.Prefer, /resolution=ignore-duplicates/, 'a duplicate is ignored, never merged over another copy\'s stamp');
+    // Row exists, stamp is fresh: insert ignored, guarded update matches nothing, read says when.
+    sent.length = 0;
+    replies = [{ ok: true, status: 201, data: [] }, { ok: true, status: 200, data: [] }, { ok: true, status: 200, data: [{ last_posted_at: '2026-11-27T10:00:00+00:00' }] }];
+    r = await store.claimFallThroughNotice('anthropic', { now, everyMs: NOTICE_EVERY_MS });
+    assert.deepEqual(r.data, { claimed: false, lastPostedAt: Date.parse('2026-11-27T10:00:00Z') });
+    assert.equal(sent[1].method, 'PATCH');
+    assert.equal(decodeURIComponent(sent[1].query), 'provider=eq.anthropic&or=(last_posted_at.is.null,last_posted_at.lte."2026-11-27T06:00:00.000Z")');
+    // A refusal is reported as one.
+    replies = [{ ok: false, status: 404, error: 'relation "ai_fall_through_notices" does not exist' }];
+    r = await store.claimFallThroughNotice('anthropic', { now, everyMs: NOTICE_EVERY_MS });
+    assert.equal(r.ok, false);
+    assert.match(r.error, /does not exist/);
+    // Give back: only while the stamp is still ours.
+    sent.length = 0;
+    replies = [{ ok: true, status: 204, data: null }];
+    await store.releaseFallThroughNotice('anthropic', '2026-11-27T12:00:00.000Z');
+    assert.equal(decodeURIComponent(sent[0].query), 'provider=eq.anthropic&last_posted_at=eq."2026-11-27T12:00:00.000Z"');
+    assert.equal(sent[0].body.last_posted_at, null);
+  } finally {
+    Object.assign(supabase, saved);
+  }
+});
+
+test('the notice table is set up by a re-runnable SQL file that says what breaks without it', () => {
+  const sql = require('fs').readFileSync(require('path').join(__dirname, '../../docs/SQL/ai_fall_through_notices_setup.sql'), 'utf8');
+  assert.match(sql, /^-- FEATURE: .+/m);
+  assert.match(sql, /create table if not exists public\.ai_fall_through_notices/);
+  assert.match(sql, /project_id/);
+  assert.match(sql, /owner_user_id/);
+  assert.match(sql, /enable row level security/);
+  const statements = sql.split('\n').filter((l) => /^(create|alter)/.test(l));
+  assert.ok(statements.every((l) => /if not exists|enable row level security/.test(l)), 'every statement is safe to run twice');
+});
+
 // ── The first caller: alt text ─────────────────────────────────────────────
 
 test('alt text goes through the door on the fast tier and returns trimmed text', async () => {
