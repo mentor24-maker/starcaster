@@ -34,9 +34,10 @@ const REPLIES = {
   geminiOk: (text = 'from gemini') => ({ status: 200, body: { modelVersion: 'gemini-2.5-pro', candidates: [{ content: { parts: [{ text }] }, finishReason: 'STOP' }], usageMetadata: { promptTokenCount: 8, candidatesTokenCount: 3, totalTokenCount: 11 } } }),
 };
 
-function fakeResponse({ status, body }) {
+function fakeResponse({ status, body, headers = {} }) {
   const text = typeof body === 'string' ? body : JSON.stringify(body);
-  return { ok: status >= 200 && status < 300, status, text: async () => text, headers: { get: () => '' } };
+  const lower = Object.fromEntries(Object.entries(headers).map(([k, v]) => [k.toLowerCase(), v]));
+  return { ok: status >= 200 && status < 300, status, text: async () => text, headers: { get: (n) => lower[String(n).toLowerCase()] ?? '' } };
 }
 
 /**
@@ -44,7 +45,7 @@ function fakeResponse({ status, body }) {
  * it gives (a function, so each call can differ). Records every request sent,
  * every meter row and every bus post.
  */
-function harness({ order = 'anthropic,openai,gemini', keys = { anthropic: 'k-a', openai: 'k-o', gemini: 'k-g', kimi: 'k-k' }, script = {}, now = 1_000_000 } = {}) {
+function harness({ order = 'anthropic,openai,gemini', keys = { anthropic: 'k-a', openai: 'k-o', gemini: 'k-g', kimi: 'k-k' }, script = {}, now = 1_000_000, dns = {} } = {}) {
   const sent = [];
   const metered = [];
   const posts = [];
@@ -64,18 +65,25 @@ function harness({ order = 'anthropic,openai,gemini', keys = { anthropic: 'k-a',
   const deps = {
     order: () => envProviderOrder({ env: { AI_PROVIDER_ORDER: order } }),
     getKey: (def) => keys[def.id] || '',
+    // A GET is the door reading a web page (SC-897): scripted by `script.page(url)`.
     fetchImpl: async (url, init) => {
-      const provider = providerOf(url);
-      sent.push({ provider, url, body: JSON.parse(init.body), headers: init.headers });
+      const provider = init.method === 'GET' ? 'page' : providerOf(url);
+      sent.push({ provider, url, body: init.body ? JSON.parse(init.body) : undefined, headers: init.headers, init });
       const reply = script[provider];
       if (!reply) throw new Error(`test: no scripted reply for ${provider}`);
-      const r = reply();
+      const r = reply(url);
       if (r instanceof Error) throw r;
       return fakeResponse(r);
     },
     recordUsage: async (row) => { metered.push(row); },
     postBus: async (text) => { posts.push(text); return { ok: true }; },
     now: () => clock.now,
+    // Every name is public unless the test says otherwise; never real DNS.
+    lookup: async (host) => {
+      const answer = dns[host] || [{ address: '93.184.216.34', family: 4 }];
+      if (answer instanceof Error) throw answer;
+      return answer;
+    },
   };
   return { deps, sent, metered, posts, clock };
 }
@@ -610,4 +618,268 @@ test('a picture sent through generate reaches the provider that answers', async 
   assert.equal(r.provider, 'gemini');
   assert.equal(r.skipped[0].verdict, 'OUT OF CREDIT');
   assert.deepEqual(h.sent[1].body.contents[0].parts[0], { inlineData: { mimeType: 'image/png', data: 'iVBORw0KGgo=' } });
+});
+
+// ── An exact JSON shape, and reading a named web page (SC-897) ─────────────
+
+const { schemaMismatch, isPrivateAddress, pageText } = require('../../lib/aiClient');
+
+const SHAPE = {
+  type: 'object',
+  properties: {
+    label: { type: 'string' },
+    colours: { type: 'array', items: { type: 'object', properties: { hex: { type: 'string' } }, required: ['hex'], additionalProperties: false } },
+  },
+  required: ['label', 'colours'],
+  additionalProperties: false,
+};
+const FITS = JSON.stringify({ label: 'Calm', colours: [{ hex: '#123456' }] });
+
+test('buildRequest with a schema sets each provider\'s own structured-answer field', () => {
+  const ask = { system: 's', messages: 'm', maxTokens: 50, schema: SHAPE };
+  const claude = buildRequest(AI_PROVIDERS.anthropic, 'claude-sonnet-5-5', 'k', ask);
+  assert.deepEqual(claude.body.output_config, { format: { type: 'json_schema', schema: SHAPE } });
+  const openai = buildRequest(AI_PROVIDERS.openai, 'gpt-5.5', 'k', ask);
+  assert.deepEqual(openai.body.response_format, { type: 'json_schema', json_schema: { name: 'answer', schema: SHAPE, strict: true } });
+  const gemini = buildRequest(AI_PROVIDERS.gemini, 'gemini-3.1-pro-preview', 'k', ask);
+  assert.equal(gemini.body.generationConfig.responseMimeType, 'application/json');
+  assert.deepEqual(gemini.body.generationConfig.responseJsonSchema, SHAPE);
+  // A provider not known to hold a schema gets plain JSON mode and the schema in words.
+  const deepseek = buildRequest(AI_PROVIDERS.deepseek, 'deepseek-v4-pro', 'k', ask);
+  assert.deepEqual(deepseek.body.response_format, { type: 'json_object' });
+  assert.ok(deepseek.body.messages[0].content.includes(JSON.stringify(SHAPE)), 'the schema is in its instructions');
+  // A provider that holds the schema itself is not also sent it in words.
+  assert.ok(!openai.body.messages[0].content.includes(JSON.stringify(SHAPE)));
+});
+
+test('no new option means the request is byte-for-byte what it was before', () => {
+  const asks = [
+    { system: 's', messages: 'm', maxTokens: 50 },
+    { system: 's', messages: 'm', json: true, maxTokens: 50, tier: 'fast' },
+  ];
+  const expected = {
+    anthropic: [
+      '{"model":"m","max_tokens":50,"system":"s","messages":[{"role":"user","content":"m"}]}',
+      '{"model":"m","max_tokens":50,"system":"s\\n\\nReply with a single JSON object and nothing else: no prose, no code fences.","messages":[{"role":"user","content":"m"}]}',
+    ],
+    openai: [
+      '{"model":"m","max_completion_tokens":50,"messages":[{"role":"system","content":"s"},{"role":"user","content":"m"}]}',
+      '{"model":"m","max_completion_tokens":50,"messages":[{"role":"system","content":"s\\n\\nReply with a single JSON object and nothing else: no prose, no code fences."},{"role":"user","content":"m"}],"response_format":{"type":"json_object"}}',
+    ],
+    gemini: [
+      '{"systemInstruction":{"parts":[{"text":"s"}]},"contents":[{"role":"user","parts":[{"text":"m"}]}],"generationConfig":{"maxOutputTokens":50}}',
+      '{"systemInstruction":{"parts":[{"text":"s\\n\\nReply with a single JSON object and nothing else: no prose, no code fences."}]},"contents":[{"role":"user","parts":[{"text":"m"}]}],"generationConfig":{"maxOutputTokens":50,"responseMimeType":"application/json"}}',
+    ],
+  };
+  for (const [id, bodies] of Object.entries(expected)) {
+    asks.forEach((ask, i) => {
+      assert.equal(JSON.stringify(buildRequest(AI_PROVIDERS[id], 'm', 'k', ask).body), bodies[i], `${id}, ask ${i + 1}`);
+      assert.equal(JSON.stringify(buildRequest(AI_PROVIDERS[id], 'm', 'k', { ...ask, schema: undefined, pages: undefined }).body), bodies[i]);
+    });
+  }
+});
+
+test('an answer that fits the schema comes back parsed, saying who held it to the shape', async () => {
+  const h = harness({ order: 'deepseek', keys: { deepseek: 'k-d' }, script: { deepseek: () => REPLIES.openaiOk(FITS) } });
+  const r = await generate({ ...ASK, schema: SHAPE }, h.deps);
+  assert.equal(r.ok, true);
+  assert.deepEqual(r.json, JSON.parse(FITS));
+  assert.equal(r.schemaBy, 'door');
+  const h2 = harness({ order: 'openai', script: { openai: () => REPLIES.openaiOk(FITS) } });
+  assert.equal((await generate({ ...ASK, schema: SHAPE }, h2.deps)).schemaBy, 'provider');
+});
+
+test('an answer that does not fit the schema is bad_json naming the field', async () => {
+  const cases = [
+    [{ label: 'Calm' }, /colours is missing/],
+    [{ label: 7, colours: [] }, /label should be string, but is integer/],
+    [{ label: 'Calm', colours: [{ hex: 1 }] }, /colours\[0\]\.hex should be string/],
+    [{ label: 'Calm', colours: [], extra: true }, /extra is not a field the shape allows/],
+  ];
+  for (const [answer, why] of cases) {
+    const h = harness({ order: 'anthropic', script: { anthropic: () => REPLIES.anthropicOk(JSON.stringify(answer)) } });
+    const r = await generate({ ...ASK, schema: SHAPE }, h.deps);
+    assert.equal(r.ok, false);
+    assert.equal(r.code, 'bad_json');
+    assert.match(r.error, why);
+    assert.match(r.field, why);
+    assert.equal(r.provider, 'anthropic');
+    assert.equal(h.metered.length, 1, 'the call was still served, so it is still metered');
+  }
+});
+
+test('schemaMismatch covers enums, numbers, lengths, anyOf and local $ref', () => {
+  assert.equal(schemaMismatch({ enum: ['a', 'b'] }, 'a'), '');
+  assert.match(schemaMismatch({ enum: ['a', 'b'] }, 'c'), /one of "a", "b"/);
+  assert.match(schemaMismatch({ type: 'integer' }, 1.5), /should be integer, but is number/);
+  assert.equal(schemaMismatch({ type: 'number' }, 3), '');
+  assert.match(schemaMismatch({ type: 'array', maxItems: 1 }, [1, 2]), /more than 1/);
+  assert.match(schemaMismatch({ type: 'string', minLength: 3 }, 'ab'), /shorter than 3/);
+  assert.match(schemaMismatch({ anyOf: [{ type: 'string' }, { type: 'null' }] }, 4), /fits none/);
+  const withRef = { type: 'object', properties: { c: { $ref: '#/$defs/c' } }, $defs: { c: { type: 'string' } } };
+  assert.match(schemaMismatch(withRef, { c: 2 }), /^c should be string/);
+  assert.equal(schemaMismatch({ type: 'string', format: 'email' }, 'not an email'), '', 'an unchecked keyword is never a failure');
+});
+
+test('a schema that is not an object is refused before anything is sent', async () => {
+  const h = harness({ script: { anthropic: REPLIES.anthropicOk } });
+  const r = await generate({ ...ASK, schema: 'object' }, h.deps);
+  assert.equal(r.code, 'bad_request');
+  assert.equal(h.sent.length, 0);
+});
+
+const PAGE_HTML = '<!doctype html><html><head><title>Delray Tennis</title><meta name="description" content="Courts &amp; lessons"><style>.x{}</style></head>'
+  + '<body><script>alert(1)</script><h1>Welcome</h1><p>Junior&nbsp;camps &mdash; all summer.</p></body></html>';
+const pageOk = () => ({ status: 200, headers: { 'content-type': 'text/html; charset=utf-8' }, body: PAGE_HTML });
+
+test('a provider that fetches pages itself is given the address and its fetch tool, not the page', () => {
+  const req = buildRequest(AI_PROVIDERS.anthropic, 'claude-sonnet-5-5', 'k', { messages: 'Describe them.', maxTokens: 50, pages: [{ url: 'https://example.com/' }] });
+  assert.deepEqual(req.body.tools, [{ type: 'web_fetch_20260209', name: 'web_fetch', max_uses: 3 }]);
+  assert.match(req.body.messages[0].content, /^Describe them\.\n\nRead this web page with your web fetch tool before answering:\n- https:\/\/example\.com\/$/);
+});
+
+test('a provider without its own fetch is sent the page text the door read, and the reply says so', async () => {
+  const h = harness({ order: 'openai', script: { openai: () => REPLIES.openaiOk('a tennis club'), page: pageOk } });
+  const r = await generate({ ...ASK, messages: 'Describe them.', pages: ['https://example.com/'] }, h.deps);
+  assert.equal(r.ok, true);
+  assert.deepEqual(h.sent.map((s) => s.provider), ['page', 'openai']);
+  assert.equal(h.sent[0].init.redirect, 'manual', 'redirects are followed by the door, each one checked');
+  const said = h.sent[1].body.messages[1].content;
+  assert.match(said, /^Describe them\.\n\nThe text of the web page https:\/\/example\.com\/, read for you:/);
+  assert.match(said, /Title: Delray Tennis/);
+  assert.match(said, /Description: Courts & lessons/);
+  assert.match(said, /Junior camps — all summer\./);
+  assert.ok(!/alert|\.x\{\}/.test(said), 'scripts and styles are not page text');
+  assert.equal(r.pages.length, 1);
+  assert.equal(r.pages[0].readBy, 'door');
+  assert.equal(r.pages[0].url, 'https://example.com/');
+  assert.ok(r.pages[0].chars > 0);
+});
+
+test('Anthropic out of credit: the next provider gets the page text the door read', async () => {
+  const h = harness({ order: 'anthropic,openai', script: { anthropic: REPLIES.anthropicNoCredit, openai: REPLIES.openaiOk, page: pageOk } });
+  const r = await generate({ ...ASK, pages: ['https://example.com/'] }, h.deps);
+  assert.equal(r.provider, 'openai');
+  assert.deepEqual(h.sent.map((s) => s.provider), ['anthropic', 'page', 'openai']);
+  assert.ok(h.sent[0].body.tools, 'Anthropic was asked to fetch it itself');
+  assert.equal(r.pages[0].readBy, 'door');
+});
+
+test('a page that cannot be read fails clearly and is never sent empty', async () => {
+  const cases = [
+    [() => ({ status: 404, body: 'gone' }), /answered 404/],
+    [() => ({ status: 200, headers: { 'content-type': 'application/pdf' }, body: '%PDF' }), /is application\/pdf, not a web page \(send it as a file instead\)/],
+    [() => ({ status: 200, headers: { 'content-type': 'text/html' }, body: '<html><body><script>x()</script></body></html>' }), /has no readable text/],
+    [() => new Error('socket hang up'), /could not be read: socket hang up/],
+  ];
+  for (const [page, why] of cases) {
+    const h = harness({ order: 'openai', script: { openai: REPLIES.openaiOk, page } });
+    const r = await generate({ ...ASK, pages: ['https://example.com/'] }, h.deps);
+    assert.equal(r.ok, false);
+    assert.equal(r.code, 'page_unreadable');
+    assert.match(r.error, why);
+    assert.equal(r.pages[0].readBy, 'door');
+    assert.deepEqual(h.sent.map((s) => s.provider), ['page'], 'no AI request was made');
+  }
+});
+
+test('the door never reads a private network address, by name, by number or by redirect', async () => {
+  for (const url of ['http://127.0.0.1/', 'http://[::1]/', 'http://169.254.169.254/latest/meta-data', 'http://10.0.0.5/', 'http://[::ffff:127.0.0.1]/', 'http://2130706433/']) {
+    const h = harness({ order: 'openai', script: { openai: REPLIES.openaiOk, page: pageOk } });
+    const r = await generate({ ...ASK, pages: [url] }, h.deps);
+    assert.equal(r.code, 'page_unreadable', url);
+    assert.match(r.error, /private network/, url);
+    assert.equal(h.sent.length, 0, `${url}: nothing was fetched`);
+  }
+  const byName = harness({ order: 'openai', dns: { 'intranet.example.com': [{ address: '192.168.1.4', family: 4 }] }, script: { openai: REPLIES.openaiOk, page: pageOk } });
+  const r1 = await generate({ ...ASK, pages: ['https://intranet.example.com/'] }, byName.deps);
+  assert.match(r1.error, /intranet\.example\.com is on a private network \(192\.168\.1\.4\)/);
+  assert.equal(byName.sent.length, 0);
+  const redirect = harness({ order: 'openai', script: { openai: REPLIES.openaiOk, page: () => ({ status: 302, headers: { location: 'http://localhost:3001/admin' }, body: '' }) } });
+  redirect.deps.lookup = async (host) => (host === 'localhost' ? [{ address: '127.0.0.1', family: 4 }] : [{ address: '93.184.216.34', family: 4 }]);
+  const r2 = await generate({ ...ASK, pages: ['https://example.com/'] }, redirect.deps);
+  assert.equal(r2.code, 'page_unreadable');
+  assert.match(r2.error, /localhost:3001\/admin localhost is on a private network/);
+  assert.equal(redirect.sent.length, 1, 'the redirect target was never fetched');
+});
+
+test('a redirect to a public page is followed, and the reply names where it landed', async () => {
+  const h = harness({
+    order: 'openai',
+    script: { openai: REPLIES.openaiOk, page: (url) => (url === 'https://example.com/' ? { status: 301, headers: { location: '/home' }, body: '' } : pageOk()) },
+  });
+  const r = await generate({ ...ASK, pages: ['https://example.com/'] }, h.deps);
+  assert.equal(r.ok, true);
+  assert.equal(r.pages[0].finalUrl, 'https://example.com/home');
+  assert.match(h.sent[2].body.messages[1].content, /\(it moved to https:\/\/example\.com\/home\)/);
+});
+
+test('pages that are not web addresses, or too many, are refused before anything is sent', async () => {
+  for (const [pages, why] of [['https://e.com', /a list of web addresses/], [['ftp://e.com/'], /must be an address starting with http/], [Array(6).fill('https://e.com/'), /at most 5 pages/]]) {
+    const h = harness({ script: { anthropic: REPLIES.anthropicOk } });
+    const r = await generate({ ...ASK, pages }, h.deps);
+    assert.equal(r.code, 'bad_request');
+    assert.match(r.error, why);
+    assert.equal(h.sent.length, 0);
+  }
+});
+
+test("Anthropic's own fetch: an answer reached without reading the page is page_unreadable", async () => {
+  const withFetch = (resultContent, text = 'They teach tennis.') => () => ({
+    status: 200,
+    body: {
+      model: 'claude-sonnet-5-5',
+      content: [
+        { type: 'server_tool_use', id: 't1', name: 'web_fetch', input: { url: 'https://example.com/' } },
+        { type: 'web_fetch_tool_result', tool_use_id: 't1', content: resultContent },
+        { type: 'text', text },
+      ],
+      stop_reason: 'end_turn',
+      usage: { input_tokens: 10, output_tokens: 5 },
+    },
+  });
+  const read = harness({ order: 'anthropic', script: { anthropic: withFetch({ type: 'web_fetch_result', url: 'https://example.com/', content: {} }) } });
+  const ok = await generate({ ...ASK, pages: ['https://example.com/'] }, read.deps);
+  assert.equal(ok.ok, true);
+  assert.equal(ok.text, 'They teach tennis.');
+  assert.deepEqual(ok.pages, [{ url: 'https://example.com/', readBy: 'provider' }]);
+
+  const failed = harness({ order: 'anthropic', script: { anthropic: withFetch({ type: 'web_fetch_tool_error', error_code: 'url_not_accessible' }) } });
+  const bad = await generate({ ...ASK, pages: ['https://example.com/'] }, failed.deps);
+  assert.equal(bad.ok, false);
+  assert.equal(bad.code, 'page_unreadable');
+  assert.match(bad.error, /its page reader failed \(url_not_accessible\)/);
+
+  const never = harness({ order: 'anthropic', script: { anthropic: () => REPLIES.anthropicOk('I guess they teach tennis.') } });
+  const none = await generate({ ...ASK, pages: ['https://example.com/'] }, never.deps);
+  assert.equal(none.code, 'page_unreadable');
+  assert.match(none.error, /did not read any of them/);
+});
+
+test('isPrivateAddress: loopback, private, link-local and mapped addresses are private; public ones are not', () => {
+  for (const a of ['127.0.0.1', '10.1.2.3', '172.20.0.1', '192.168.0.1', '169.254.169.254', '100.64.0.1', '0.0.0.0', '::1', '::', 'fe80::1', 'fd00::1', '::ffff:7f00:1', '::ffff:10.0.0.1', 'not-an-ip']) {
+    assert.equal(isPrivateAddress(a), true, a);
+  }
+  for (const a of ['93.184.216.34', '8.8.8.8', '2606:4700::1111', '::ffff:8.8.8.8']) assert.equal(isPrivateAddress(a), false, a);
+});
+
+test('pageText keeps plain text as it is', () => {
+  assert.equal(pageText('Hello\r\nthere', 'text/plain'), 'Hello\nthere');
+});
+
+test('the live page reader refuses a private address at connect time, even when the first look-up said public', async () => {
+  const http = require('node:http');
+  const { readPage, livePageFetch } = require('../../lib/aiClient');
+  const server = http.createServer((req, res) => res.end('<p>admin only</p>'));
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const url = `http://localhost:${server.address().port}/`;
+    // A name that answers "public" to the door's check and "127.0.0.1" a moment later.
+    const fooled = async () => [{ address: '93.184.216.34', family: 4 }];
+    const r = await readPage(url, { fetchImpl: livePageFetch, lookup: fooled });
+    assert.equal(r.ok, false);
+    assert.match(r.error, /localhost is on a private network \(127\.0\.0\.1\)/);
+  } finally {
+    server.close();
+  }
 });
