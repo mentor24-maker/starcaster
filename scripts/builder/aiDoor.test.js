@@ -878,7 +878,8 @@ test('the live page reader refuses a private address at connect time, even when 
     const fooled = async () => [{ address: '93.184.216.34', family: 4 }];
     const r = await readPage(url, { fetchImpl: livePageFetch, lookup: fooled });
     assert.equal(r.ok, false);
-    assert.match(r.error, /localhost is on a private network \(127\.0\.0\.1\)/);
+    // Linux answers ::1 first, macOS 127.0.0.1: either is the loopback being refused.
+    assert.match(r.error, /localhost is on a private network \((127\.0\.0\.1|::1)\)/);
   } finally {
     server.close();
   }
