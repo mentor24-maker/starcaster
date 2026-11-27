@@ -620,6 +620,54 @@ test('a picture sent through generate reaches the provider that answers', async 
   assert.deepEqual(h.sent[1].body.contents[0].parts[0], { inlineData: { mimeType: 'image/png', data: 'iVBORw0KGgo=' } });
 });
 
+// ── Pictures to Mistral (SC-924) ──────────────────────────────────────────
+
+test('Mistral: a picture goes as an image_url part whose address is a plain string, before the words', () => {
+  const req = buildRequest(AI_PROVIDERS.mistral, 'mistral-small-latest', 'k', { system: 's', messages: withFiles([PNG]), maxTokens: 50 });
+  assert.equal(req.url, 'https://api.mistral.ai/v1/chat/completions');
+  assert.deepEqual(req.body.messages[1], {
+    role: 'user',
+    content: [
+      { type: 'image_url', image_url: 'data:image/png;base64,iVBORw0KGgo=' },
+      { type: 'text', text: 'What does this say?' },
+    ],
+  });
+  const byAddress = buildRequest(AI_PROVIDERS.mistral, 'mistral-large-latest', 'k', { messages: withFiles([{ url: 'https://example.com/a.jpg' }]), maxTokens: 50 });
+  assert.deepEqual(byAddress.body.messages[0].content[0], { type: 'image_url', image_url: 'https://example.com/a.jpg' });
+});
+
+test('every other OpenAI-style service keeps the wrapped { url } picture shape', () => {
+  for (const id of ['openai', 'kimi', 'xai', 'openrouter']) {
+    const req = buildRequest(AI_PROVIDERS[id], 'm', 'k', { messages: withFiles([PNG]), maxTokens: 50 });
+    assert.deepEqual(req.body.messages[0].content[0], { type: 'image_url', image_url: { url: 'data:image/png;base64,iVBORw0KGgo=' } }, id);
+  }
+});
+
+test('a picture sent through generate reaches Mistral in its own shape', async () => {
+  const h = harness({ order: 'mistral', keys: { mistral: 'k-m' }, script: { mistral: () => REPLIES.openaiOk('a tennis ball') } });
+  const r = await generate({ ...ASK, messages: withFiles([{ mimeType: 'image/jpeg', base64: '/9j/4AAQ' }]) }, h.deps);
+  assert.equal(r.ok, true);
+  assert.equal(r.provider, 'mistral');
+  assert.equal(h.sent[0].url, 'https://api.mistral.ai/v1/chat/completions');
+  assert.deepEqual(h.sent[0].body.messages[1].content[0], { type: 'image_url', image_url: 'data:image/jpeg;base64,/9j/4AAQ' });
+});
+
+test('a picture type Mistral does not list, or a PDF, is a named skip and the next provider answers', async () => {
+  const gif = { mimeType: 'image/gif', base64: 'R0lGODlh' };
+  const h = harness({ order: 'mistral,openai', keys: { mistral: 'k-m', openai: 'k-o' }, script: { mistral: () => REPLIES.openaiOk('wrong'), openai: () => REPLIES.openaiOk('a gif') } });
+  const r = await generate({ ...ASK, messages: withFiles([gif]) }, h.deps);
+  assert.equal(r.provider, 'openai');
+  assert.deepEqual(h.sent.map((s) => s.provider), ['openai'], 'Mistral is never sent the request');
+  assert.equal(r.skipped[0].provider, 'mistral');
+  assert.equal(r.skipped[0].verdict, CANNOT_READ);
+  assert.equal(r.skipped[0].reason, 'Mistral cannot read image/gif images');
+
+  const h2 = harness({ order: 'mistral,openai', keys: { mistral: 'k-m', openai: 'k-o' }, script: { mistral: () => REPLIES.openaiOk('wrong'), openai: () => REPLIES.openaiOk('read it') } });
+  const r2 = await generate({ ...ASK, messages: withFiles([PDF]) }, h2.deps);
+  assert.equal(r2.provider, 'openai');
+  assert.equal(r2.skipped[0].reason, 'Mistral cannot read PDFs');
+});
+
 // ── An exact JSON shape, and reading a named web page (SC-897) ─────────────
 
 const { schemaMismatch, isPrivateAddress, pageText, readReply } = require('../../lib/aiClient');
