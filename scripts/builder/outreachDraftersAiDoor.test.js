@@ -39,6 +39,8 @@ function fakeDoorDeps() {
     },
     recordUsage: async () => {},
     postBus: async () => ({ ok: true }),
+    // No shared notice row in a test: this door limits the notice by its own memory (SC-925).
+    noticeStore: null,
     getKey: () => 'test-key',
     order: () => aiClient.getAiProviderOrder({ env: { AI_PROVIDER_ORDER: 'anthropic,openai' } }),
     now: () => 0,
