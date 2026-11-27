@@ -1935,16 +1935,20 @@ The rule:
   `lib/credentialVerify.js`, `lib/anthropicBilling.js`) are allowed, because
   they ask providers about keys and money, not to generate.
 - **It also blocks the door's old one-provider helpers** (`queryGemini`,
-  `queryAnthropic`, `queryOpenAI`, `queryKimi`) outside `lib/aiClient.js`.
-  They live inside the door's file, so a caller names no address, but each
-  talks to one provider by name with no order and no fall-through. The first
-  version of the check missed this: `lib/wyrTweetOcr.js` called `queryGemini`
-  while the check printed that every call went through the door.
+  `queryAnthropic`, `queryOpenAI`, `queryKimi`) anywhere outside
+  `lib/aiClient.js`. They used to live inside the door's file, so a caller
+  named no address, but each talked to one provider by name with no order and
+  no fall-through. The first version of the check missed this:
+  `lib/wyrTweetOcr.js` called `queryGemini` while the check printed that every
+  call went through the door. The helpers were deleted on 2026-11-26 (SC-922)
+  once nothing called them; the check still refuses the names, so they cannot
+  come back.
 - **A feature the door cannot serve yet goes on the check's `WAITING` list
   with its reason and the ticket that moves it**, and the check prints that
-  list every run. As of 2026-11-18 there are three, all needing the AI to read
-  a file the door cannot send yet: the Theme Wizard, the flyer upload and the
-  Would You Rather image reader (SC-895). Do not add to it to make a new feature easier to write.
+  list every run. As of 2026-11-26 the list is **empty**: the three that
+  waited for the door to send a file (the Would You Rather image reader, the
+  flyer upload and, last, the Theme Wizard in SC-898) all go through it now.
+  Do not add to it to make a new feature easier to write.
 
 ## 6. Working in this repo
 
