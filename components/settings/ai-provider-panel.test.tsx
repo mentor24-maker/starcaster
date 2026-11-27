@@ -11,8 +11,8 @@ import { GroupRows, ModelChooser, ProviderTable, lastCallText, listStatusText, m
 function row(overrides: Partial<ProviderRow> = {}): ProviderRow {
   return {
     id: 'anthropic', label: 'Anthropic', enabled: true,
-    fast: 'claude-haiku-4-5', strong: 'claude-sonnet-5-5',
-    defaultFast: 'claude-haiku-4-5', defaultStrong: 'claude-sonnet-5-5',
+    fast: 'claude-haiku-5-5', strong: 'claude-sonnet-5-5',
+    defaultFast: 'claude-haiku-5-5', defaultStrong: 'claude-sonnet-5-5',
     keyEnv: 'ANTHROPIC_API_KEY', keySet: true, custom: false, baseUrl: '',
     ...overrides,
   };

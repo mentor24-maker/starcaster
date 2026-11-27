@@ -81,7 +81,7 @@ test.after(() => {
 
 const SCOPE = { projectId: 'p1' };
 const MODELS = {
-  anthropic: { fast: 'claude-haiku-4-5', strong: 'claude-sonnet-5-5' },
+  anthropic: { fast: 'claude-haiku-5-5', strong: 'claude-sonnet-5-5' },
   openai: { fast: 'gpt-5.4-mini', strong: 'gpt-5.5' },
 };
 const PAGE = { title: 'Junior tennis', content: 'Coaching for juniors at the Delray Beach Tennis Center, every weekday after school.' };
