@@ -13,3 +13,25 @@ answer after the page comes back. The door was gluing that sentence onto the
 answer, so every request asking for a page *and* a JSON answer failed. It now
 takes only what Claude wrote after it finished reading. A new test reproduces
 the chatty reply and fails if the fix is removed.
+
+The second review found three more things, all fixed:
+
+- **A page Claude could not read was reported as read.** Asked for two pages,
+  if Claude read one and its reader was refused on the other, the door still
+  said "success, both pages read". It now checks every page it asked for
+  against what actually came back, and fails naming the page that was not
+  read — the same rule the door already applies when it reads pages itself.
+- **One way of writing a loopback address got past the safety guard.** An
+  address like `[::127.0.0.1]` (the server's own machine, written the IPv6
+  way) looked public to the check. Every IPv6 spelling that hides an IPv4
+  address is now caught.
+- **A correct answer was refused when the shape refers to itself** (a tree,
+  say, where each child has the same shape as its parent). The checker now
+  follows those references, and one it cannot follow is left unchecked
+  rather than failing a good answer.
+
+Three small ones came along: a slow page now says "no answer within 15s"
+instead of "the operation was aborted", a description with an apostrophe in
+it is no longer cut off, and a page can no longer end its own quoted text
+early to slip instructions to the AI. Each fix was broken on purpose and its
+test watched to fail.
