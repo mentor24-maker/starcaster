@@ -29,3 +29,12 @@ The everyday commands did not change: `npm run clickup -- ...` and
 `npm run doctor` work as before, now running Spirality's own door for this
 folder. `npm run spirality:where` shows which Spirality folder was found, and
 why.
+
+**After review (same day).** Review sent it back for two real problems, both
+fixed. First, when a script gave up on a slow ticket write and stopped it, only
+the new go-between stopped; the write itself kept running and could land after
+the script had already decided it failed, which would have meant duplicate
+alarms. Stopping it now stops everything it started, and a test proves it.
+Second, the go-between is now on the list of files a machine may never merge on
+its own, just like the old copy was. GitHub's checks also now read the Spirality
+release name the same careful way the rest of the code does.
