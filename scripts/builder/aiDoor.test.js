@@ -844,11 +844,23 @@ test("Anthropic's own fetch: an answer reached without reading the page is page_
   assert.equal(ok.text, 'They teach tennis.');
   assert.deepEqual(ok.pages, [{ url: 'https://example.com/', readBy: 'provider' }]);
 
-  const failed = harness({ order: 'anthropic', script: { anthropic: withFetch({ type: 'web_fetch_tool_error', error_code: 'url_not_accessible' }) } });
-  const bad = await generate({ ...ASK, pages: ['https://example.com/'] }, failed.deps);
-  assert.equal(bad.ok, false);
-  assert.equal(bad.code, 'page_unreadable');
-  assert.match(bad.error, /its page reader failed \(url_not_accessible\)/);
+  // SC-897 review 3: the API names a failed fetch `web_fetch_tool_result_error`.
+  // The door looked for `web_fetch_tool_error` only and counted the real one as
+  // a read. The old name, and any type the door does not know, fail too.
+  for (const [content, why] of [
+    [{ type: 'web_fetch_tool_result_error', error_code: 'url_not_accessible' }, /its page reader failed \(url_not_accessible\)/],
+    [{ type: 'web_fetch_tool_error', error_code: 'url_not_accessible' }, /its page reader failed \(url_not_accessible\)/],
+    [{ type: 'web_fetch_something_new', url: 'https://example.com/' }, /its page reader failed \(unrecognised fetch result "web_fetch_something_new"\)/],
+    [{ error_code: 'too_many_requests' }, /its page reader failed \(too_many_requests\)/],
+  ]) {
+    const failed = harness({ order: 'anthropic', script: { anthropic: withFetch(content, '{"made":"up"}') } });
+    const bad = await generate({ ...ASK, json: true, pages: ['https://example.com/'] }, failed.deps);
+    assert.equal(bad.ok, false, content.type);
+    assert.equal(bad.code, 'page_unreadable', content.type);
+    assert.match(bad.error, why, content.type);
+    assert.equal(bad.json, undefined, 'the made-up answer is never handed back as JSON');
+    assert.ok(bad.pages[0].error, 'the page is marked unread');
+  }
 
   const never = harness({ order: 'anthropic', script: { anthropic: () => REPLIES.anthropicOk('I guess they teach tennis.') } });
   const none = await generate({ ...ASK, pages: ['https://example.com/'] }, never.deps);
@@ -909,7 +921,7 @@ test("Anthropic's own fetch: one page read and one refused is page_unreadable na
   const pages = ['https://a.com/', 'https://b.com/'];
   const refused = harness({ order: 'anthropic', script: { anthropic: twoPages([
     { type: 'server_tool_use', id: 't2', name: 'web_fetch', input: { url: 'https://b.com/' } },
-    { type: 'web_fetch_tool_result', tool_use_id: 't2', content: { type: 'web_fetch_tool_error', error_code: 'url_not_accessible' } },
+    { type: 'web_fetch_tool_result', tool_use_id: 't2', content: { type: 'web_fetch_tool_result_error', error_code: 'url_not_accessible' } },
   ]) } });
   const r = await generate({ ...ASK, pages }, refused.deps);
   assert.equal(r.ok, false);
@@ -961,6 +973,83 @@ test('page text: an apostrophe in the description is kept, and the page cannot c
   const sent = JSON.stringify(h.sent.find((x) => x.provider === 'openai').body);
   assert.equal(sent.split('PAGE>>>').length - 1, 1, 'only the door\'s own closing marker');
   assert.equal(sent.split('<<<PAGE').length - 1, 1, 'only the door\'s own opening marker');
+});
+
+// SC-897 review 3 (a)/(c): a page this server is refused may still be read by a
+// provider later in the order that fetches pages itself.
+test('a page the door cannot read goes on to a later provider that reads pages itself', async () => {
+  const blocked = () => ({ status: 403, body: 'no robots' });
+  const fetched = () => ({
+    status: 200,
+    body: {
+      model: 'claude-sonnet-5-5',
+      content: [
+        { type: 'server_tool_use', id: 't1', name: 'web_fetch', input: { url: 'https://example.com/' } },
+        { type: 'web_fetch_tool_result', tool_use_id: 't1', content: { type: 'web_fetch_result', url: 'https://example.com/', content: {} } },
+        { type: 'text', text: 'They teach tennis.' },
+      ],
+      stop_reason: 'end_turn',
+      usage: { input_tokens: 10, output_tokens: 5 },
+    },
+  });
+  const h = harness({ order: 'openai,gemini,anthropic', script: { openai: REPLIES.openaiOk, gemini: REPLIES.openaiOk, anthropic: fetched, page: blocked } });
+  const r = await generate({ ...ASK, pages: ['https://example.com/'] }, h.deps);
+  assert.equal(r.ok, true, r.error);
+  assert.equal(r.provider, 'anthropic');
+  assert.deepEqual(h.sent.map((s) => s.provider), ['page', 'anthropic'], 'the page is tried once, and neither openai nor gemini is sent it empty');
+  assert.deepEqual(r.skipped.map((s) => [s.provider, s.verdict]), [['openai', 'CANNOT READ PAGE'], ['gemini', 'CANNOT READ PAGE']]);
+  assert.match(r.skipped[0].reason, /answered 403\); trying Anthropic/);
+
+  // No later provider reads pages: the call fails naming the page, not a provider never asked,
+  // and keeps the pages read before it.
+  const h2 = harness({ order: 'openai', script: { openai: REPLIES.openaiOk, page: (url) => (url.includes('b.com') ? blocked() : { status: 200, headers: { 'content-type': 'text/plain' }, body: 'A' }) } });
+  const r2 = await generate({ ...ASK, pages: ['https://a.com/', 'https://b.com/', 'https://c.com/'] }, h2.deps);
+  assert.equal(r2.code, 'page_unreadable');
+  assert.equal(r2.provider, null);
+  assert.deepEqual(r2.pages.map((p) => [p.url, p.error || 'read']), [['https://a.com/', 'read'], ['https://b.com/', 'https://b.com/ answered 403'], ['https://c.com/', 'not tried (an earlier page could not be read)']]);
+
+  // The page-reading provider is out of credit too: still page_unreadable, never no_provider.
+  const h3 = harness({ order: 'openai,anthropic', script: { openai: REPLIES.openaiOk, anthropic: REPLIES.anthropicNoCredit, page: blocked } });
+  const r3 = await generate({ ...ASK, pages: ['https://example.com/'] }, h3.deps);
+  assert.equal(r3.code, 'page_unreadable');
+  assert.match(r3.error, /answered 403/);
+});
+
+// SC-897 review 3 (d): the bus must not hear "Anthropic answered" for a call that failed.
+test('a fall-through is not announced when the provider that answered left the page unread', async () => {
+  const unread = () => REPLIES.anthropicOk('I guess they teach tennis.');
+  const page = () => ({ status: 200, headers: { 'content-type': 'text/plain' }, body: 'Tennis lessons.' });
+  const h = harness({ order: 'openai,anthropic', script: { openai: REPLIES.openaiNoCredit, anthropic: unread, page } });
+  const r = await generate({ ...ASK, pages: ['https://example.com/'] }, h.deps);
+  assert.equal(r.code, 'page_unreadable');
+  assert.deepEqual(r.skipped.map((s) => s.provider), ['openai'], 'openai was passed over for credit');
+  assert.equal(r.skipped[0].verdict, 'OUT OF CREDIT');
+  assert.deepEqual(h.posts, []);
+});
+
+// SC-897 review 3 (b): the limit is one per page, not one per redirect.
+test('one deadline covers a whole page, its look-ups and every redirect', async () => {
+  const { readPage } = require('../../lib/aiClient');
+  let hops = 0;
+  const slowRedirect = async (url, init) => {
+    hops += 1;
+    await new Promise((resolve, reject) => {
+      const t = setTimeout(resolve, 40);
+      init.signal.addEventListener('abort', () => { clearTimeout(t); const e = new Error('aborted'); e.name = 'AbortError'; reject(e); });
+    });
+    return fakeResponse({ status: 302, headers: { location: `/hop${hops}` }, body: '' });
+  };
+  const started = Date.now();
+  const r = await readPage('https://example.com/', { fetchImpl: slowRedirect, lookup: async () => [{ address: '93.184.216.34', family: 4 }], timeoutMs: 100 });
+  assert.equal(r.ok, false);
+  assert.match(r.error, /no answer within/);
+  assert.ok(hops < 6, `stopped after ${hops} hop(s), not every redirect`);
+  assert.ok(Date.now() - started < 400, 'well inside the one deadline');
+
+  const stuckLookup = () => new Promise(() => {});
+  const r2 = await readPage('https://example.com/', { fetchImpl: slowRedirect, lookup: stuckLookup, timeoutMs: 50 });
+  assert.equal(r2.ok, false);
+  assert.match(r2.error, /no answer within/);
 });
 
 test('a page that does not answer in time says so, whichever abort error the reader raises', async () => {

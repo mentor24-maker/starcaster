@@ -35,3 +35,16 @@ instead of "the operation was aborted", a description with an apostrophe in
 it is no longer cut off, and a page can no longer end its own quoted text
 early to slip instructions to the AI. Each fix was broken on purpose and its
 test watched to fail.
+
+**Third review round.** When Claude's page reader fails, Anthropic labels the
+result `web_fetch_tool_result_error`, but the door was looking for a
+different name, so a real failure still counted as "page read" and a made-up
+answer could come back as a success. The door now counts a page as read only
+when the result says plainly that the page came back; anything else, including
+a label it has never seen, is a failure. Four smaller fixes came with it: if
+our server is refused a page, the door now passes the job on to a provider
+later in the order that reads pages itself instead of giving up; each page has
+one 15-second limit in total, rather than 15 seconds per redirect; a failed
+page read no longer blames a provider that was never asked, and keeps the
+pages it did read; and the "now using another provider" message is only sent
+once the pages are known to have been read.
