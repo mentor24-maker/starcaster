@@ -21,6 +21,25 @@ const {
 } = require('../../lib/aiClient');
 const { generateAlt } = require('../../lib/altTextProviders');
 
+// The notice's shared store, tripwired (SC-925 review): no test may ever reach
+// the real table. A door test that forgot its fake would otherwise write into
+// whatever database this folder points at (a doppler-run pass: production).
+// Every reach is recorded and fails the test that made it; the store's own
+// test below calls the real functions it saved here, against a stubbed sbQuery.
+const realNoticeStore = require('../../lib/aiProviderSettingsStore');
+const REAL_NOTICE_FNS = {
+  claimFallThroughNotice: realNoticeStore.claimFallThroughNotice,
+  releaseFallThroughNotice: realNoticeStore.releaseFallThroughNotice,
+  clearFallThroughNotice: realNoticeStore.clearFallThroughNotice,
+};
+const liveStoreReached = [];
+for (const name of Object.keys(REAL_NOTICE_FNS)) {
+  realNoticeStore[name] = async (provider) => {
+    liveStoreReached.push(`${name}(${provider})`);
+    return { ok: false, status: 500, error: 'test: the live notice store was reached' };
+  };
+}
+
 // ── Recorded replies, in each provider's own shape ─────────────────────────
 
 const REPLIES = {
@@ -77,6 +96,10 @@ function harness({ order = 'anthropic,openai,gemini', keys = { anthropic: 'k-a',
     },
     recordUsage: async (row) => { metered.push(row); },
     postBus: async (text) => { posts.push(text); return { ok: true }; },
+    // Never the live store or the process's Map: each door gets its own of both.
+    noticeStore: fakeNoticeStore(),
+    noticeMemory: new Map(),
+    noticeStoreTimeoutMs: 50,
     now: () => clock.now,
     // Every name is public unless the test says otherwise; never real DNS.
     lookup: async (host) => {
@@ -90,7 +113,10 @@ function harness({ order = 'anthropic,openai,gemini', keys = { anthropic: 'k-a',
 
 const ASK = { feature: 'test-feature', tier: 'strong', system: 'Be brief.', messages: 'Hello' };
 
-test.beforeEach(() => _resetNoticeMemory());
+test.beforeEach(() => { _resetNoticeMemory(); liveStoreReached.length = 0; });
+test.afterEach(() => {
+  assert.deepEqual(liveStoreReached, [], 'a door test reached the REAL notice store; give it a fake noticeStore');
+});
 
 // ── Falling through ────────────────────────────────────────────────────────
 
@@ -440,10 +466,11 @@ function fakeNoticeStore({ refuse = false } = {}) {
       if (rows.get(provider) === Date.parse(stamp)) rows.set(provider, null);
       return { ok: true, status: 200, data: true };
     },
-    clear: async (provider) => {
+    clear: async (provider, stamp) => {
       calls.push(['clear', provider]);
       if (refuse) return no;
-      rows.set(provider, null);
+      const last = rows.get(provider);
+      if (last !== undefined && last !== null && last <= Date.parse(stamp)) rows.set(provider, null);
       return { ok: true, status: 200, data: true };
     },
   };
@@ -547,9 +574,9 @@ test('a shared row that never answers does not hold the AI reply up for long', a
   let r;
   const warned = await capturingWarnings(async () => { r = await generate(ASK, h.deps); });
   assert.equal(r.ok, true);
-  assert.ok(Date.now() - started < 4500, 'bounded');
+  assert.ok(Date.now() - started < 1000, 'bounded by the door\'s timeout (50ms here, 3 seconds live)');
   assert.equal(h.posts.length, 1, 'fell back to its own memory and posted');
-  assert.ok(warned.some((w) => /no answer within 3 seconds/.test(w)));
+  assert.ok(warned.some((w) => /no answer within 0.05 seconds/.test(w)), warned.join('\n'));
 });
 
 test('a successful AI call with no stamp set makes no store write; one after a shared notice clears it once', async () => {
@@ -573,7 +600,7 @@ test('a successful AI call with no stamp set makes no store write; one after a s
 
 test('the shared store claims with a guarded write and gives back only its own stamp', async () => {
   const supabase = require('../../lib/supabase');
-  const store = require('../../lib/aiProviderSettingsStore');
+  const store = { ...realNoticeStore, ...REAL_NOTICE_FNS };
   const saved = { sbQuery: supabase.sbQuery, isConfigured: supabase.isConfigured };
   const sent = [];
   let replies = [];
@@ -605,9 +632,49 @@ test('the shared store claims with a guarded write and gives back only its own s
     await store.releaseFallThroughNotice('anthropic', '2026-11-27T12:00:00.000Z');
     assert.equal(decodeURIComponent(sent[0].query), 'provider=eq.anthropic&last_posted_at=eq."2026-11-27T12:00:00.000Z"');
     assert.equal(sent[0].body.last_posted_at, null);
+    // Clear after recovery: only a stamp at or before the one the caller knows.
+    sent.length = 0;
+    replies = [{ ok: true, status: 204, data: null }];
+    await store.clearFallThroughNotice('anthropic', '2026-11-27T12:00:00.000Z');
+    assert.equal(decodeURIComponent(sent[0].query), 'provider=eq.anthropic&last_posted_at=lte."2026-11-27T12:00:00.000Z"');
+    r = await store.clearFallThroughNotice('anthropic');
+    assert.equal(r.ok, false, 'a clear with no stamp is refused, never a clear of whatever is there');
+    assert.equal(sent.length, 1);
   } finally {
     Object.assign(supabase, saved);
   }
+});
+
+test('the door test harness never reaches the live notice store, even on a fall-through and a recovery', async () => {
+  let funded = false;
+  const h = harness({ script: { anthropic: () => (funded ? REPLIES.anthropicOk() : REPLIES.anthropicNoCredit()), openai: REPLIES.openaiOk } });
+  await generate(ASK, h.deps);
+  funded = true;
+  await generate(ASK, h.deps);
+  assert.equal(h.posts.length, 1);
+  assert.deepEqual(h.deps.noticeStore.calls, [['claim', 'anthropic'], ['clear', 'anthropic']], 'the harness\'s own fake took both');
+  assert.deepEqual(liveStoreReached, []);
+  // And the tripwire itself works: a door given no override reaches the live store, and is caught.
+  const { noticeStore, ...noFake } = h.deps;
+  funded = false;
+  await capturingWarnings(() => generate(ASK, { ...noFake, noticeMemory: new Map() }));
+  assert.deepEqual(liveStoreReached, ['claimFallThroughNotice(anthropic)']);
+  liveStoreReached.length = 0;
+});
+
+test('a recovery clears only the stamp this copy knows, never a newer one another copy wrote', async () => {
+  const store = fakeNoticeStore();
+  let funded = false;
+  const { a, clock } = twoCopies(store, { anthropic: () => (funded ? REPLIES.anthropicOk() : REPLIES.anthropicNoCredit()), openai: REPLIES.openaiOk });
+  await generate(ASK, a.deps);
+  const first = store.rows.get('anthropic');
+  // Another copy stamps a fresh outage after A's notice.
+  clock.now += NOTICE_EVERY_MS + 1000;
+  store.rows.set('anthropic', clock.now);
+  funded = true;
+  await generate(ASK, a.deps);
+  assert.ok(first < clock.now);
+  assert.equal(store.rows.get('anthropic'), clock.now, 'the newer stamp stays, so its notice is not repeated');
 });
 
 test('the notice table is set up by a re-runnable SQL file that says what breaks without it', () => {

@@ -16,3 +16,11 @@ AI call that works adds no database writes.
 
 It needs a new SQL file, `docs/SQL/ai_fall_through_notices_setup.sql`, to be
 run on production. Until then everything behaves exactly as it did.
+
+**After review.** The review found that the AI door's tests would have written
+test rows into the real notice table whenever this folder pointed at a
+database, which on a production-connected run means production. Every test
+door now carries its own fake notice table, and a tripwire fails any test that
+reaches the real one. Also fixed: when an AI company starts working again, a
+copy now clears only the notice time it knew about, not a newer one another
+copy wrote for a fresh outage, so that newer notice is not repeated.
