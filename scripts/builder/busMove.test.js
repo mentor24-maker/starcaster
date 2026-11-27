@@ -6,7 +6,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { planBusMove, checkMoved, archiveName, commentsSince } = require('../../lib/busMove.js');
-const trackerBus = require('../../loop/lib/trackerBus.js');
+const trackerBus = require('../../lib/spirality.cjs').requireSpirality('lib/trackerBus.js');
 const trackerForward = require('../../lib/trackerForward.js');
 
 // The two projects as they stood on 2026-11-16.
@@ -72,7 +72,7 @@ test('two "Team chat" tickets in one project: after the plan, every lookup finds
   const moved = (from) => project.find((t) => t.from === from).id;
   // lib/trackerForward.js (the relay's alarms): createdAt, oldest wins.
   assert.equal(trackerForward.pickTeamChat(project.map((t) => ({ ...t, createdAt: t.created }))).id, moved('SCBUS-1'));
-  // loop/lib/trackerBus.js (bus-post, the review gate): date_created, oldest wins.
+  // Spirality's lib/trackerBus.js (bus-post, the review gate): date_created, oldest wins.
   assert.equal(trackerBus.pickTeamChat(project.map((t) => ({ ...t, date_created: String(Date.parse(t.created)) }))).id, moved('SCBUS-1'));
   // The roll call and the pulse take the first match in list order: only one is left to match.
   for (const [name, from] of [['Node roll call', 'SCBUS-3'], ['Pipeline pulse', 'SCBUS-2']]) {

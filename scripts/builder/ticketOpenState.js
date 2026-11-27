@@ -6,7 +6,7 @@
  *
  * WHY THIS EXISTS. Both used to ask the ticket door `task-open`, a command of
  * the old ClickUp door (`scripts/clickup_direct.mjs`). The door that `npm run
- * clickup` runs now (`loop/scripts/clickup.mjs`) has no such command, so every
+ * clickup` runs now (`Spirality's scripts/clickup.mjs`) has no such command, so every
  * call printed the usage text and exited 1. `npm run thread` read that exit as
  * "this ticket is not open" and refused EVERY ticket (2026-11-18, SC-843 —
  * open, just claimed, refused). Tidy read it as "could not tell", which was

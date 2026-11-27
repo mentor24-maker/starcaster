@@ -140,11 +140,3 @@ test('rehearsal: a pass hung in a gate is stopped and the snapshot names that ga
   assert.equal(stuck.what, 'npm run check:render');
   fs.rmSync(dir, { recursive: true, force: true });
 });
-
-test('loop_runner.sh hands a stopped pass to pass-timeout, with the snapshot it asked for', () => {
-  const runner = fs.readFileSync(path.join(REPO, 'scripts', 'loop_runner.sh'), 'utf8')
-    .split('\n').filter((line) => !line.trim().startsWith('#')).join('\n');
-  assert.match(runner, /RUN_WITH_TIME_LIMIT_SNAPSHOT="\$SNAPSHOT" \\\s*\n\s*"\$REPO\/scripts\/run_with_time_limit\.sh"/);
-  assert.match(runner, /rm -f "\$SNAPSHOT"/, 'a stop must never report the previous stop\'s snapshot');
-  assert.match(runner, /if \[ "\$CODE" -eq 124 \]; then\s*\n\s*npm run --silent clickup -- pass-timeout --pass "\$SKILL"[^\n]*\\\s*\n\s*--limit "\$\{LOOP_PASS_LIMIT_SECONDS:-7200\}" --snapshot "\$SNAPSHOT"/);
-});

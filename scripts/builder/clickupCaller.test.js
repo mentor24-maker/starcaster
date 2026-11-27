@@ -132,3 +132,13 @@ function readInstallers() {
 test('KINDS is the whole vocabulary — a third kind would need a decision, not a string', () => {
   assert.deepEqual(KINDS, ['scheduled', 'interactive']);
 });
+
+// SC-870: the lane wrappers left scripts/ for Spirality's runner, which exports
+// spirality.project.json's `laneEnv` to every pass. That setting is now the
+// lanes' only declaration, so losing it is the silent never-yields again.
+test('the lanes declare themselves through laneEnv, now that Spirality runs them', () => {
+  const config = JSON.parse(fs.readFileSync(path.join(SCRIPTS, '..', 'spirality.project.json'), 'utf8'));
+  assert.equal(config.laneEnv && config.laneEnv.STARCASTER_CALLER, 'scheduled',
+    'spirality.project.json laneEnv must set STARCASTER_CALLER=scheduled for every lane pass');
+  assert.equal(isScheduled({ env: config.laneEnv }), true);
+});

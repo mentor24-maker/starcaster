@@ -237,29 +237,6 @@ test('claim without --task refuses rather than guessing a ticket', () => {
 
 // ── the skill is actually wired to all of this ───────────────────────────
 
-test('the build skill asks for --claimable and claims with `claim`', () => {
-  // A rule nothing calls is a rule that does not run — the whole reason this
-  // ticket exists. `--status Queued` in the claim step is the specific
-  // regression: it hides every send-back.
-  const skill = fs.readFileSync(path.join(__dirname, '../../.claude/skills/loop-build/SKILL.md'), 'utf8');
-  // The Spirality skill (SC-790) names no list id — the door reads the
-  // project's own list — so the assertions match the command, not the id.
-  assert.match(skill, /npm run clickup -- queue --claimable/,
-    'the build skill must ask for the claimable list, not for one status');
-  assert.match(skill, /npm run clickup -- claim --task/,
-    'and must claim through `claim`, which fills the status guard in for it');
-  assert.doesNotMatch(skill, /queue[^\n]*--status Queued/,
-    'asking for Queued alone hides every send-back — the bug this ticket closes');
-});
-
-test('the review skill sends work back to Rework, not to Queued', () => {
-  const skill = fs.readFileSync(path.join(__dirname, '../../.claude/skills/loop-review/SKILL.md'), 'utf8');
-  assert.match(skill, /--status Rework --if-status "In review"/,
-    'a send-back must land in Rework');
-  assert.doesNotMatch(skill, /--status Queued --if-status "In review"/,
-    'the old destination must be gone, or send-backs keep hiding in the queue');
-});
-
 // ── migrate-rework ───────────────────────────────────────────────────────
 
 /**

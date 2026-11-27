@@ -12,7 +12,7 @@
  *       ({ id, text, author: { id, name }, at })
  *
  * Run it under Doppler, exactly as the ticket door is run
- * (`node loop/scripts/with_doppler.mjs node scripts/tracker_read.mjs ...`);
+ * (`node scripts/spirality.mjs with-doppler node scripts/tracker_read.mjs ...`);
  * scripts/lib/trackerDoor.cjs is the one caller, and it does that for you.
  *
  * WHY THIS EXISTS. The pause switch is one ticket found by its NAME, and it
@@ -33,11 +33,16 @@
  * from a read that actually worked.
  */
 
-import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { resolve as resolvePath } from 'node:path';
-import { loadProjectConfig } from '../loop/lib/projectConfig.mjs';
-import { projectSeats } from '../loop/scripts/lib/expectedSecrets.mjs';
-import { createApiTracker, trackerTokenEnv } from '../loop/scripts/tracker/apiTracker.mjs';
+
+// Spirality's own door code, from the release StarCaster's lanes run (SC-870).
+const { spiralityPath } = createRequire(import.meta.url)('../lib/spirality.cjs');
+const fromSpirality = (rel) => import(pathToFileURL(spiralityPath(rel)).href);
+const { loadProjectConfig } = await fromSpirality('lib/projectConfig.mjs');
+const { projectSeats } = await fromSpirality('scripts/lib/expectedSecrets.mjs');
+const { createApiTracker, trackerTokenEnv } = await fromSpirality('scripts/tracker/apiTracker.mjs');
 
 function arg(name) {
   const i = process.argv.indexOf(`--${name}`);

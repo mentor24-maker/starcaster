@@ -8,7 +8,7 @@ const { classifyTicketRead, readTicketOpenState } = require('./ticketOpenState.j
 // parser is held to the door's actual shape rather than to a guess.
 const answer = (id, status, ended) => [
   '> starcaster@1.0.0 clickup',
-  '> node loop/scripts/with_doppler.mjs node loop/scripts/clickup.mjs get --task ' + id,
+  '> node scripts/spirality.mjs clickup get --task ' + id,
   '',
   `id:       ${id}`,
   'name:     Some ticket',

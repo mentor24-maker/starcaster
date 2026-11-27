@@ -1,0 +1,3 @@
+# The Spirality release GitHub's checks download (SC-870). Keep it the release
+# StarCaster's lanes run: `npm run spirality:pin` says when it is not.
+release-2

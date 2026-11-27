@@ -62,21 +62,13 @@ const SCHEDULED_LAUNCHERS = {
       + 'never touches ClickUp; its failure post and its beat do, through '
       + 'report:failure and heartbeat.',
   },
-  'loop_runner.sh': {
-    job: 'loop-build / loop-review',
-    why: 'Both loop lanes. A headless Claude session on a timer is still a '
-      + 'background job: Dane is not talking to it, so it yields like any '
-      + 'other. The marker is exported here rather than in the skills, '
-      + 'because the child session inherits this environment and a skill '
-      + 'cannot be relied on to remember.',
-  },
-  'run_relay.sh': {
-    job: 'relay',
-    why: 'Every ten minutes on the Mini, the lanes\' relay since the Spirality '
-      + 'setup (SC-790). It talks to the tracker rather than ClickUp, but it runs '
-      + 'the door unattended and anything it reaches inherits this, so it yields '
-      + 'like every other background job.',
-  },
+  // The lanes (loop-build, loop-review, loop-intake) and their relay run from
+  // Spirality's runner since 2026-11-25 (SC-905), so their wrappers are no
+  // longer in scripts/ (SC-870). The three loop passes still declare
+  // themselves: the marker is `laneEnv` in spirality.project.json, which
+  // Spirality's loop_runner.sh exports to every pass. The RELAY does not:
+  // Spirality release-2's run_relay.sh never exports laneEnv, so relay calls
+  // are not marked as scheduled callers (a gap in Spirality, not here).
   'run_pipeline_pulse.sh': {
     job: 'pipeline-pulse',
     why: 'Hourly. Reads a lot of tickets to produce its report.',

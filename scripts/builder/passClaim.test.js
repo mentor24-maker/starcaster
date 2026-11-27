@@ -568,26 +568,3 @@ test('the reconcile reuses the sweep\'s destination rule and its note', () => {
   assert.match(cmd, /pipelinePause\.sweptTicketNote\(/);
   assert.match(cmd, /buildStart\.resolveBuildStart\(/, 'and asks about the PR the way build-start does');
 });
-
-test('the skill runs the reconcile FIRST and states the invariant', () => {
-  // Since task 86bbtujen the reconcile is the second gate of the PREFLIGHT
-  // table rather than a prose step — same order (before the pause: repairing
-  // is not claiming), now unreorderable by a summary. The skill keeps two
-  // duties: run the one command, and REPORT a hand-back, because that line is
-  // the only evidence anywhere that a previous pass dropped its ticket.
-  const preflight = require('./preflight.js');
-  const ids = preflight.GATES['loop-build'].map((g) => g.id);
-  assert.ok(ids.indexOf('reconcile') !== -1, 'the build preflight runs the reconcile');
-  assert.ok(ids.indexOf('reconcile') < ids.indexOf('pause'), 'before the pause — repairing is not claiming');
-  const rec = preflight.GATES['loop-build'][ids.indexOf('reconcile')];
-  assert.deepEqual([...rec.npmArgs], ['clickup', '--', 'pass-reconcile'], 'calling the real command');
-
-  // The Spirality skill (SC-790) runs `pass-reconcile` itself rather than
-  // `npm run preflight`, and its `claim` arms the marker from LOOP_RUNNER_PID
-  // rather than a --pass flag, so those three wording assertions were dropped.
-  // The invariant and the shape that broke it are still stated, and checked.
-  const skill = read('.claude/skills/loop-build/SKILL.md');
-  assert.match(skill, /npm run clickup -- pass-reconcile/, 'the reconcile is still run, once, before the claim');
-  assert.match(skill, /A PASS MAY NOT END WITH ITS TICKET STILL IN `Building`/, 'the invariant is stated');
-  assert.match(skill, /YOU CANNOT PROMISE TO COME BACK/, 'and the shape that broke it is named');
-});
