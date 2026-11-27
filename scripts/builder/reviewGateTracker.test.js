@@ -157,7 +157,9 @@ test('the gate script itself runs to an answer, not a crash (it is imported by n
   const { spawnSync } = require('node:child_process');
   const out = spawnSync(process.execPath, [path.join(__dirname, '..', 'review_gate.mjs'), '--pr', '1'], {
     encoding: 'utf8',
-    env: { PATH: '', HOME: process.env.HOME || '' },
+    // The gate reads Spirality's own files (SC-870): hand it the folder this
+    // run found, as GitHub's checks do with SPIRALITY_DIR.
+    env: { PATH: '', HOME: process.env.HOME || '', SPIRALITY_DIR: require('../../lib/spirality.cjs').spiralityDir() },
   });
   const said = `${out.stdout}${out.stderr}`;
   assert.doesNotMatch(said, /crashed|is not defined/, said);
