@@ -622,7 +622,7 @@ test('a picture sent through generate reaches the provider that answers', async 
 
 // ── An exact JSON shape, and reading a named web page (SC-897) ─────────────
 
-const { schemaMismatch, isPrivateAddress, pageText } = require('../../lib/aiClient');
+const { schemaMismatch, isPrivateAddress, pageText, readReply } = require('../../lib/aiClient');
 
 const SHAPE = {
   type: 'object',
@@ -854,6 +854,38 @@ test("Anthropic's own fetch: an answer reached without reading the page is page_
   const none = await generate({ ...ASK, pages: ['https://example.com/'] }, never.deps);
   assert.equal(none.code, 'page_unreadable');
   assert.match(none.error, /did not read any of them/);
+});
+
+// SC-897 review: Claude says a sentence BEFORE its page-reader call and
+// answers AFTER the result. Joining every text block glued the two together
+// and a pages+json answer failed as bad_json.
+test("Anthropic's own fetch: the answer is the text AFTER the page was read, not the sentence before it", async () => {
+  const answer = JSON.stringify({ label: 'Tennis', colours: [{ hex: '#0a0' }] });
+  const chatty = () => ({
+    status: 200,
+    body: {
+      model: 'claude-sonnet-5-5',
+      content: [
+        { type: 'text', text: "I'll read the page first." },
+        { type: 'server_tool_use', id: 't1', name: 'web_fetch', input: { url: 'https://example.com/' } },
+        { type: 'web_fetch_tool_result', tool_use_id: 't1', content: { type: 'web_fetch_result', url: 'https://example.com/', content: {} } },
+        { type: 'text', text: answer.slice(0, 10) },
+        { type: 'text', text: answer.slice(10) },
+      ],
+      stop_reason: 'end_turn',
+      usage: { input_tokens: 10, output_tokens: 5 },
+    },
+  });
+  for (const extra of [{ json: true }, { schema: SHAPE }]) {
+    const h = harness({ order: 'anthropic', script: { anthropic: chatty } });
+    const r = await generate({ ...ASK, ...extra, pages: ['https://example.com/'] }, h.deps);
+    assert.equal(r.ok, true, `${Object.keys(extra)[0]}: ${r.error || ''}`);
+    assert.equal(r.text, answer);
+    assert.deepEqual(r.json, { label: 'Tennis', colours: [{ hex: '#0a0' }] });
+  }
+  // A reply with no tool blocks still joins every text block, as before.
+  const plain = readReply(AI_PROVIDERS.anthropic, { content: [{ type: 'text', text: 'a' }, { type: 'text', text: 'b' }] }, 'm');
+  assert.equal(plain.text, 'ab');
 });
 
 test('isPrivateAddress: loopback, private, link-local and mapped addresses are private; public ones are not', () => {
