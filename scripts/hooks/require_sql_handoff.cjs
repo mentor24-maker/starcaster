@@ -13,7 +13,7 @@
  * the branch adds and stood aside on main, so a reply pointing at a file merged
  * days earlier and still waiting to be run -- the usual case, and the SC-832
  * card on 2026-11-17 -- was never checked. The ticket door (`npm run clickup --
- * ask` / `comment`, loop/scripts/lib/operatorCard.mjs) refuses the same thing
+ * ask` / `comment`, Spirality's scripts/lib/operatorCard.mjs) refuses the same thing
  * on tickets; this is the same rule for a chat reply.
  *
  * WHY A STOP HOOK AND NOT A PRE-COMMIT CHECK

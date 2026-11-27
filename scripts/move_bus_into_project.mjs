@@ -31,14 +31,17 @@
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { createApiTracker, trackerTokenEnv } from '../loop/scripts/tracker/apiTracker.mjs';
-import { projectSeats } from '../loop/scripts/lib/expectedSecrets.mjs';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const require = createRequire(import.meta.url);
+// Spirality's own door code, from the release StarCaster's lanes run (SC-870).
+const { spiralityPath } = require('../lib/spirality.cjs');
+const fromSpirality = (rel) => import(pathToFileURL(spiralityPath(rel)).href);
+const { createApiTracker, trackerTokenEnv } = await fromSpirality('scripts/tracker/apiTracker.mjs');
+const { projectSeats } = await fromSpirality('scripts/lib/expectedSecrets.mjs');
 const { planBusMove, checkMoved, commentsSince, tagWords, ARCHIVE_SUFFIX, BOARD_NAMES } = require('../lib/busMove.js');
-const { NOTICEBOARD_TAG } = require('../loop/lib/loopNoticeboards.js');
-const { SWITCH_TASK_NAME } = require('../loop/lib/pipelinePause.js');
+const { NOTICEBOARD_TAG } = require('../lib/spirality.cjs').requireSpirality('lib/loopNoticeboards.js');
+const { SWITCH_TASK_NAME } = require('../lib/spirality.cjs').requireSpirality('lib/pipelinePause.js');
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const argv = process.argv.slice(2);

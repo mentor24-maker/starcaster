@@ -399,11 +399,21 @@ const probes = {
     else ok.push({ what: obj.id, how: `id present and well-formed (${channel ?? list}) — existence not probed, this check makes no API calls` });
   },
 
-  // The agent's skill lives at .claude/skills/<id>/SKILL.md in this repo.
+  // The agent's skill: Spirality's plugin (plugin/skills/<id>/SKILL.md), which
+  // StarCaster's lanes run since SC-870 deleted the copies in .claude/skills/.
+  // A skill still in this repo counts too. No Spirality found is COULD NOT
+  // CHECK, never drift and never ok.
   'skill-file'(obj) {
-    const p = path.join(ROOT, '.claude', 'skills', obj.id, 'SKILL.md');
-    if (fs.existsSync(p)) ok.push({ what: obj.id, how: `.claude/skills/${obj.id}/SKILL.md exists` });
-    else drift.push({ what: obj.id, why: `inventory names agent "${obj.id}" — .claude/skills/${obj.id}/SKILL.md does not exist` });
+    const local = path.join(ROOT, '.claude', 'skills', obj.id, 'SKILL.md');
+    if (fs.existsSync(local)) { ok.push({ what: obj.id, how: `.claude/skills/${obj.id}/SKILL.md exists` }); return; }
+    let found;
+    try { found = require('../lib/spirality.cjs').locate(); } catch (err) {
+      cannot.push({ what: obj.id, why: `no Spirality found on this machine to look for its skill in (${String(err.message).split('\n')[0]})` });
+      return;
+    }
+    const rel = path.join('plugin', 'skills', obj.id, 'SKILL.md');
+    if (fs.existsSync(path.join(found.dir, rel))) ok.push({ what: obj.id, how: `Spirality's ${rel} exists (${found.how})` });
+    else drift.push({ what: obj.id, why: `inventory names agent "${obj.id}" — neither .claude/skills/${obj.id}/SKILL.md nor Spirality's ${rel} (${found.dir}) exists` });
   },
 
   'gh-auth'(obj) {

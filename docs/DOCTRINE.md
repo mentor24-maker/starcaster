@@ -2038,10 +2038,10 @@ has on something he has already said yes to.
   inside a fence does not count. Tested in
   `scripts/hooks/require_sql_handoff.test.js`, gated in CI by `npm run test:hooks`.
 - **Tickets: the door, `npm run clickup -- ask` and `comment`** (Spirality
-  #313, `sqlFilesWithoutBlock` in `loop/scripts/lib/operatorCard.mjs`). A body
+  #313, `sqlFilesWithoutBlock` in Spirality's `scripts/lib/operatorCard.mjs`). A body
   that names a `.sql` file without its block is refused with exit 2 before
   anything is posted or the status moves, and the block is printed to paste.
-  Tested by `npm run test:loop`. `describe` and `task` do not check: a spec
+  Tested in Spirality. `describe` and `task` do not check: a spec
   names SQL without handing it over.
 
 `npm run sql:handoff` prints the block on demand: with no argument, for the
@@ -2056,8 +2056,11 @@ SQL that was merged and still waiting to be run (the usual case) was never
 checked. And the ticket door's refusal already existed, but only in Spirality,
 built eight hours earlier; StarCaster's copy in `loop/` was from the day
 before and checked nothing. **A control built in Spirality is not in force here
-until `loop/` is brought up to it**, and nothing announces the gap. Read the
-commit `loop/README.md` names before trusting that a Spirality fix applies.
+until `loop/` is brought up to it**, and nothing announces the gap. *Since
+SC-870 (2026-11-26) there is no copy: StarCaster runs Spirality's own release,
+so a Spirality fix applies once the tracker names a release that has it
+(`npm run clickup -- release list --project starcaster`, in Spirality's
+folder).*
 
 *Why this rule has a hook when most do not.* It was written down, binding, and
 sitting in the file CLAUDE.md tells every agent to read first — and on

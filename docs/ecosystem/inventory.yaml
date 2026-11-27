@@ -327,7 +327,7 @@ objects:
     summary: Turns a rough idea from Dane into small, independently-shippable tasks. The only manual step of the loop.
     links:
       doc: doctrine/LOOPS.md
-      url: https://github.com/mentor24-maker/starcaster/blob/main/.claude/skills/loop-spec/SKILL.md
+      url: https://github.com/mentor24-maker/spirality/blob/main/plugin/skills/loop-spec/SKILL.md
     probe: skill-file
 
   - id: loop-intake
@@ -337,7 +337,7 @@ objects:
     summary: Takes the oldest Requested ticket Dane filed and writes it up as a proper spec, handed to him in Needs your input to approve.
     links:
       doc: doctrine/LOOPS.md
-      url: https://github.com/mentor24-maker/starcaster/blob/main/.claude/skills/loop-intake/SKILL.md
+      url: https://github.com/mentor24-maker/spirality/blob/main/plugin/skills/loop-intake/SKILL.md
     probe: skill-file
 
   - id: loop-build
@@ -347,7 +347,7 @@ objects:
     summary: Claims a queued task and builds it into a pull request in its own worktree. Never edits main, never merges.
     links:
       doc: doctrine/LOOPS.md
-      url: https://github.com/mentor24-maker/starcaster/blob/main/.claude/skills/loop-build/SKILL.md
+      url: https://github.com/mentor24-maker/spirality/blob/main/plugin/skills/loop-build/SKILL.md
     probe: skill-file
 
   - id: loop-review
@@ -357,7 +357,7 @@ objects:
     summary: Independently verifies a built pull request, then either readies it for Dane's merge or sends it back with notes.
     links:
       doc: doctrine/LOOPS.md
-      url: https://github.com/mentor24-maker/starcaster/blob/main/.claude/skills/loop-review/SKILL.md
+      url: https://github.com/mentor24-maker/spirality/blob/main/plugin/skills/loop-review/SKILL.md
     probe: skill-file
 
   # ---------------------------------------------------------------- secrets

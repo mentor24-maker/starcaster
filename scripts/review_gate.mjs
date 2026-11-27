@@ -31,7 +31,7 @@ import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const gate = require('./builder/reviewGate.js');
 const reviewGateTracker = require('./builder/reviewGateTracker.js');
-const { projectConfig } = require('../loop/lib/substrateConfig.js');
+const { projectConfig } = require('../lib/spirality.cjs').requireSpirality('lib/substrateConfig.js');
 
 /*
  * The tracker, not ClickUp, since SC-795 (2026-11-12). Both calls live in

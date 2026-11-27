@@ -55,8 +55,28 @@ permissions:
 jobs:
   review-gate:
     runs-on: ubuntu-latest
+    env:
+      SPIRALITY_DIR: ${{ github.workspace }}/.spirality
     steps:
       - uses: actions/checkout@v4
+
+      # SPIRALITY AT THE RELEASE THE LANES RUN (SC-870). StarCaster no longer
+      # carries a copy of Spirality's ticket door (loop/, deleted): its scripts
+      # and tests read Spirality's own files through lib/spirality.cjs, which
+      # finds them at SPIRALITY_DIR here. The release is the one named in
+      # .spirality-release; `npm run spirality:pin` says on the bus when that
+      # is not the release StarCaster's lanes run. Spirality's repository is
+      # public, so no token is needed.
+      - name: Which Spirality release
+        id: spirality
+        run: echo "release=$(grep -v '^#' .spirality-release | grep -m1 .)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v4
+        with:
+          repository: mentor24-maker/spirality
+          ref: ${{ steps.spirality.outputs.release }}
+          path: .spirality
+          persist-credentials: false
 
       - uses: actions/setup-node@v4
         with:

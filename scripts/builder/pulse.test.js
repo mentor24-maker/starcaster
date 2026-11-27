@@ -35,7 +35,7 @@ const {
 
 // The link reader scripts/pulse.cjs hands the indexer, with a fixed config so
 // these tests do not depend on spirality.project.json.
-const { findTicketIds } = require('../../loop/lib/clickupTicketLink.js');
+const { findTicketIds } = require('../../lib/spirality.cjs').requireSpirality('lib/clickupTicketLink.js');
 const TRACKER_OPTS = { trackerPrefix: 'SC', trackerUrl: 'http://mac-mini.local:4180' };
 const readLinks = (text) => findTicketIds(text, TRACKER_OPTS);
 
@@ -116,11 +116,12 @@ test('a banner quoted INSIDE a pass body cannot open a phantom pass', () => {
  * 86bcc9dp8). The pattern above was written against `(exit 0)`; PR #537 added
  * a label after the number and no test noticed, so for a month every pass read
  * as hung and the pulse's record could not be written at all. Reading the
- * format out of `scripts/loop_runner.sh` means the next change to that line
+ * format out of Spirality's `scripts/loop_runner.sh` (the runner the lanes use
+ * since SC-905) means the next change to that line
  * turns this test red instead of silently blinding the pulse.
  */
 function runnerBannerLines({ stamp, skill, code }) {
-  const sh = fs.readFileSync(path.join(__dirname, '..', 'loop_runner.sh'), 'utf8');
+  const sh = fs.readFileSync(require('../../lib/spirality.cjs').spiralityPath('scripts/loop_runner.sh'), 'utf8');
   const echoes = sh.split('\n')
     .map((l) => /^\s*echo "(===== .* (?:START|END) \/\$SKILL.*=====)" >> "\$LOG"\s*$/.exec(l))
     .filter(Boolean)
@@ -1184,15 +1185,18 @@ test('a pass still running counts as the loop being alive', () => {
   assert.equal(lastSeenAlive(passes, unterminated), Date.parse('2026-08-30T11:50:00'));
 });
 
-// SC-807: the runner's SKIP line, rendered from loop_runner.sh itself so the
+// SC-807: the runner's SKIP line, rendered from Spirality's loop_runner.sh (the
+// runner StarCaster's lanes use since SC-905) so the
 // pulse and the runner cannot drift apart without a test going red.
 function runnerSkipLine({ stamp, skill, workLine }) {
-  const sh = fs.readFileSync(path.join(__dirname, '..', 'loop_runner.sh'), 'utf8');
+  const sh = fs.readFileSync(require('../../lib/spirality.cjs').spiralityPath('scripts/loop_runner.sh'), 'utf8');
   const echoes = sh.split('\n')
-    .map((l) => /^\s*echo "(===== .* SKIP \/\$SKILL.*=====)" >> "\$LOG"\s*$/.exec(l))
+    .map((l) => /^\s*echo "(===== .* SKIP \/\$SKILL \(\$\{WORK_LINE.*=====)" >> "\$LOG"\s*$/.exec(l))
     .filter(Boolean)
     .map((m) => m[1]);
-  assert.equal(echoes.length, 1, 'loop_runner.sh writes exactly one SKIP line');
+  // Spirality's runner (SC-870) writes three SKIP lines (policy, no work, a
+  // stated reason); this is the no-work one, the one the work check names.
+  assert.equal(echoes.length, 1, "Spirality's loop_runner.sh writes exactly one no-work SKIP line");
   return echoes[0]
     .replace(/\$\(date "[^"]*"\)/, stamp)
     .replace(/\$SKILL/g, skill)
@@ -1206,7 +1210,7 @@ function runnerSkipLine({ stamp, skill, workLine }) {
  * and that difference hid a pattern that read none of them (SC-807 round 3).
  */
 async function realWorkLines() {
-  const { workVerdict } = await import(path.join(__dirname, '..', 'lib', 'workCheck.mjs'));
+  const { workVerdict } = await import(require('../../lib/spirality.cjs').spiralityPath('scripts/lib/workCheck.mjs'));
   const answer = (map) => (args) => map[args[0]] ?? { status: 0, stdout: '', stderr: '' };
   const emptyBuild = workVerdict('loop-build', { door: answer({
     'pass-reconcile': { status: 0, stdout: '', stderr: '' },

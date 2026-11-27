@@ -862,7 +862,7 @@ function commentOnTask(taskId, text, { timeoutMs = SHELL_TIMEOUT_MS } = {}) {
  * No ClickUp token is needed, deliberately: the old path refused before
  * posting when CLICKUP_API_TOKEN was missing, which would have made an alarm
  * depend on a credential the alarm no longer uses. The door runs under Doppler
- * itself (loop/scripts/with_doppler.mjs), so a caller that is not wrapped in
+ * itself (Spirality's scripts/with_doppler.mjs), so a caller that is not wrapped in
  * `doppler run` (repair, backup) posts the same way as one that is.
  *
  * WHICH ADDRESS (review of PR #1004). The project config's `trackerApiUrl` is
@@ -892,11 +892,12 @@ function commentOnTask(taskId, text, { timeoutMs = SHELL_TIMEOUT_MS } = {}) {
  * caller's existing "could NOT post ... not stamping it as sent" path still
  * runs and the next pass tries again.
  */
-const WITH_DOPPLER = path.join(ROOT, 'loop', 'scripts', 'with_doppler.mjs');
-const TICKET_DOOR = path.join(ROOT, 'loop', 'scripts', 'clickup.mjs');
+// Spirality's door, through the same launcher the npm clickup script uses
+// (SC-870): it finds the release StarCaster's lanes run and wraps it in Doppler.
+const LAUNCHER = path.join(ROOT, 'scripts', 'spirality.mjs');
 
 function busPostArgs(from) {
-  const args = [WITH_DOPPLER, 'node', TICKET_DOOR, 'bus-post', '--body-file', '-'];
+  const args = [LAUNCHER, 'clickup', 'bus-post', '--body-file', '-'];
   if (from) args.push('--from', String(from));
   return args;
 }

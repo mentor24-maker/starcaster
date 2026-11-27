@@ -690,7 +690,7 @@ function isTerminalStatus(status, statusType) {
 /**
  * Since the move off ClickUp (2026-11-12) every PR carries the tracker's link
  * rather than the ClickUp one, `Ticket: <trackerUrl>/t/SC-12`. Which links
- * count is ONE definition, `findTicketIds` in loop/lib/clickupTicketLink.js —
+ * count is ONE definition, `findTicketIds` in Spirality's lib/clickupTicketLink.js —
  * the same one `pr-opened` and the review gate read — so this check cannot
  * disagree with them about which ticket a PR declares. It knows both forms,
  * the `/tickets/` address the door's `get` prints, and any host.
@@ -710,7 +710,7 @@ function isTerminalStatus(status, statusType) {
  */
 function indexPrsByTicket(openPrs, ticketIdsIn) {
   if (typeof ticketIdsIn !== 'function') {
-    throw new TypeError('indexPrsByTicket needs the link reader (findTicketIds from loop/lib/clickupTicketLink.js)');
+    throw new TypeError('indexPrsByTicket needs the link reader (findTicketIds from Spirality\'s lib/clickupTicketLink.js)');
   }
   const index = new Map();
   for (const pr of openPrs || []) {

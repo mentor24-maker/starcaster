@@ -8,19 +8,20 @@
 // ticket back and exits 1 if the value did not stick, so this script never
 // reports a write it did not see land.
 //
-//   node loop/scripts/with_doppler.mjs node scripts/backfill_ticket_class.mjs \
+//   node scripts/spirality.mjs with-doppler node scripts/backfill_ticket_class.mjs \
 //     --table docs/ticket-classes/starcaster-2026-11-16.tsv --door <clickup.mjs> [--apply]
 //
 // Without --apply it only says what it would change. A ticket whose three
 // values already match is skipped, so a second run changes nothing.
 // --door must be a ticket door that knows `classify` (Spirality's SP-345);
-// StarCaster's copy in loop/ gets it the next time loop/ is refreshed.
+// by default, Spirality's own door (lib/spirality.cjs finds it, SC-870).
 // Exit: 0 every row matches (or would be written), 1 a write did not stick or
 // the tickets could not be read, 2 bad arguments or a bad table.
 
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import { createRequire } from 'node:module';
 
 const KINDS = ['feature', 'fix', 'operational', 'documentation'];
 const STARTERS = ['operator', 'client', 'agent'];
@@ -30,7 +31,7 @@ const argv = process.argv.slice(2);
 const arg = (name) => { const i = argv.indexOf(`--${name}`); return i >= 0 ? argv[i + 1] : undefined; };
 const apply = argv.includes('--apply');
 const tablePath = arg('table');
-const door = arg('door') || 'loop/scripts/clickup.mjs';
+const door = arg('door') || createRequire(import.meta.url)('../lib/spirality.cjs').spiralityPath('scripts/clickup.mjs');
 
 function fail(code, msg) { console.error(msg); process.exit(code); }
 

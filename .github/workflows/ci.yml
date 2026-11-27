@@ -37,8 +37,28 @@ env:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    env:
+      SPIRALITY_DIR: ${{ github.workspace }}/.spirality
     steps:
       - uses: actions/checkout@v4
+
+      # SPIRALITY AT THE RELEASE THE LANES RUN (SC-870). StarCaster no longer
+      # carries a copy of Spirality's ticket door (loop/, deleted): its scripts
+      # and tests read Spirality's own files through lib/spirality.cjs, which
+      # finds them at SPIRALITY_DIR here. The release is the one named in
+      # .spirality-release; `npm run spirality:pin` says on the bus when that
+      # is not the release StarCaster's lanes run. Spirality's repository is
+      # public, so no token is needed.
+      - name: Which Spirality release
+        id: spirality
+        run: echo "release=$(grep -v '^#' .spirality-release | grep -m1 .)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v4
+        with:
+          repository: mentor24-maker/spirality
+          ref: ${{ steps.spirality.outputs.release }}
+          path: .spirality
+          persist-credentials: false
 
       - uses: actions/setup-node@v4
         with:
@@ -182,12 +202,6 @@ jobs:
         # missing (DOCTRINE.md §6.5); a hook whose test does not run is the
         # same decoration the rule it replaced turned out to be.
         run: npm run test:hooks
-
-      - name: Unit tests (lane runner)
-        # The copied lane runner's helpers and the runner itself, driven in a
-        # scratch folder with stand-ins (SC-807): wake time, model, pause,
-        # the empty-queue skip, and the heartbeat StarCaster adds to each.
-        run: npm run test:runner
 
       - name: Unit tests (site import engine)
         # Runs after the full build so lib/builder/template.js exists for

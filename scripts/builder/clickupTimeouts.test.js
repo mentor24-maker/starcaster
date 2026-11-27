@@ -95,9 +95,11 @@ test('the bus post goes to the tracker\'s bus through the ticket door, not Click
   });
   assert.equal(out, 'Posted to the bus: comment 1');
   assert.equal(saw.cmd, 'node');
-  assert.match(saw.args[0], /loop[\\/]scripts[\\/]with_doppler\.mjs$/, 'under Doppler, so an unwrapped caller (repair) posts too');
-  assert.match(saw.args[2], /loop[\\/]scripts[\\/]clickup\.mjs$/);
-  assert.deepEqual(saw.args.slice(3), ['bus-post', '--body-file', '-', '--from', 'mac-mini']);
+  // Spirality's door through the launcher (SC-870), which wraps it in Doppler,
+  // so an unwrapped caller (repair) posts too.
+  assert.match(saw.args[0], /scripts[\\/]spirality\.mjs$/);
+  assert.equal(saw.args[1], 'clickup');
+  assert.deepEqual(saw.args.slice(2), ['bus-post', '--body-file', '-', '--from', 'mac-mini']);
   assert.ok(!saw.args.includes('chat') && !saw.args.some((a) => /clickup_direct/.test(a)),
     'the old ClickUp chat door is exactly what this slice retires');
   assert.equal(saw.options.input, 'an alarm');

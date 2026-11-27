@@ -244,19 +244,20 @@ npm run --silent site-import-watch -- --check || true
 # it, one all-clear when it does. Never allowed to fail the wake: 1 is
 # UNAPPLIED and 2 is CANNOT TELL, both readings, not failures.
 npm run --silent sql:unapplied -- --check || true
-# THE ELEVENTH — is StarCaster's copy of the loop behind Spirality? (SC-868)
+# THE ELEVENTH — do GitHub's checks test against the Spirality release the
+# lanes run? (SC-870, replacing SC-868's copy-drift check)
 #
-# loop/ is Spirality's ticket door, copied by hand at a fixed commit. On
-# 2026-11-17 Spirality shipped a check refusing a card that hands Dane SQL
-# without a clickable link (#313); eight hours later StarCaster's build pass
-# did exactly that on SC-832, because nobody had copied the fix and nothing
-# said the copy was behind. This compares every file in loop/ (README.md
-# aside) with Spirality's main, reading GitHub at most once an hour. Posts
-# only from the relay's owner, once a day while BEHIND or CANNOT TELL, one
-# all-clear when it matches again. A stopgap until SC-869 runs the lanes from
-# Spirality. Never allowed to fail the wake: 1 is BEHIND and 2 is CANNOT TELL,
-# both readings, not failures.
-npm run --silent loop:drift -- --check || true
+# StarCaster used to run a copy of Spirality's ticket door in loop/, copied by
+# hand; on 2026-11-17 that copy was eight hours behind a fix and a build pass
+# handed Dane SQL with no clickable link (SC-832). The copy is gone: the lanes
+# run Spirality's own release, and StarCaster's scripts read the same folder
+# (lib/spirality.cjs). The one thing left that can fall behind is
+# .spirality-release, the release GitHub's checks download. This compares it
+# with the release StarCaster's lanes ran last on this machine. Posts only from
+# the relay's owner, once a day while OUT OF STEP or CANNOT TELL, one all-clear
+# when they match again. Never allowed to fail the wake: 1 is OUT OF STEP and
+# 2 is CANNOT TELL, both readings, not failures.
+npm run --silent spirality:pin -- --check || true
 # THE TENTH — does any client site link to a page that no longer exists?
 # (ticket 86bcxn69z)
 #

@@ -52,7 +52,7 @@ const LOOP_LOG_DIR = process.env.LOOP_LOG_DIR || path.join(os.homedir(), 'loop-l
 // deliberately not imported: see "READ-ONLY IS A HARD PROPERTY" above.
 const { readTickets, asLoopTasks, projectConfig } = require('./lib/trackerTickets.cjs');
 // Which ticket a PR declares: the one definition pr-opened and the review gate read.
-const { findTicketIds } = require('../loop/lib/clickupTicketLink.js');
+const { findTicketIds } = require('../lib/spirality.cjs').requireSpirality('lib/clickupTicketLink.js');
 
 const PROJECT = projectConfig();
 /** The tracker's seat for Dane (`operatorUserId` in spirality.project.json),

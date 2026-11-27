@@ -50,11 +50,3 @@ test('a nonsense limit is refused rather than read as "no limit"', () => {
   assert.equal(run(['0', '--', 'true']).status, 2);
   assert.equal(run(['5', '--']).status, 2);
 });
-
-test('loop_runner.sh runs every pass through the time limit', () => {
-  const fs = require('fs');
-  const runner = fs.readFileSync(path.join(__dirname, '..', 'loop_runner.sh'), 'utf8')
-    .split('\n').filter((line) => !line.trim().startsWith('#')).join('\n');
-  assert.match(runner, /run_with_time_limit\.sh" "\$\{LOOP_PASS_LIMIT_SECONDS:-7200\}" -- \\\s*\n\s*"\$CLAUDE_BIN" -p/,
-    'the claude pass must be the command the time limit wraps');
-});

@@ -35,16 +35,17 @@ test('readTickets runs the door\'s tickets --json and nothing else', () => {
   assert.deepEqual(rows, [{ id: 'SC-1' }]);
   assert.equal(calls.length, 1);
   const args = calls[0].args;
-  assert.match(args[0], /loop\/scripts\/with_doppler\.mjs$/, 'under Doppler, so the door has its token');
-  assert.match(args[2], /loop\/scripts\/clickup\.mjs$/, 'the tracker\'s ticket door');
-  assert.deepEqual(args.slice(3), ['tickets', '--json', '--include-closed', '--comments']);
+  // Spirality's door through the launcher (SC-870), which wraps it in Doppler.
+  assert.match(args[0], /scripts\/spirality\.mjs$/, 'through the Spirality launcher');
+  assert.equal(args[1], 'clickup', 'the tracker\'s ticket door');
+  assert.deepEqual(args.slice(2), ['tickets', '--json', '--include-closed', '--comments']);
   assert.ok(calls[0].opts.timeout > 0, 'every door call has a deadline');
 });
 
 test('readTickets names the project when one is asked for', () => {
   const { run, calls } = fakeRun();
   tt.readTickets({ project: 'starcaster-bus', includeClosed: true, run, node: 'mac-mini' });
-  assert.deepEqual(calls[0].args.slice(3), ['tickets', '--json', '--include-closed', '--project', 'starcaster-bus']);
+  assert.deepEqual(calls[0].args.slice(2), ['tickets', '--json', '--include-closed', '--project', 'starcaster-bus']);
 });
 
 test('BREAK-TEST: a failed read throws with the door\'s reason, never an empty list', () => {
@@ -79,7 +80,7 @@ test('BREAK-TEST: off the Mini the door is pointed at the tracker\'s network add
 test('a project slug and a config travel separately', () => {
   const { run, calls } = fakeRun();
   tt.readTickets({ project: 'starcaster-bus', config: { trackerUrl: 'http://tracker.example:4999' }, run, node: 'macbook-pro', env: {} });
-  assert.deepEqual(calls[0].args.slice(3), ['tickets', '--json', '--project', 'starcaster-bus']);
+  assert.deepEqual(calls[0].args.slice(2), ['tickets', '--json', '--project', 'starcaster-bus']);
   assert.equal(calls[0].opts.env.TRACKER_API_URL, 'http://tracker.example:4999');
 });
 
@@ -134,7 +135,7 @@ test('BREAK-TEST: the door\'s "(no body)" placeholder reads as an EMPTY descript
   // A wiped report must read back as empty; read as text, it was reported as
   // TRUNCATED, which names the wrong failure.
   const printed = `id:       SCBUS-2\nname:     Pipeline pulse\n---\n${tt.NO_BODY_PLACEHOLDER}\n\n  tracker: 2 request(s) this run\n`;
-  assert.equal(tt.NO_BODY_PLACEHOLDER, '(no body)', 'the exact text loop/scripts/clickup.mjs prints');
+  assert.equal(tt.NO_BODY_PLACEHOLDER, '(no body)', "the exact text Spirality's scripts/clickup.mjs prints");
   assert.equal(tt.descriptionFromGet(printed), '');
   assert.equal(tt.descriptionFromGet('id: x\n---\nSee (no body) above.\n'), 'See (no body) above.', 'only the whole placeholder');
 });
