@@ -166,3 +166,37 @@ test('the gate script itself runs to an answer, not a crash (it is imported by n
   assert.match(said, /CANNOT TELL — could not read PR #1 from GitHub: the `gh` command is not installed/);
   assert.equal(out.status, 0, 'advisory: exits 0');
 });
+
+test('a Spirality that cannot be loaded makes the gate say CANNOT TELL, not go red (SC-870)', () => {
+  // A failed Spirality download or a missing release tag used to throw on the
+  // gate's first line and turn every pull request red. Now it is answered the
+  // way an unreachable tracker is: CANNOT TELL, exit 0 while advisory, and
+  // still shut (exit 1) once the gate is enforcing.
+  const { spawnSync } = require('node:child_process');
+  const os = require('node:os');
+  const nowhere = fs.mkdtempSync(path.join(os.tmpdir(), 'sc870-gate-'));
+  const run = (extra) => spawnSync(process.execPath, [path.join(__dirname, '..', 'review_gate.mjs'), '--pr', '1'], {
+    encoding: 'utf8',
+    env: { PATH: '', HOME: nowhere, SPIRALITY_DIR: path.join(nowhere, 'no-spirality-here'), ...extra },
+  });
+  const advisory = run({});
+  const said = `${advisory.stdout}${advisory.stderr}`;
+  assert.match(said, /MERGE GATE CANNOT TELL — could not load Spirality's code/, said);
+  assert.doesNotMatch(said, /crashed/);
+  assert.equal(advisory.status, 0, 'advisory: exits 0');
+  const enforcing = run({ REVIEW_GATE_ENFORCING: 'true' });
+  assert.match(`${enforcing.stdout}${enforcing.stderr}`, /CANNOT TELL/);
+  assert.equal(enforcing.status, 1, 'enforcing: a gate that could not look stays shut');
+});
+
+test("the gate's load-failure stand-ins agree with the module they stand in for", () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'review_gate.mjs'), 'utf8');
+  const gate = require('./reviewGate.js');
+  const label = /const LOAD_FAILURE_LABEL = '([^']+)'/.exec(src);
+  assert.ok(label, 'review_gate.mjs names its load-failure label');
+  assert.equal(label[1], gate.GATE_LABEL);
+  const truthy = /const enforcingWithoutGate = \(value\) => (\[[^\]]+\])/.exec(src);
+  assert.ok(truthy, 'review_gate.mjs names its enforcing words');
+  for (const word of JSON.parse(truthy[1].replace(/'/g, '"'))) assert.equal(gate.isEnforcing(word), true, word);
+  assert.equal(gate.isEnforcing('false'), false);
+});

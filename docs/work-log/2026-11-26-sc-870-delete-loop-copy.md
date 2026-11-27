@@ -38,3 +38,15 @@ alarms. Stopping it now stops everything it started, and a test proves it.
 Second, the go-between is now on the list of files a machine may never merge on
 its own, just like the old copy was. GitHub's checks also now read the Spirality
 release name the same careful way the rest of the code does.
+
+**Second review (same evening).** The "never merge this on its own" protection
+from the first round had been written into StarCaster's old merge rules, which
+the relay stopped reading when the lanes moved to Spirality. It is now in the
+list Spirality's own merge rules actually read (`spirality.project.json`), along
+with the two files every watchdog's ticket write goes through, and a test asks
+Spirality's real rules about each file. Three smaller fixes rode along: the
+review check on GitHub now takes the Spirality release from `main` rather than
+from the pull request it is grading, so a pull request cannot pick its own
+referee; both GitHub checks accept exactly the release names the rest of the
+code does; and if Spirality cannot be downloaded, the review check says
+"cannot tell" instead of turning every pull request red.

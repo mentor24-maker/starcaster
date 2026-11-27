@@ -56,7 +56,7 @@ jobs:
         # line endings), and refused out loud unless it is release-<n>.
         run: |
           release="$(tr -d '\r' < .spirality-release | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | grep -v '^#' | grep -m1 . || true)"
-          if ! printf '%s' "$release" | grep -Eq '^release-[0-9]+$'; then
+          if ! printf '%s' "$release" | grep -Eq '^release-[1-9][0-9]*$'; then
             echo "::error file=.spirality-release::\"$release\" is not a Spirality release name (release-<n>)"
             exit 1
           fi

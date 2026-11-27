@@ -29,9 +29,40 @@ import { appendFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
-const gate = require('./builder/reviewGate.js');
-const reviewGateTracker = require('./builder/reviewGateTracker.js');
-const { projectConfig } = require('../lib/spirality.cjs').requireSpirality('lib/substrateConfig.js');
+
+/*
+ * SPIRALITY THAT CANNOT BE LOADED IS A CANNOT TELL (SC-870 review, round 2).
+ * The gate used to need nothing but Node. Since loop/ was deleted, the gate's
+ * own modules read Spirality's files the moment they load, so a failed
+ * Spirality download, a missing release tag or a folder with no Spirality
+ * would throw here, before anything could print an answer, and every pull
+ * request would go red for a reason that is not the pull request's. So the
+ * load is caught and answered the way an unreachable tracker is: CANNOT TELL,
+ * never a pass, and exit 0 while the gate is advisory. These two constants
+ * stand in for `gate.GATE_LABEL` / `gate.isEnforcing`, which are what failed
+ * to load; reviewGate.test.js checks they agree with the module.
+ */
+const LOAD_FAILURE_LABEL = 'MERGE GATE';
+const enforcingWithoutGate = (value) => ['1', 'true', 'yes', 'on'].includes(String(value || '').trim().toLowerCase());
+
+let gate;
+let reviewGateTracker;
+let projectConfig;
+try {
+  gate = require('./builder/reviewGate.js');
+  reviewGateTracker = require('./builder/reviewGateTracker.js');
+  ({ projectConfig } = require('../lib/spirality.cjs').requireSpirality('lib/substrateConfig.js'));
+} catch (err) {
+  const enforcing = enforcingWithoutGate(process.env.REVIEW_GATE_ENFORCING);
+  const message = `${LOAD_FAILURE_LABEL} CANNOT TELL — could not load Spirality's code, which the gate reads: ${String(err?.message || err).split('\n')[0]}`;
+  console.error(message);
+  console.log(`::${enforcing ? 'error' : 'warning'}::${message}`);
+  if (process.env.GITHUB_STEP_SUMMARY) {
+    try { appendFileSync(process.env.GITHUB_STEP_SUMMARY, `### Review gate\n\n\`\`\`\n${message}\n\`\`\`\n`); } catch { /* a nicety */ }
+  }
+  if (!enforcing) console.log('\n(Advisory mode: exiting 0 so this does not block anything yet.)');
+  process.exit(enforcing ? 1 : 0);
+}
 
 /*
  * The tracker, not ClickUp, since SC-795 (2026-11-12). Both calls live in

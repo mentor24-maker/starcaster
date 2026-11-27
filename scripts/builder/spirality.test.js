@@ -140,3 +140,45 @@ test('nothing outside lib/spirality.cjs reaches for a loop/ copy any more', () =
   const out = spawnSync('git', ['grep', '-n', '-E', "(\\.\\./)+loop/(lib|scripts)/|'loop', 'scripts'", '--', 'lib', 'scripts', 'package.json', ':!scripts/builder/spirality.test.js'], { cwd: REPO, encoding: 'utf8' });
   assert.equal(out.stdout, '', `still pointing at the deleted loop/ copy:\n${out.stdout}`);
 });
+
+test("Spirality's own merge rules refuse to auto-merge the launcher, the pin and the door wrappers (SC-870 review)", () => {
+  // Since SC-905 the relay merges through SPIRALITY's lib/autoMergeLane.js,
+  // which reads only `governancePaths` in spirality.project.json, never
+  // scripts/builder/autoMergeLane.js. Every claim, verdict and bus post goes
+  // through these files, so a machine pull request touching only one of them
+  // must wait for Dane. Asked of the real rules, read through lib/spirality.cjs.
+  const lane = spirality.requireSpirality('lib/autoMergeLane.js');
+  const { governancePaths } = JSON.parse(fs.readFileSync(path.join(REPO, 'spirality.project.json'), 'utf8'));
+  for (const file of [
+    'scripts/spirality.mjs',
+    'scripts/spirality_pin.mjs',
+    'lib/spirality.cjs',
+    'scripts/builder/spirality.test.js',
+    'scripts/builder/spiralityPin.test.js',
+    '.spirality-release',
+    'scripts/lib/trackerDoor.cjs',
+    'scripts/lib/trackerTickets.cjs',
+  ]) {
+    const verdict = lane.laneEligibility([file], governancePaths);
+    assert.equal(verdict.eligible, false, `${file}: ${verdict.reason}`);
+    assert.match(String(verdict.reason), /protected list/, file);
+  }
+});
+
+test('both workflows accept exactly the release names lib/spirality.cjs does, and the gate reads its pin from the base branch', () => {
+  const read = (name) => fs.readFileSync(path.join(REPO, '.github', 'workflows', name), 'utf8');
+  for (const name of ['ci.yml', 'review-gate.yml']) {
+    const m = /grep -Eq '([^']+)'/.exec(read(name));
+    assert.ok(m, `${name} checks the release name`);
+    const re = new RegExp(m[1]);
+    for (const good of ['release-1', 'release-2', 'release-12']) assert.ok(re.test(good) && spirality.RELEASE_RE.test(good), `${name}: ${good}`);
+    for (const bad of ['release-0', 'release-02', 'main', 'release-']) assert.equal(re.test(bad), spirality.RELEASE_RE.test(bad), `${name}: ${bad}`);
+  }
+  const gate = read('review-gate.yml');
+  // A pull request must not choose the Spirality that grades it.
+  assert.match(gate, /git show FETCH_HEAD:\.spirality-release/);
+  assert.match(gate, /BASE_REF: \$\{\{ github\.base_ref \}\}/);
+  // And a bad pin or failed download leaves the answer to the gate (CANNOT TELL), never a red job or Spirality's default branch.
+  assert.match(gate, /if: steps\.spirality\.outputs\.release != ''/);
+  assert.equal((gate.match(/continue-on-error: true/g) || []).length, 2);
+});
