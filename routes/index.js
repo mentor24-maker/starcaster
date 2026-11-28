@@ -94,10 +94,13 @@ const fonts       = require('./fonts');
 const context     = require('./context');
 const publicSite  = require('./publicSite');
 const spirality   = require('./spirality');
+const inboundEmail = require('./inboundEmail');
 
 // Route modules are tried in order — first match wins.
 // Put more specific / higher-traffic modules first.
 const ROUTE_MODULES = [
+  // One exact path, '/api/webhooks/resend/inbound', that no other module claims.
+  inboundEmail,
   admin,
   auth,
   projectAdmin,
@@ -348,6 +351,14 @@ async function handleRequest(req, res) {
   // facts the invitation email already told them. It never lists invitations
   // and never redeems one; redemption is in POST /api/auth/register.
   const isInviteVerifyRoute = pathname === '/api/invitations/verify' && method === 'GET';
+  // SECURITY EXEMPTION: Resend calls this when an email arrives for one of our
+  // domains (SC-926), and Resend has no session. EXACT path and POST only —
+  // never a prefix, so it cannot open any neighbouring route. It grants
+  // nothing by itself: routes/inboundEmail.js refuses (401) any call whose
+  // Svix signature, made with RESEND_WEBHOOK_SECRET over the raw body within
+  // five minutes, does not check out, and refuses everything (503) while that
+  // secret is unset.
+  const isResendInboundRoute = pathname === inboundEmail.PATH && String(method || '').toUpperCase() === 'POST';
   /**
    * The OAuth callbacks a provider redirects a browser back to.
    *
@@ -436,6 +447,7 @@ async function handleRequest(req, res) {
     && !isPublicSiteRoute
     && !isSpiralityRoute
     && !isInviteVerifyRoute
+    && !isResendInboundRoute
     && !hasPublicTenantReadAccess
     && !authUser
   ) {
@@ -463,6 +475,7 @@ async function handleRequest(req, res) {
     && !isAdminRoute
     && !isDebugRoute
     && !isWebhookRoute
+    && !isResendInboundRoute
     && !isCronAuthorized
     && !isOAuthCallback
   ) {

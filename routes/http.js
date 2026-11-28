@@ -120,6 +120,55 @@ function parseJsonBody(req) {
   });
 }
 
+/**
+ * The request body exactly as it arrived, for a route that checks a signature
+ * over it (the Resend inbound webhook, SC-926). Re-serialising a parsed body
+ * does not reproduce the signed bytes, so this never pretends it does:
+ *
+ *   { ok: true, raw: <string>, exact: true }    the original bytes
+ *   { ok: true, raw: <string>, exact: false }   ONLY a parsed object was left
+ *                                               (a host consumed the stream);
+ *                                               `raw` is JSON.stringify of it,
+ *                                               a best guess the caller must
+ *                                               name when it fails to verify
+ *   { ok: false, error }                        too large, or the stream broke
+ *
+ * Local (server.js) the stream is unread and is read here. On Vercel the
+ * function helpers may already have buffered and parsed it into `req.body`; a
+ * string or Buffer there is still the original bytes. Never call
+ * parseJsonBody first on such a route: it caches only the parsed object.
+ */
+function readRawBody(req) {
+  if (Buffer.isBuffer(req.rawBody)) return Promise.resolve({ ok: true, raw: req.rawBody.toString('utf8'), exact: true });
+  if (typeof req.rawBody === 'string') return Promise.resolve({ ok: true, raw: req.rawBody, exact: true });
+  const streamUnread = !req.readableEnded && req.body === undefined && typeof req.on === 'function';
+  if (!streamUnread) {
+    const body = req.body;
+    if (Buffer.isBuffer(body)) return Promise.resolve({ ok: true, raw: body.toString('utf8'), exact: true });
+    if (typeof body === 'string') return Promise.resolve({ ok: true, raw: body, exact: true });
+    if (body && typeof body === 'object') return Promise.resolve({ ok: true, raw: JSON.stringify(body), exact: false });
+    return Promise.resolve({ ok: true, raw: '', exact: true });
+  }
+  return new Promise((resolve) => {
+    const chunks = [];
+    let size = 0;
+    let done = false;
+    const finish = (out) => { if (!done) { done = true; resolve(out); } };
+    req.on('data', (chunk) => {
+      const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk));
+      size += buf.length;
+      if (size > MAX_BODY_BYTES) return finish({ ok: false, error: 'Request body too large (max 10MB)' });
+      chunks.push(buf);
+    });
+    req.on('end', () => {
+      const raw = Buffer.concat(chunks).toString('utf8');
+      req.rawBody = raw;
+      finish({ ok: true, raw, exact: true });
+    });
+    req.on('error', (err) => finish({ ok: false, error: err?.message || 'the request stream failed' }));
+  });
+}
+
 function getUrlObj(req) {
   const host = req.headers.host || 'localhost';
   return new URL(req.url, `http://${host}`);
@@ -280,6 +329,7 @@ module.exports = {
   sendOk,
   sendErr,
   parseJsonBody,
+  readRawBody,
   setCors,
   getUrlObj,
   normalizeApiPathname,
