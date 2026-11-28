@@ -50,6 +50,7 @@ const youtubeCreatorsStore = require(path.join(ROOT, 'lib/youtubeCreatorsStore.j
 const redditWatchStore = require(path.join(ROOT, 'lib/redditWatchStore.js'));
 const assetsStore = require(path.join(ROOT, 'lib/assetsStore.js'));
 const bookingStore = require(path.join(ROOT, 'lib/bookingStore.js'));
+const inboundEmailStore = require(path.join(ROOT, 'lib/inboundEmailStore.js'));
 const substackContactCapture = require(path.join(ROOT, 'lib/acquire/SubstackContactCapture.js'));
 const youtubeOutreachCommentsStore = require(path.join(ROOT, 'lib/youtubeOutreachCommentsStore.js'));
 
@@ -2444,6 +2445,50 @@ try {
   console.error(`  failed to seed the booking calendar: ${err.message}`);
 }
 
+/**
+ * Settings › Projects › (fixture) › Email (SC-928): two received addresses,
+ * one on with an address long enough to wrap and one switched off, and a
+ * delivery on each, forwarded and refused, so the card has a list and a log
+ * to lay out rather than its empty sentence. Through the store the webhook
+ * uses; each route is read back by address rather than assumed.
+ */
+async function seedInboundEmail({ projectId, userId }) {
+  // No domain is set on the fixture project on purpose: with one, the
+  // Builder Pages screen stopped listing "Panel Lattice Check" and
+  // check:panels went blind (found building SC-928). So the card's add form
+  // shows its "no domain set" sentence here; the form is covered by
+  // components/settings/inbound-email-panel.test.tsx.
+  const routes = [
+    { address: 'a-deliberately-very-long-mailbox-name-for-wrapping@ui-harness-fixture.example', forwardTo: 'someone.with.a.long.inbox.name@gmail.example', enabled: true },
+    { address: 'switched-off@ui-harness-fixture.example', forwardTo: 'fixture@gmail.example', enabled: false },
+  ];
+  let made = 0;
+  for (const r of routes) {
+    const existing = must(await inboundEmailStore.listRoutes(200, projectId), 'list inbound routes');
+    if (existing.some((row) => row.address === r.address)) continue;
+    must(await inboundEmailStore.addRoute(r, { projectId, userId }), `add inbound route ${r.address}`);
+    made += 1;
+  }
+  const log = [
+    { svix: 'msg_ui_fixture_forwarded', to: routes[0].address, outcome: 'forwarded', error: '', subject: 'A subject line long enough to have to wrap inside the narrow right-hand column of the project screen' },
+    { svix: 'msg_ui_fixture_refused', to: routes[1].address, outcome: 'refused', error: `the route for ${routes[1].address} is switched off`, subject: 'Hello' },
+  ];
+  for (const d of log) {
+    const claim = must(await inboundEmailStore.claimDelivery(d.svix, { resendEmailId: 'em_fixture', toAddress: d.to, fromAddress: 'Ann Example <ann@outside.example>', subject: d.subject, receivedAt: new Date().toISOString() }), `record delivery ${d.svix}`);
+    if (claim.action !== 'handle') continue;
+    must(await inboundEmailStore.finishDelivery(claim.row, { outcome: d.outcome, error: d.error, projectId, ownerUserId: userId }), `finish delivery ${d.svix}`);
+  }
+  const total = must(await inboundEmailStore.listRoutes(200, projectId), 'list inbound routes').length;
+  return { made, total };
+}
+
+let inboundSeeded = null;
+try {
+  inboundSeeded = await seedInboundEmail({ projectId: project.id, userId });
+} catch (err) {
+  console.error(`  failed to seed received email routes: ${err.message}`);
+}
+
 let minerSeeded = null;
 try {
   minerSeeded = await seedSubstackMiner({ projectId: project.id, userId });
@@ -2508,5 +2553,10 @@ console.log(
   bookingSeeded
     ? `Booking calendar seeded — ${bookingSeeded.made} booking(s) created, ${bookingSeeded.total} on the calendar.`
     : 'WARNING: the booking calendar was NOT seeded; the Booking Manager will open on "No booking calendar yet".'
+);
+console.log(
+  inboundSeeded
+    ? `Received email seeded — ${inboundSeeded.made} route(s) created, ${inboundSeeded.total} on the project (one switched off), with a forwarded and a refused delivery.`
+    : 'WARNING: received email routes were NOT seeded; Settings › Projects › Email will show its empty state.'
 );
 console.log(`export UI_HARNESS_PROJECT_ID=${project.id}`);
