@@ -16,3 +16,13 @@ This is slice 1 of 3. Nothing receives mail yet: SC-927 points alphire.agency's
 mail at Resend, sets the secret and runs the new database file
 (`docs/SQL/inbound_email_setup.sql`), and SC-928 adds a screen for choosing
 which addresses forward where.
+
+**Fixed after review.** On Vercel, the hosting service reads every incoming
+request before our code sees it, and our first version then checked Resend's
+signature against a rebuilt copy of the email data rather than the original. A
+rebuilt copy can differ by a single character, and if it did, every real email
+would have been refused with nothing to say so. Vercel actually keeps the
+original and hands it back on request, so StarCaster now asks for it. A test
+now copies Vercel's exact behaviour, including an accented subject line. And if
+the check ever has to fall back to a rebuilt copy and fails, a line goes on the
+bus right away, so "mail has quietly stopped" cannot happen unnoticed.

@@ -204,9 +204,22 @@ function registerTests() {
 
   test('a failed check over a re-serialised body says the raw bytes were not available', async () => {
     const w = withWorld({ routes: [ROUTE] });
-    const out = await call(w, sampleEvent(), { secret: 'whsec_b3RoZXJzZWNyZXQ=', exact: false });
+    let last = 0;
+    const deps = { ...w.deps, warnState: { get: () => last, set: (t) => { last = t; } } };
+    const out = await call(w, sampleEvent(), { secret: 'whsec_b3RoZXJzZWNyZXQ=', exact: false, deps });
     assert.equal(out.status, 401);
     assert.match(out.payload.error.message, /re-serialised/);
+    // The "every email silently refused" case says so on the bus — once.
+    assert.equal(w.bus.length, 1);
+    assert.match(w.bus[0], /REFUSED \(401\).*re-serialised/);
+    await call(w, sampleEvent(), { id: 'msg_2', secret: 'whsec_b3RoZXJzZWNyZXQ=', exact: false, deps });
+    assert.equal(w.bus.length, 1, 'a second refusal inside six hours posts nothing');
+    await call(w, sampleEvent(), { id: 'msg_3', secret: 'whsec_b3RoZXJzZWNyZXQ=', exact: false, deps: { ...deps, now: NOW + inbound.RESERIALISED_WARN_MS } });
+    assert.equal(w.bus.length, 2, 'after six hours it says so again');
+    // A refusal over the ORIGINAL bytes is an ordinary bad call, not an alarm.
+    await call(w, sampleEvent(), { id: 'msg_4', secret: 'whsec_b3RoZXJzZWNyZXQ=', exact: true, deps: { ...deps, warnState: { get: () => 0, set() {} } } });
+    assert.equal(w.bus.length, 2);
+    assert.equal(w.sent.length, 0);
   });
 
   test('no RESEND_WEBHOOK_SECRET: 503 saying so, never accepts unsigned mail', async () => {
@@ -354,6 +367,57 @@ function registerTests() {
     assert.equal(res.statusCode, 200, res.body);
     assert.equal(JSON.parse(res.body).data.outcome, 'forwarded');
     assert.equal(await route.handle(req, res, '/api/webhooks/resend/inboundx', 'POST', w.deps), false, 'only the exact path');
+  });
+
+  /**
+   * A request shaped the way Vercel hands it to api/[...slug].js. A faithful
+   * copy of @vercel/node 34.0.0 dist/dev-server.mjs `addHelpers` for a request
+   * with a content-type: `readBody` consumes the stream, `restoreBody` assigns
+   * a replay as own `req.on` / `req.addListener` / `req.read`, and `req.body`
+   * becomes a lazy getter that JSON.parses. Here the getter THROWS, so any
+   * reader that touches it (or re-serialises) fails the test.
+   */
+  async function vercelShapedRequest(raw, headers) {
+    const { PassThrough } = require('stream');
+    const req = Readable.from([Buffer.from(raw)]);
+    req.headers = { 'content-type': 'application/json', ...headers };
+    const chunks = [];
+    for await (const c of req) chunks.push(c);
+    const body = Buffer.concat(chunks);
+    const replay = new PassThrough();
+    const on = replay.on.bind(replay);
+    const originalOn = req.on.bind(req);
+    req.read = replay.read.bind(replay);
+    req.on = req.addListener = (name, cb) => (name === 'data' || name === 'end' ? on(name, cb) : originalOn(name, cb));
+    replay.write(body);
+    replay.end();
+    Object.defineProperty(req, 'body', { configurable: true, enumerable: true, get() { throw new Error('req.body was read: the parsed copy, not the signed bytes'); } });
+    assert.equal(req.readableEnded, true, 'the original stream is used up, as on Vercel');
+    return req;
+  }
+
+  test('on Vercel (stream consumed, replay installed) the route verifies over the ORIGINAL bytes, non-ASCII included', async () => {
+    const w = withWorld({ routes: [ROUTE] });
+    const route = require('../../routes/inboundEmail.js');
+    // Bytes JSON.stringify(JSON.parse(raw)) would NOT reproduce: spacing, an
+    // escaped slash, a \u-escaped accent, and a raw non-ASCII subject.
+    const raw = JSON.stringify(sampleEvent(), null, 1)
+      .replace('"Question about your privacy policy"', '"Qu\u00e9stion \u2014 caf\u00e9 \/ r\u00e9sum\u00e9 \u2603 Grüße"');
+    assert.notEqual(JSON.stringify(JSON.parse(raw)), raw, 'a re-serialised copy differs from these bytes');
+    const req = await vercelShapedRequest(raw, inbound.signForTest({ secret: SECRET, id: 'msg_vercel', timestamp: TS, body: raw }));
+    const res = { statusCode: 0, headers: {}, body: '', setHeader(k, v) { this.headers[k] = v; }, end(b) { this.body = b; } };
+    assert.equal(await route.handle(req, res, route.PATH, 'POST', w.deps), true);
+    assert.equal(res.statusCode, 200, res.body);
+    assert.equal(JSON.parse(res.body).data.outcome, 'forwarded');
+    assert.equal(w.sent.length, 1);
+    assert.equal(w.bus.length, 0);
+  });
+
+  test('readRawBody on a Vercel-shaped request returns the exact bytes and never reads req.body', async () => {
+    const { readRawBody } = require('../../routes/http.js');
+    const raw = '{ "a" : "caf\u00e9 \/" }';
+    const req = await vercelShapedRequest(raw, {});
+    assert.deepEqual(await readRawBody(req), { ok: true, raw, exact: true });
   });
 
   test('readRawBody: original bytes when the host left a string or Buffer, a flagged guess when it left only an object', async () => {

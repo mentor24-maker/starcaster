@@ -134,13 +134,21 @@ function parseJsonBody(req) {
  *   { ok: false, error }                        too large, or the stream broke
  *
  * Local (server.js) the stream is unread and is read here. On Vercel the
- * function helpers may already have buffered and parsed it into `req.body`; a
- * string or Buffer there is still the original bytes. Never call
- * parseJsonBody first on such a route: it caches only the parsed object.
+ * function helpers (@vercel/node `addHelpers`) read the whole stream BEFORE our
+ * handler runs, put a lazy JSON-parsing getter on `req.body`, and then REPLAY
+ * the original bytes: `restoreBody` swaps in their own `req.on` / `req.read`
+ * that feed a PassThrough holding the exact buffer they read. So the stream is
+ * "ended" but still delivers the signed bytes, and that replay is what this
+ * reads (SC-926 rework: the first version saw `req.body` defined, never asked
+ * the stream, and verified over JSON.stringify of the parsed copy).
+ * `req.body` is never touched on that path: the getter would parse the body,
+ * and throws on invalid JSON. Never call parseJsonBody first on such a route:
+ * it caches only the parsed object.
  */
 function readRawBody(req) {
   if (Buffer.isBuffer(req.rawBody)) return Promise.resolve({ ok: true, raw: req.rawBody.toString('utf8'), exact: true });
   if (typeof req.rawBody === 'string') return Promise.resolve({ ok: true, raw: req.rawBody, exact: true });
+  if (typeof req.on === 'function' && hasReplayedStream(req)) return readStream(req);
   const streamUnread = !req.readableEnded && req.body === undefined && typeof req.on === 'function';
   if (!streamUnread) {
     const body = req.body;
@@ -149,6 +157,21 @@ function readRawBody(req) {
     if (body && typeof body === 'object') return Promise.resolve({ ok: true, raw: JSON.stringify(body), exact: false });
     return Promise.resolve({ ok: true, raw: '', exact: true });
   }
+  return readStream(req);
+}
+
+/**
+ * True when a host has already consumed the request stream and installed a
+ * replay of it: Vercel's `restoreBody` assigns `on`, `addListener` and `read`
+ * directly on the request object, where a plain IncomingMessage only inherits
+ * them. Read without touching `req.body` (its getter parses).
+ */
+function hasReplayedStream(req) {
+  const own = (k) => Object.prototype.hasOwnProperty.call(req, k) && typeof req[k] === 'function';
+  return own('on') && own('read');
+}
+
+function readStream(req) {
   return new Promise((resolve) => {
     const chunks = [];
     let size = 0;
