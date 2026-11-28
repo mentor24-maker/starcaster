@@ -1,0 +1,91 @@
+/* Email card (React island) — components/settings/inbound-email-panel.tsx,
+   on Settings › Projects › (a project), directly above Share with (SC-928).
+   It sits in the narrow right column, so each route is a stacked block,
+   never a wide table. */
+
+.inbound-email-routes {
+  display: grid;
+  gap: var(--space-3);
+  margin: var(--space-3) 0;
+  padding: 0;
+  list-style: none;
+}
+
+.inbound-email-route {
+  min-width: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--border-light);
+  border-radius: 6px;
+}
+
+.inbound-email-route.is-off .inbound-email-address {
+  opacity: 0.6;
+}
+
+.inbound-email-route-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.inbound-email-address {
+  min-width: 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.inbound-email-state {
+  flex: 0 0 auto;
+  font-size: 0.85em;
+}
+
+.inbound-email-forward {
+  overflow-wrap: anywhere;
+}
+
+.inbound-email-route-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.inbound-email-form {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.inbound-email-form label {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.inbound-email-add {
+  margin-top: var(--space-3);
+}
+
+.inbound-email-log {
+  display: grid;
+  gap: var(--space-2);
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.inbound-email-log-item {
+  display: grid;
+  gap: 2px;
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--border-light);
+  overflow-wrap: anywhere;
+}
+
+.inbound-email-outcome-failed .inbound-email-log-outcome,
+.inbound-email-outcome-refused .inbound-email-log-outcome,
+.inbound-email-outcome-no_route .inbound-email-log-outcome {
+  color: var(--status-warn-ink);
+}

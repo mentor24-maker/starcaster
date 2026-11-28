@@ -42,6 +42,7 @@ const auth        = require('./auth');
 const projectAdmin = require('./projectAdmin');
 const projectSupport = require('./projectSupport');
 const projectShares = require('./projectShares');
+const inboundEmailSettings = require('./inboundEmailSettings');
 const projects    = require('./projects');
 const invitations = require('./invitations');
 const settings    = require('./settings');
@@ -109,6 +110,8 @@ const ROUTE_MODULES = [
   // not know — '/api/projects/:id/shares' would never arrive otherwise. It
   // also owns '/api/builder/shared', well ahead of `builder`.
   projectShares,
+  // Same reason: '/api/projects/:id/inbound-email' (SC-928).
+  inboundEmailSettings,
   projects,
   invitations,
   // Ahead of `settings`, which owns the wider '/api/settings' prefix.

@@ -236,8 +236,10 @@ function registerTests() {
     }
   });
 
-  test('an address with no enabled route is recorded as no_route and nothing is sent', async () => {
-    const w = withWorld({ routes: [{ ...ROUTE, enabled: false }] });
+  // A route that exists but is switched off is 'refused', not 'no_route'
+  // (SC-928): scripts/builder/inboundEmailSettings.test.js covers that case.
+  test('an address with no route at all is recorded as no_route and nothing is sent', async () => {
+    const w = withWorld({ routes: [{ ...ROUTE, address: 'someone-else@alphire.agency' }] });
     const out = await call(w);
     assert.equal(out.status, 200);
     assert.equal(out.payload.data.outcome, 'no_route');

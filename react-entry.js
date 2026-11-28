@@ -15,6 +15,7 @@ import FootagePanel from './components/studio/footage-panel';
 import FontsManager from './components/fonts/fonts-manager';
 import WordPressExportPanel from './components/settings/wordpress-export-panel';
 import ProjectSharePanel from './components/settings/project-share-panel';
+import InboundEmailPanel from './components/settings/inbound-email-panel';
 import YoutubeOutreachPanel from './components/youtube-outreach/youtube-outreach-panel';
 import SubstackNotesPanel from './components/substack-notes/substack-notes-panel';
 import SubstackMinerPanel from './components/substack-miner/substack-miner-panel';
@@ -77,6 +78,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
   if (connectionsHost) {
     createRoot(connectionsHost).render(<ConnectionsPanel />);
+  }
+
+  const inboundEmailHost = document.getElementById('inboundEmailReactRoot');
+
+  if (inboundEmailHost) {
+    createRoot(inboundEmailHost).render(<InboundEmailPanel />);
   }
 
   const projectShareHost = document.getElementById('projectShareReactRoot');
